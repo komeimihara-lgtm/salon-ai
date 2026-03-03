@@ -1,0 +1,240 @@
+'use client'
+
+import { useState, useRef, useEffect } from 'react'
+import { Send, Sparkles, TrendingUp, Users, AlertTriangle, Zap } from 'lucide-react'
+import KPISummary from '@/components/ui/KPISummary'
+import { DEMO_SALON } from '@/lib/leo'
+import { ChatMessage, LeoMessage } from '@/types'
+
+// クイック質問サジェスト
+const QUICK_QUESTIONS = [
+  { icon: TrendingUp, text: '今月の売上目標を達成するには？', color: 'text-blue-400' },
+  { icon: Users, text: '失客しているお客様を取り戻したい', color: 'text-red-400' },
+  { icon: AlertTriangle, text: 'リピート率を上げる施策を教えて', color: 'text-amber-400' },
+  { icon: Zap, text: '今すぐできるキャンペーンを考えて', color: 'text-purple-400' },
+]
+
+function MessageBubble({ message }: { message: ChatMessage }) {
+  const isUser = message.role === 'user'
+  return (
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
+      {!isUser && (
+        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mr-3 mt-1 shadow-lg">
+          <Sparkles className="w-4 h-4 text-white" />
+        </div>
+      )}
+      <div className={`max-w-[78%] ${isUser ? 'order-1' : ''}`}>
+        {!isUser && (
+          <p className="text-xs font-bold text-amber-400 mb-1 ml-1">LEO GRANT</p>
+        )}
+        <div className={`rounded-2xl px-4 py-3 ${
+          isUser
+            ? 'bg-gradient-to-br from-[#1A2F5A] to-[#2E4A8A] text-white rounded-tr-sm shadow-lg'
+            : 'bg-[#1E2D42] border border-[#2E3F5C] text-slate-200 rounded-tl-sm shadow-md'
+        }`}>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+        </div>
+        <p className="text-xs text-slate-600 mt-1 mx-1">
+          {message.timestamp.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex justify-start animate-fade-in-up">
+      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mr-3 shadow-lg">
+        <Sparkles className="w-4 h-4 text-white animate-pulse" />
+      </div>
+      <div className="bg-[#1E2D42] border border-[#2E3F5C] rounded-2xl rounded-tl-sm px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          {[0, 150, 300].map((delay) => (
+            <span
+              key={delay}
+              className="w-2 h-2 bg-amber-400 rounded-full"
+              style={{
+                animation: 'pulse-dot 1.2s ease-in-out infinite',
+                animationDelay: `${delay}ms`
+              }}
+            />
+          ))}
+          <span className="text-xs text-slate-400 ml-1">LEOが分析中...</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function LeoPage() {
+  const salon = DEMO_SALON
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: '0',
+      role: 'assistant',
+      content: `${salon.owner_name}さん、こんにちは。LEO GRANTです。\n\n現在の状況を確認しました。今月の達成率は${Math.round((salon.kpi.monthly_actual / salon.kpi.monthly_target) * 100)}%、残り${salon.kpi.days_remaining}日で¥${((salon.kpi.monthly_target - salon.kpi.monthly_actual) / 10000).toFixed(0)}万円が必要です。\n\n特に気になるのは失客${salon.kpi.lost_customers}名です。今すぐ手を打てば今月中に取り戻せます。\n\n何から始めますか？`,
+      timestamp: new Date(),
+    }
+  ])
+  const [input, setInput] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [history, setHistory] = useState<LeoMessage[]>([])
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, isLoading])
+
+  // テキストエリア高さ自動調整
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`
+    }
+  }, [input])
+
+  async function sendMessage(text: string) {
+    if (!text.trim() || isLoading) return
+
+    const userMsg: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: text.trim(),
+      timestamp: new Date(),
+    }
+
+    const newHistory: LeoMessage[] = [...history, { role: 'user', content: text.trim() }]
+    setMessages(prev => [...prev, userMsg])
+    setHistory(newHistory)
+    setInput('')
+    setIsLoading(true)
+
+    try {
+      const res = await fetch('/api/leo/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newHistory }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) throw new Error(data.error || 'エラーが発生しました')
+
+      const assistantMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.message,
+        timestamp: new Date(),
+      }
+
+      setMessages(prev => [...prev, assistantMsg])
+      setHistory(prev => [...prev, { role: 'assistant', content: data.message }])
+    } catch (err) {
+      const errorMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: '接続に問題が発生しました。少し待ってから再度お試しください。',
+        timestamp: new Date(),
+      }
+      setMessages(prev => [...prev, errorMsg])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage(input)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0F1923] flex flex-col">
+
+      {/* ヘッダー */}
+      <header className="flex-shrink-0 bg-[#1A2535] border-b border-[#2E3F5C] px-4 py-3">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-white">LEO GRANT</h1>
+              <p className="text-xs text-slate-400">経営会議AI — {salon.name}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 bg-[#0F1923] rounded-full px-3 py-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs text-slate-400">オンライン</span>
+          </div>
+        </div>
+      </header>
+
+      {/* KPIサマリー */}
+      <div className="flex-shrink-0 max-w-4xl mx-auto w-full px-4 pt-4">
+        <KPISummary kpi={salon.kpi} salonName={salon.name} />
+      </div>
+
+      {/* チャットエリア */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="max-w-4xl mx-auto space-y-4">
+          {messages.map(msg => (
+            <MessageBubble key={msg.id} message={msg} />
+          ))}
+          {isLoading && <TypingIndicator />}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      {/* クイック質問（最初のメッセージのみ） */}
+      {messages.length === 1 && !isLoading && (
+        <div className="flex-shrink-0 max-w-4xl mx-auto w-full px-4 pb-2">
+          <p className="text-xs text-slate-500 mb-2 ml-1">よく使う質問</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {QUICK_QUESTIONS.map(({ icon: Icon, text, color }) => (
+              <button
+                key={text}
+                onClick={() => sendMessage(text)}
+                className="flex items-center gap-2 bg-[#1A2535] hover:bg-[#1E2D42] border border-[#2E3F5C] hover:border-[#3E5080] rounded-xl px-3 py-2.5 text-left transition-all group"
+              >
+                <Icon className={`w-4 h-4 flex-shrink-0 ${color}`} />
+                <span className="text-sm text-slate-300 group-hover:text-white">{text}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 入力エリア */}
+      <div className="flex-shrink-0 bg-[#1A2535] border-t border-[#2E3F5C] px-4 py-3">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-end gap-3 bg-[#0F1923] border border-[#2E3F5C] focus-within:border-amber-500/50 rounded-2xl px-4 py-3 transition-colors">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="LEOに相談する... (Enter で送信 / Shift+Enter で改行)"
+              rows={1}
+              className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none"
+              style={{ minHeight: '24px', maxHeight: '120px' }}
+            />
+            <button
+              onClick={() => sendMessage(input)}
+              disabled={!input.trim() || isLoading}
+              className="flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 transition-all shadow-lg"
+            >
+              <Send className="w-4 h-4 text-white" />
+            </button>
+          </div>
+          <p className="text-center text-xs text-slate-600 mt-2">
+            LEO GRANTはサロンの実データを基に回答します
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
