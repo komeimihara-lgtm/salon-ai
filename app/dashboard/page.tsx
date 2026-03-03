@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Sparkles, Users, Calendar, TrendingUp, ArrowRight } from 'lucide-react'
+import { Sparkles, Users, Calendar, TrendingUp, ArrowRight, MessageCircle } from 'lucide-react'
 
 const NAV_ITEMS = [
   {
@@ -24,6 +24,14 @@ const NAV_ITEMS = [
     label: '予約管理',
     desc: 'カレンダー・リマインド自動送信',
     color: 'from-emerald-500 to-teal-600',
+    badge: 'LIVE',
+  },
+  {
+    href: '/counseling',
+    icon: MessageCircle,
+    label: 'SOLA カウンセリング',
+    desc: 'AIビューティーカウンセラー・音声対応',
+    color: 'from-rose-500 to-pink-600',
     badge: 'LIVE',
   },
   {

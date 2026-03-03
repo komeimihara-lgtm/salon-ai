@@ -146,3 +146,24 @@ CREATE INDEX idx_reservations_date ON reservations(reservation_date);
 CREATE INDEX idx_reservations_status ON reservations(status);
 
 ALTER TABLE reservations DISABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- SOLA カウンセリングセッション
+-- ============================================================
+CREATE TABLE IF NOT EXISTS counseling_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
+  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  customer_name TEXT NOT NULL,
+  mode TEXT DEFAULT 'online' CHECK (mode IN ('online', 'salon')),
+  concerns TEXT[] DEFAULT '{}',
+  skin_type TEXT,
+  allergies TEXT,
+  cautions TEXT,
+  selected_menu TEXT,
+  aria_comment TEXT,
+  chat_history JSONB DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_counseling_sessions_salon_id ON counseling_sessions(salon_id);

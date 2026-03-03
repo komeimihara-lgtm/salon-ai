@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@elevenlabs/elevenlabs-js": "^2.37.0",
     "@supabase/supabase-js": "^2.98.0",
     "@types/node": "^20.0.0",
     "@types/react": "^18.0.0",
