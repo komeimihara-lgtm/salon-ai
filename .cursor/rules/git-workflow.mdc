@@ -1,0 +1,37 @@
+---
+description: Git運用ルール（必ず守ること）
+alwaysApply: true
+---
+
+# Git運用ルール（salon-ai）
+
+## 必須ルール
+
+### 1. 機能追加・修正のたびに必ずcommit & push
+
+```bash
+git add .
+git commit -m "機能名: 変更内容"
+git push origin main
+```
+
+### 2. 作業開始前に必ずpullして最新状態にする
+
+```bash
+git pull origin main
+```
+
+### 3. コミットメッセージの例
+
+- `feat: 自動フォロー画面を復元`
+- `fix: ElevenLabs音声エラーを修正`
+- `add: LINE連携画面を追加`
+
+### 4. Vercelデプロイ
+
+- GitHub連携済みのため、**pushするだけで自動デプロイ**
+- 手動で `vercel deploy` は不要
+
+## 背景
+
+以前、GitHub未連携の状態で不完全なコードをpushしてしまい、完成済みの画面が消えるトラブルが発生。今後は必ずcommit & pushを徹底する。
