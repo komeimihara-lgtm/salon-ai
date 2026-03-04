@@ -6,7 +6,6 @@ export async function POST(req: Request) {
       headers: { 'Content-Type': 'application/json' },
     })
   }
-
   try {
     const { text } = await req.json()
     if (!text || typeof text !== 'string') {
@@ -15,7 +14,6 @@ export async function POST(req: Request) {
         headers: { 'Content-Type': 'application/json' },
       })
     }
-
     const response = await fetch(
       `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
       {
@@ -37,9 +35,7 @@ export async function POST(req: Request) {
         }),
       }
     )
-
     const data = await response.json()
-
     if (!data.audioContent) {
       const errMsg = data.error?.message || '音声生成エラー'
       return new Response(JSON.stringify({ error: errMsg }), {
@@ -47,9 +43,7 @@ export async function POST(req: Request) {
         headers: { 'Content-Type': 'application/json' },
       })
     }
-
     const audioBuffer = Buffer.from(data.audioContent, 'base64')
-
     return new Response(audioBuffer, {
       headers: { 'Content-Type': 'audio/mpeg' },
     })
