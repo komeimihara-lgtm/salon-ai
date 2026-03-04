@@ -23,6 +23,7 @@ import {
   ShoppingCart,
   Heart,
   FileText,
+  Home,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -52,9 +53,25 @@ const BOTTOM_NAV_ITEMS = [
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const isCounselingPage = pathname?.startsWith('/counseling')
 
   // ルートのリダイレクト時はシェルを表示しない
   if (pathname === '/') return <>{children}</>
+
+  // カウンセリングページ: サイドバー非表示・Homeボタンのみ
+  if (isCounselingPage) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <header className="sticky top-0 z-20 flex items-center h-14 px-4 bg-off-white border-b border-gray-200">
+          <Link href="/dashboard" className="flex items-center gap-2 text-text-main hover:text-rose font-medium">
+            <Home className="w-5 h-5" />
+            Home
+          </Link>
+        </header>
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex">
