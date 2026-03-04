@@ -1,10 +1,7 @@
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js'
-
 export async function POST(req: Request) {
-  const apiKey = process.env.ELEVENLABS_API_KEY
-  const voiceId = process.env.ELEVENLABS_VOICE_ID
-  if (!voiceId || !apiKey) {
-    return new Response(JSON.stringify({ error: 'ElevenLabs credentials not configured' }), {
+  const apiKey = process.env.GOOGLE_TTS_API_KEY
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: 'Google TTS API key not configured' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     })
@@ -19,34 +16,45 @@ export async function POST(req: Request) {
       })
     }
 
-    const elevenlabs = new ElevenLabsClient({ apiKey })
-    const audioStream = await elevenlabs.textToSpeech.convert(voiceId, {
-      text,
-      modelId: 'eleven_multilingual_v2',
-      outputFormat: 'mp3_44100_128',
-      voiceSettings: {
-        stability: 0.35,
-        similarityBoost: 0.85,
-        style: 0.45,
-        useSpeakerBoost: true,
-        speed: 1.15,
-      },
-    })
+    const response = await fetch(
+      `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input: { text },
+          voice: {
+            languageCode: 'ja-JP',
+            name: 'ja-JP-Neural2-B',
+            ssmlGender: 'FEMALE',
+          },
+          audioConfig: {
+            audioEncoding: 'MP3',
+            speakingRate: 1.05,
+            pitch: 1.5,
+            volumeGainDb: 1.0,
+          },
+        }),
+      }
+    )
 
-    const reader = audioStream.getReader()
-    const chunks: Uint8Array[] = []
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (value) chunks.push(value)
+    const data = await response.json()
+
+    if (!data.audioContent) {
+      const errMsg = data.error?.message || '音声生成エラー'
+      return new Response(JSON.stringify({ error: errMsg }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
-    const buffer = Buffer.concat(chunks)
 
-    return new Response(buffer, {
+    const audioBuffer = Buffer.from(data.audioContent, 'base64')
+
+    return new Response(audioBuffer, {
       headers: { 'Content-Type': 'audio/mpeg' },
     })
   } catch (error) {
-    console.error('ElevenLabs TTS error:', error)
+    console.error('Google TTS error:', error)
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Speech synthesis failed' }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
