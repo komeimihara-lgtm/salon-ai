@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Noto+Sans+JP:wght@400;500;600;700&family=Noto+Serif+JP:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,32 +15,65 @@
 }
 
 body {
-  background-color: #FDFAF7;
-  color: #2C2C2C;
-  font-family: var(--font-noto-sans), 'Noto Sans JP', sans-serif;
+  background-color: var(--off-white);
+  color: var(--text-main);
+  font-family: 'Noto Sans JP', sans-serif;
+}
+
+.font-serif-jp { font-family: 'Noto Serif JP', serif; }
+.font-sans-jp { font-family: 'Noto Sans JP', sans-serif; }
+.font-dm-sans { font-family: 'DM Sans', sans-serif; }
+
+/* セクションラベル */
+.section-label {
+  font-size: 10px;
+  font-family: 'DM Sans', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  color: var(--rose);
+}
+
+/* グラデーションライン */
+.gradient-line {
+  width: 48px;
+  height: 3px;
+  background: linear-gradient(90deg, #C4728A, #9B8EC4);
+}
+
+/* カードシャドウ */
+.card-shadow {
+  box-shadow: 0 4px 24px rgba(90, 74, 110, 0.08);
 }
 
 /* スクロールバー */
-::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #F8F5FF; }
 ::-webkit-scrollbar-thumb { background: #9B8EC4; border-radius: 3px; }
 
-/* アニメーション */
+/* ARIA 口パクアニメーション */
+@keyframes aria-mouth {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(1.2); }
+}
+
+/* 音声波形 */
+@keyframes voice-wave {
+  0%, 100% { transform: scaleY(0.5); }
+  50% { transform: scaleY(1); }
+}
+
+/* タイピング3点ドット */
+@keyframes typing-dot {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+
+/* フェードインアップ */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-fade-in-up { animation: fadeInUp 0.3s ease-out; }
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1); }
-}
-
-@keyframes typing-dot {
-  0%, 80%, 100% { opacity: 0.3; }
-  40% { opacity: 1; }
-}
 
 /* SOLAアバター 話し中パルスリング */
 @keyframes pulse-ring {
@@ -46,30 +81,6 @@ body {
   70% { box-shadow: 0 0 0 20px rgba(196, 114, 138, 0); }
   100% { box-shadow: 0 0 0 0 rgba(196, 114, 138, 0); }
 }
-
 .sola-speaking {
   animation: pulse-ring 1.5s ease-out infinite;
-}
-
-/* SOLAアバター 音声波形アニメーション */
-@keyframes sola-wave {
-  from { transform: scaleY(0.5); }
-  to { transform: scaleY(1.5); }
-}
-
-/* 完成版デザイン */
-.gradient-line {
-  background: linear-gradient(to right, var(--rose), var(--lavender));
-  width: 4px;
-  height: 20px;
-}
-.section-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-main);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.card-shadow {
-  box-shadow: 0 4px 24px rgba(90, 74, 110, 0.08);
 }
