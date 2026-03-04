@@ -53,17 +53,20 @@ const BOTTOM_NAV_ITEMS = [
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const isCounselingPage = pathname?.startsWith('/counseling')
+  const isCounselingPage = typeof pathname === 'string' && pathname.startsWith('/counseling')
 
   // ルートのリダイレクト時はシェルを表示しない
   if (pathname === '/') return <>{children}</>
 
-  // カウンセリングページ: サイドバー非表示・Homeボタンのみ
+  // カウンセリングページ: サイドバー非表示・Homeボタンのみ（ダッシュボードへ）
   if (isCounselingPage) {
     return (
-      <div className="min-h-screen flex flex-col">
-        <header className="sticky top-0 z-20 flex items-center h-14 px-4 bg-off-white border-b border-gray-200">
-          <Link href="/dashboard" className="flex items-center gap-2 text-text-main hover:text-rose font-medium">
+      <div className="min-h-screen flex flex-col bg-white">
+        <header className="sticky top-0 z-20 flex items-center h-14 px-4 bg-white border-b border-gray-200 shadow-sm">
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose/10 text-rose hover:bg-rose/20 font-semibold transition-colors"
+          >
             <Home className="w-5 h-5" />
             Home
           </Link>
