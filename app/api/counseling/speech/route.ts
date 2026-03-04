@@ -1,8 +1,8 @@
 function cleanTextForSpeech(text: string): string {
   return text
-    .replace(/[\u{1F000}-\u{1FFFF}|\u{2600}-\u{27FF}|\u{2700}-\u{27BF}|\u{FE00}-\u{FE0F}|\u{1F900}-\u{1F9FF}|\u{1FA00}-\u{1FA9F}]/gu, '')
     .replace(/[✨🌸💆🌿🍃🌱]/g, '')
-    .replace(/[\u2600-\u26FF\u2700-\u27BF]/g, '')
+    .replace(/[\u2600-\u26FF\u2700-\u27BF\uFE00-\uFE0F]/g, '')
+    .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
     .replace(/。/g, '。\n')
     .replace(/、/g, '、')
     .trim()
