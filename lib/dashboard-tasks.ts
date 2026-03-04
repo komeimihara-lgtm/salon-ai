@@ -6,13 +6,21 @@ export interface ManualTask {
   done: boolean
 }
 
+const DEFAULT_TASKS: ManualTask[] = [
+  { id: '4', text: '予約確認の電話', done: false },
+  { id: '5', text: '在庫発注', done: true },
+]
+
 export function getManualTasks(): ManualTask[] {
-  if (typeof window === 'undefined') return []
+  if (typeof window === 'undefined') return DEFAULT_TASKS
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_TASKS
+    }
   } catch (_) {}
-  return []
+  return DEFAULT_TASKS
 }
 
 export function setManualTasks(tasks: ManualTask[]) {
