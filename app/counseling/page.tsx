@@ -89,7 +89,8 @@ function VoiceInputField({
       alert('お使いのブラウザは音声入力に対応していません')
       return
     }
-    const SpeechRecognition = (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionConstructor; SpeechRecognition?: SpeechRecognitionConstructor }).webkitSpeechRecognition || (window as unknown as { SpeechRecognition?: SpeechRecognitionConstructor }).SpeechRecognition
+    type SpeechRecognitionCtor = new () => SpeechRecognition
+    const SpeechRecognition = (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor; SpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition || (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition
     if (!SpeechRecognition) return
     const recognition = new SpeechRecognition()
     recognition.lang = 'ja-JP'
