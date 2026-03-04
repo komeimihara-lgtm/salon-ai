@@ -3,14 +3,34 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const SOLA_SYSTEM = `あなたはSOLA（ソラ）、エステサロンのAIビューティーカウンセラーです。
-お客様のお肌の悩みを丁寧に聞き、適切なアドバイスやメニュー提案をします。
-親しみやすく、専門的でありながら分かりやすい言葉で話してください。`
+const buildSolaSystem = (customerName?: string) => `あなたはSOLA（ソラ）、プロのAIビューティーカウンセラーです。
+
+キャラクター設定：
+- 30代女性・落ち着いた知性と温かさを兼ね備えた美容のプロ
+- 共感的・知性的・母性的・明るい・専門家的
+- 話し方：丁寧で温かみがある。「〜ですね」「〜でしょうか？」を多用
+- 専門知識：エステ・スキンケア・ボディケア・リラクゼーション全般
+
+カウンセリングの流れ：
+1. 挨拶と自己紹介
+2. お客様のお名前を確認
+3. 今日のお悩みや気になる部分をヒアリング
+4. 具体的な症状・期間・生活習慣を深掘り
+5. お客様のゴール・理想の状態を確認
+6. 施術メニューの提案
+7. カルテ情報のまとめ
+
+重要：
+- 一度に聞く質問は1〜2個まで
+- 共感の言葉を必ず入れる
+- 専門用語は使わず、わかりやすい言葉で
+- 回答は3〜4文程度に収める（音声で聞きやすい長さ）
+${customerName ? `- お客様のお名前：${customerName}様` : ''}`
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { mode, messages, concerns, skin_type, visit_purpose, summary } = body
+    const { mode, messages, concerns, skin_type, visit_purpose, summary, customer_name } = body
 
     if (mode === 'chat') {
       if (!messages?.length) {
@@ -19,7 +39,7 @@ export async function POST(req: NextRequest) {
       const response = await anthropic.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1024,
-        system: SOLA_SYSTEM,
+        system: buildSolaSystem(customer_name),
         messages: messages.map((m: { role: string; content: string }) => ({
           role: m.role as 'user' | 'assistant',
           content: m.content,

@@ -34,3 +34,20 @@ body {
   0%, 80%, 100% { opacity: 0.3; }
   40% { opacity: 1; }
 }
+
+/* SOLAアバター 話し中パルスリング */
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(196, 114, 138, 0.5); }
+  70% { box-shadow: 0 0 0 20px rgba(196, 114, 138, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(196, 114, 138, 0); }
+}
+
+.sola-speaking {
+  animation: pulse-ring 1.5s ease-out infinite;
+}
+
+/* SOLAアバター 音声波形アニメーション */
+@keyframes sola-wave {
+  from { transform: scaleY(0.5); }
+  to { transform: scaleY(1.5); }
+}
