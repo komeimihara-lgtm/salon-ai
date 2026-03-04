@@ -23,13 +23,8 @@ import {
 
 const STORAGE_KEY = 'sola_counseling_draft'
 
-// Web Speech API types (browser-specific)
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList
-}
-type SpeechRecognitionCtor = new () => { lang: string; continuous: boolean; interimResults: boolean; onresult: ((e: SpeechRecognitionEvent) => void) | null; onerror: (() => void) | null; onend: (() => void) | null; start: () => void; stop: () => void }
+const SOLA_AVATAR_URL = '/images/sola-avatar.png'
 
-// タイピングアニメーション（3点ドット）
 function TypingDots() {
   return (
     <span className="inline-flex gap-1">
@@ -44,24 +39,16 @@ function TypingDots() {
   )
 }
 
-// アバター画像（メイン・小サイズ共通）
 function SolaAvatarImg({ size = 24, isSpeaking = false }: { size?: number; isSpeaking?: boolean }) {
   return (
     <div className="relative shrink-0">
-      {isSpeaking && (
-        <span
-          className="absolute inset-0 rounded-full ring-2 ring-[#9B8EC4] animate-pulse"
-          style={{ width: size + 8, height: size + 8, top: -4, left: -4 }}
-          aria-hidden
-        />
-      )}
       <div
-        className={`rounded-full overflow-hidden shrink-0 ring-2 ring-offset-2 ring-[#9B8EC4] bg-gray-100 relative z-10`}
+        className={`rounded-full overflow-hidden shrink-0 ring-2 ring-offset-2 ring-[#9B8EC4] bg-gray-100 relative z-10 ${isSpeaking ? 'sola-speaking' : ''}`}
         style={{ width: size, height: size }}
       >
         <Image
-          src="/images/sola-avatar.png"
-          alt="Sola"
+          src={SOLA_AVATAR_URL}
+          alt="SOLA（ソラ）"
           width={size}
           height={size}
           className="w-full h-full object-cover"
@@ -71,7 +58,24 @@ function SolaAvatarImg({ size = 24, isSpeaking = false }: { size?: number; isSpe
   )
 }
 
-// 音声入力付きテキストフィールド
+function SolaWaveform({ isSpeaking }: { isSpeaking: boolean }) {
+  if (!isSpeaking) return null
+  return (
+    <div className="flex items-end justify-center gap-1 h-8 mt-2">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div
+          key={i}
+          className="w-1.5 rounded-full bg-gradient-to-t from-[#C4728A] to-[#9B8EC4]"
+          style={{
+            height: `${16 + i * 6}px`,
+            animation: `sola-wave ${0.5 + i * 0.1}s ease-in-out infinite alternate`,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
 function VoiceInputField({
   value,
   onChange,
@@ -95,16 +99,19 @@ function VoiceInputField({
       alert('お使いのブラウザは音声入力に対応していません')
       return
     }
-    const SpeechRecognition = (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor; SpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition || (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition
-    if (!SpeechRecognition) return
-    const recognition = new SpeechRecognition()
+    const SR = (window as unknown as { webkitSpeechRecognition?: unknown; SpeechRecognition?: unknown }).webkitSpeechRecognition
+      || (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition
+    if (!SR || typeof SR !== 'function') return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const recognition = new (SR as any)()
     recognition.lang = 'ja-JP'
     recognition.continuous = true
     recognition.interimResults = true
-    recognition.onresult = (e: SpeechRecognitionEvent) => {
+    recognition.onresult = (e: { results: { length: number; [i: number]: { transcript: string; isFinal?: boolean } | Iterable<{ transcript: string }> } }) => {
       const last = e.results.length - 1
-      const text = Array.from(e.results[last]).map((r) => r.transcript).join('')
-      if (e.results[last].isFinal) {
+      const result = e.results[last]
+      const text = Array.from(result as Iterable<{ transcript: string }>).map((r) => r.transcript).join('')
+      if ((result as { isFinal?: boolean }).isFinal) {
         onChange(value ? `${value} ${text}` : text)
       }
     }
@@ -125,25 +132,25 @@ function VoiceInputField({
   return (
     <div className="relative">
       <textarea
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={onFocus}
-          placeholder={placeholder}
-          rows={rows}
-          disabled={disabled}
-          className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 bg-white text-[#3D3D3D] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C4728A]/30 focus:border-[#C4728A] resize-none"
-        />
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={onFocus}
+        placeholder={placeholder}
+        rows={rows}
+        disabled={disabled}
+        className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 bg-white text-[#3D3D3D] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#C4728A]/30 focus:border-[#C4728A] resize-none"
+      />
       <button
-          type="button"
-          onClick={listening ? stopListening : startListening}
-          disabled={disabled}
-          className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors ${
-            listening ? 'bg-[#C4728A] text-white animate-pulse' : 'bg-[#F8F5FF] text-[#C4728A] hover:bg-[#C4728A]/10'
-          }`}
-          title={listening ? '録音停止' : '音声入力'}
-        >
-          {listening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-        </button>
+        type="button"
+        onClick={listening ? stopListening : startListening}
+        disabled={disabled}
+        className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors ${
+          listening ? 'bg-[#C4728A] text-white animate-pulse' : 'bg-[#F8F5FF] text-[#C4728A] hover:bg-[#C4728A]/10'
+        }`}
+        title={listening ? '録音停止' : '音声入力'}
+      >
+        {listening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+      </button>
     </div>
   )
 }
@@ -213,6 +220,7 @@ function CounselingContent() {
   const [newCustomer, setNewCustomer] = useState(true)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [speechError, setSpeechError] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const initialSpokenRef = useRef(false)
   const audioUnlockedRef = useRef(false)
@@ -223,6 +231,9 @@ function CounselingContent() {
     try {
       const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)()
       ctx.resume()
+      const silent = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=')
+      silent.volume = 0
+      silent.play().catch(() => {})
     } catch (_) {}
   }, [])
 
@@ -251,6 +262,7 @@ function CounselingContent() {
 
   const speakMessage = useCallback(async (text: string) => {
     if (!voiceEnabled || !text.trim()) return
+    setSpeechError(null)
     try {
       setIsSpeaking(true)
       const response = await fetch('/api/counseling/speech', {
@@ -275,14 +287,16 @@ function CounselingContent() {
         URL.revokeObjectURL(audioUrl)
         setIsSpeaking(false)
       }
-      audio.onerror = (e) => {
-        console.error('Audio playback error:', e)
+      audio.onerror = () => {
         URL.revokeObjectURL(audioUrl)
         setIsSpeaking(false)
+        setSpeechError('音声の再生に失敗しました')
       }
       await audio.play()
     } catch (error) {
+      const msg = error instanceof Error ? error.message : '音声再生エラー'
       console.error('音声再生エラー:', error)
+      setSpeechError(msg)
       setIsSpeaking(false)
     }
   }, [voiceEnabled])
@@ -307,7 +321,7 @@ function CounselingContent() {
       const res = await fetch('/api/counseling/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'chat', messages: newMessages }),
+        body: JSON.stringify({ mode: 'chat', messages: newMessages, customer_name: data.customerName || undefined }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'エラー')
@@ -320,7 +334,7 @@ function CounselingContent() {
     } finally {
       setChatLoading(false)
     }
-  }, [chatInput, chatLoading, data.messages, speakMessage, unlockAudio])
+  }, [chatInput, chatLoading, data.messages, data.customerName, speakMessage, unlockAudio])
 
   const diagnoseSkinType = (answers: Record<string, string>): SkinType => {
     const q1 = answers.q1
@@ -427,7 +441,6 @@ function CounselingContent() {
 
   const steps = [1, 2, 3, 4, 5, 6]
 
-  // 完了画面
   if (completed) {
     return (
       <div className="min-h-screen bg-white flex flex-col">
@@ -440,7 +453,7 @@ function CounselingContent() {
         </header>
         <div className="flex-1 flex flex-col items-center justify-center p-6">
           <div className="w-24 h-24 rounded-full overflow-hidden ring-2 ring-offset-2 ring-[#9B8EC4] mb-4">
-            <Image src="/images/sola-avatar.png" alt="Sola" width={96} height={96} className="w-full h-full object-cover" />
+            <Image src={SOLA_AVATAR_URL} alt="SOLA（ソラ）" width={96} height={96} className="w-full h-full object-cover" />
           </div>
           <p className="text-sm font-medium text-[#C4728A] mb-1">Sola（ソラ）</p>
           <h2 className="text-xl font-bold text-[#3D3D3D] mb-2">
@@ -465,30 +478,42 @@ function CounselingContent() {
     )
   }
 
+  const isChatStep = step === 2
+  const useSplitLayout = isChatStep
+
   return (
-    <div className="min-h-screen bg-white flex flex-col max-w-3xl mx-auto w-full">
-      {/* ヘッダー */}
-      <header className="flex items-center h-14 px-4 border-b border-gray-100 shrink-0">
+    <div className={`min-h-screen bg-white flex flex-col ${useSplitLayout ? 'lg:flex-row lg:max-w-none' : 'max-w-lg mx-auto'}`}>
+      <header className={`flex items-center h-14 px-4 border-b border-gray-100 shrink-0 ${useSplitLayout ? 'lg:absolute lg:top-0 lg:left-0 lg:right-0 lg:z-20 lg:bg-white/95 lg:backdrop-blur' : ''}`}>
         <Link href="/dashboard" className="p-2 -ml-2 text-[#3D3D3D]">
           <BackIcon className="w-5 h-5" />
         </Link>
         <h1 className="flex-1 text-center text-sm font-bold text-[#3D3D3D]">SOLA カウンセリング</h1>
         {step === 2 ? (
-          <button
-            type="button"
-            onClick={() => setVoiceEnabled((v) => !v)}
-            className="p-2 rounded-lg text-[#3D3D3D] hover:bg-[#F8F5FF]"
-            title={voiceEnabled ? '音声をオフ' : '音声をオン'}
-          >
-            {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => { unlockAudio(); speakMessage('こんにちは') }}
+              disabled={isSpeaking}
+              className="p-2 rounded-lg text-[#3D3D3D] hover:bg-[#F8F5FF] text-xs"
+              title="音声テスト"
+            >
+              🔊
+            </button>
+            <button
+              type="button"
+              onClick={() => { unlockAudio(); setVoiceEnabled((v) => !v) }}
+              className="p-2 rounded-lg text-[#3D3D3D] hover:bg-[#F8F5FF]"
+              title={voiceEnabled ? '音声をオフ' : '音声をオン'}
+            >
+              {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            </button>
+          </div>
         ) : (
           <div className="w-9" />
         )}
       </header>
 
-      {/* ステップインジケーター */}
-      <div className="flex justify-center gap-1 py-3 shrink-0">
+      <div className={`flex justify-center gap-1 py-3 shrink-0 ${useSplitLayout ? 'lg:pt-16' : ''}`}>
         {steps.map((s) => (
           <button
             key={s}
@@ -502,29 +527,18 @@ function CounselingContent() {
         ))}
       </div>
 
-      {/* アバターセクション */}
-      <div className="flex flex-col items-center py-4 shrink-0">
-        <div className="relative inline-block">
-          {isSpeaking && (
-            <span
-              className="absolute rounded-full ring-2 ring-[#9B8EC4] animate-pulse"
-              style={{ width: 112, height: 112, top: -8, left: -8 }}
-              aria-hidden
-            />
-          )}
-          <div className="relative z-10 w-24 h-24 rounded-full overflow-hidden ring-2 ring-offset-2 ring-[#9B8EC4] bg-gray-100">
-            <Image src="/images/sola-avatar.png" alt="Sola" width={96} height={96} className="w-full h-full object-cover" />
+      {!useSplitLayout && (
+        <div className="flex flex-col items-center py-4 shrink-0">
+          <div className={`relative inline-block w-24 h-24 rounded-full overflow-hidden ring-2 ring-offset-2 ring-[#9B8EC4] bg-gray-100 ${isSpeaking ? 'sola-speaking' : ''}`}>
+            <Image src={SOLA_AVATAR_URL} alt="SOLA（ソラ）" width={96} height={96} className="w-full h-full object-cover" />
           </div>
+          <SolaWaveform isSpeaking={isSpeaking} />
+          <p className="text-sm font-medium text-[#3D3D3D] mt-2">✨ SOLA（ソラ）</p>
+          <p className="text-xs text-gray-500">AIビューティーカウンセラー</p>
         </div>
-        <p className="text-sm font-medium text-[#3D3D3D] mt-2">✨ Sola（ソラ）</p>
-        <p className="text-xs text-gray-500">AI Beauty Counselor</p>
-        <p className="flex items-center gap-1.5 mt-1 text-xs text-emerald-600">
-          <span className="w-2 h-2 rounded-full bg-emerald-500" /> オンライン
-        </p>
-      </div>
+      )}
 
-      {/* メインコンテンツ */}
-      <main className="flex-1 overflow-y-auto px-4 pb-4 min-h-0">
+      <main className={`flex-1 overflow-y-auto px-4 pb-4 min-h-0 ${useSplitLayout ? 'lg:flex lg:flex-row lg:p-0' : ''}`}>
         {step === 1 && (
           <div className="space-y-4">
             <h3 className="font-semibold text-[#3D3D3D]">基本情報</h3>
@@ -607,8 +621,25 @@ function CounselingContent() {
         )}
 
         {step === 2 && (
-          <div className="flex flex-col h-[calc(100vh-320px)] min-h-[280px]">
-            <div className="flex-1 overflow-y-auto space-y-4 pb-4">
+          <div className={`flex flex-col lg:flex-row lg:flex-1 lg:min-h-0 ${useSplitLayout ? 'lg:h-[calc(100vh-140px)]' : 'h-[calc(100vh-320px)] min-h-[280px]'}`}>
+            {/* デスクトップ: 左40% アバターエリア */}
+            <div className="hidden lg:flex lg:w-2/5 lg:flex-col lg:items-center lg:justify-center lg:py-12 lg:border-r lg:border-gray-100" style={{ background: 'linear-gradient(135deg, #F8F5FF, #FDFAF7)' }}>
+              <div className={`w-48 h-48 rounded-full overflow-hidden ring-2 ring-offset-2 ring-[#9B8EC4] bg-gray-100 ${isSpeaking ? 'sola-speaking' : ''}`}>
+                <Image src={SOLA_AVATAR_URL} alt="SOLA（ソラ）" width={192} height={192} className="w-full h-full object-cover" />
+              </div>
+              <SolaWaveform isSpeaking={isSpeaking} />
+              <h2 className="text-xl font-bold mt-6" style={{ fontFamily: 'var(--font-noto-serif)', color: '#5A4A6E' }}>SOLA（ソラ）</h2>
+              <p className="text-sm mt-1" style={{ color: '#9B8EC4', fontFamily: 'var(--font-noto-sans)' }}>AIビューティーカウンセラー</p>
+              <div className="mt-4 flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-rose-400 animate-pulse' : chatLoading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
+                <span className="text-xs" style={{ color: '#9B8EC4' }}>
+                  {isSpeaking ? 'お話し中...' : chatLoading ? '考え中...' : 'オンライン'}
+                </span>
+              </div>
+            </div>
+            {/* 右60% チャットエリア */}
+            <div className="flex flex-col flex-1 min-h-0 lg:w-3/5 lg:border-l lg:border-gray-100">
+            <div className="flex-1 overflow-y-auto space-y-4 pb-4 px-2 lg:px-6">
               {data.messages.length === 0 && (
                 <div className="flex gap-2">
                   <SolaAvatarImg size={32} isSpeaking={isSpeaking} />
@@ -644,6 +675,39 @@ function CounselingContent() {
                 </div>
               )}
               <div ref={chatEndRef} />
+            </div>
+            {/* チャット入力（デスクトップでは右カラム内に表示） */}
+            <div className="shrink-0 p-4 pt-0 border-t border-gray-100 bg-white space-y-3 lg:mx-4">
+              {speechError && (
+                <div className="text-xs text-rose-600 bg-rose-50 px-3 py-2 rounded-lg">
+                  {speechError}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <div className="flex-1 min-w-0">
+                  <VoiceInputField value={chatInput} onChange={setChatInput} onFocus={unlockAudio} placeholder="メッセージを入力..." rows={1} disabled={chatLoading} />
+                </div>
+                <button
+                  onClick={sendChat}
+                  disabled={!chatInput.trim() || chatLoading}
+                  className="shrink-0 px-4 py-3 rounded-xl bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white disabled:opacity-50 flex items-center justify-center"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex justify-between">
+                <button onClick={() => setStep(1)} className="flex items-center gap-1 text-gray-500">
+                  <ChevronLeft className="w-5 h-5" /> 戻る
+                </button>
+                <button
+                  onClick={() => { const concerns = data.messages.filter((m) => m.role === 'user').map((m) => m.content); setData((d) => ({ ...d, concerns })); setStep(3) }}
+                  disabled={data.messages.filter((m) => m.role === 'user').length < 1}
+                  className="flex items-center gap-1 px-4 py-2 rounded-xl bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white font-medium disabled:opacity-50"
+                >
+                  次へ <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
             </div>
           </div>
         )}
@@ -763,37 +827,6 @@ function CounselingContent() {
         )}
       </main>
 
-      {/* チャット入力（STEP 2のみ） */}
-      {step === 2 && (
-        <div className="shrink-0 p-4 pt-0 border-t border-gray-100 bg-white space-y-3">
-          <div className="flex gap-2">
-            <div className="flex-1 min-w-0">
-              <VoiceInputField value={chatInput} onChange={setChatInput} onFocus={unlockAudio} placeholder="メッセージを入力..." rows={1} disabled={chatLoading} />
-            </div>
-            <button
-              onClick={sendChat}
-              disabled={!chatInput.trim() || chatLoading}
-              className="shrink-0 px-4 py-3 rounded-xl bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white disabled:opacity-50 flex items-center justify-center"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="flex justify-between">
-            <button onClick={() => setStep(1)} className="flex items-center gap-1 text-gray-500">
-              <ChevronLeft className="w-5 h-5" /> 戻る
-            </button>
-            <button
-              onClick={() => { const concerns = data.messages.filter((m) => m.role === 'user').map((m) => m.content); setData((d) => ({ ...d, concerns })); setStep(3) }}
-              disabled={data.messages.filter((m) => m.role === 'user').length < 1}
-              className="flex items-center gap-1 px-4 py-2 rounded-xl bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white font-medium disabled:opacity-50"
-            >
-              次へ <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ナビゲーション（STEP 1, 3, 4, 5, 6） */}
       {step !== 2 && !completed && (
         <div className="shrink-0 flex justify-between p-4 border-t border-gray-100">
           <button onClick={() => setStep((s) => Math.max(1, s - 1))} disabled={step === 1} className="flex items-center gap-1 text-gray-500 disabled:opacity-40">
