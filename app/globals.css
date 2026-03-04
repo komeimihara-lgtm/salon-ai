@@ -3,20 +3,25 @@
 @tailwind utilities;
 
 :root {
-  --navy: #1A2F5A;
-  --gold: #C8962A;
+  --rose: #C4728A;
+  --lavender: #9B8EC4;
+  --deep: #5A4A6E;
+  --off-white: #FDFAF7;
+  --light-lav: #F8F5FF;
+  --text-main: #2C2C2C;
+  --text-sub: #6B7280;
 }
 
 body {
-  background-color: #0F1923;
-  color: #E2E8F0;
-  font-family: 'Inter', sans-serif;
+  background-color: #FDFAF7;
+  color: #2C2C2C;
+  font-family: var(--font-noto-sans), 'Noto Sans JP', sans-serif;
 }
 
 /* スクロールバー */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #1A2535; }
-::-webkit-scrollbar-thumb { background: #2E3F5C; border-radius: 3px; }
+::-webkit-scrollbar-track { background: #F8F5FF; }
+::-webkit-scrollbar-thumb { background: #9B8EC4; border-radius: 3px; }
 
 /* アニメーション */
 @keyframes fadeInUp {
