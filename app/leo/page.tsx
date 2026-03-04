@@ -8,10 +8,10 @@ import { ChatMessage, LeoMessage } from '@/types'
 
 // クイック質問サジェスト
 const QUICK_QUESTIONS = [
-  { icon: TrendingUp, text: '今月の売上目標を達成するには？', color: 'text-blue-400' },
-  { icon: Users, text: '失客しているお客様を取り戻したい', color: 'text-red-400' },
-  { icon: AlertTriangle, text: 'リピート率を上げる施策を教えて', color: 'text-amber-400' },
-  { icon: Zap, text: '今すぐできるキャンペーンを考えて', color: 'text-purple-400' },
+  { icon: TrendingUp, text: '今月の売上目標を達成するには？', color: 'text-[#C4728A]' },
+  { icon: Users, text: '失客しているお客様を取り戻したい', color: 'text-[#C4728A]' },
+  { icon: AlertTriangle, text: 'リピート率を上げる施策を教えて', color: 'text-[#9B8EC4]' },
+  { icon: Zap, text: '今すぐできるキャンペーンを考えて', color: 'text-[#9B8EC4]' },
 ]
 
 function MessageBubble({ message }: { message: ChatMessage }) {
@@ -25,12 +25,12 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       )}
       <div className={`max-w-[78%] ${isUser ? 'order-1' : ''}`}>
         {!isUser && (
-          <p className="text-xs font-bold text-amber-400 mb-1 ml-1">AI経営会議</p>
+          <p className="text-xs font-bold text-[#9B8EC4] mb-1 ml-1">AI経営会議</p>
         )}
         <div className={`rounded-2xl px-4 py-3 ${
           isUser
-            ? 'bg-gradient-to-br from-[#C4728A] to-[#9B8EC4] text-white rounded-tr-sm shadow-lg'
-            : 'bg-white border border-[#E8E0F0] text-[#2C2C2C] rounded-tl-sm shadow-md'
+            ? 'bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white rounded-tr-sm shadow-lg'
+            : 'bg-white border border-[#E8E0F0] text-[#2C2C2C] rounded-tl-sm shadow-sm'
         }`}>
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
         </div>
@@ -53,7 +53,7 @@ function TypingIndicator() {
           {[0, 150, 300].map((delay) => (
             <span
               key={delay}
-              className="w-2 h-2 bg-amber-400 rounded-full"
+              className="w-2 h-2 bg-[#9B8EC4] rounded-full"
               style={{
                 animation: 'pulse-dot 1.2s ease-in-out infinite',
                 animationDelay: `${delay}ms`
@@ -159,7 +159,7 @@ export default function LeoPage() {
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#C4728A] to-[#9B8EC4] flex items-center justify-center shadow-lg">
-              <Sparkles className="w-5 h-5 text-[#2C2C2C]" />
+              <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
               <h1 className="text-base font-bold text-[#2C2C2C]">AI経営会議</h1>
@@ -198,10 +198,10 @@ export default function LeoPage() {
               <button
                 key={text}
                 onClick={() => sendMessage(text)}
-                className="flex items-center gap-2 bg-white hover:bg-white border border-[#E8E0F0] hover:border-[#3E5080] rounded-xl px-3 py-2.5 text-left transition-all group"
+                className="flex items-center gap-2 bg-white hover:bg-[#F8F5FF] border border-[#E8E0F0] hover:border-[#9B8EC4]/50 rounded-xl px-3 py-2.5 text-left transition-all group"
               >
                 <Icon className={`w-4 h-4 flex-shrink-0 ${color}`} />
-                <span className="text-sm text-slate-300 group-hover:text-[#2C2C2C]">{text}</span>
+                <span className="text-sm text-[#2C2C2C] group-hover:text-[#9B8EC4]">{text}</span>
               </button>
             ))}
           </div>
@@ -211,7 +211,7 @@ export default function LeoPage() {
       {/* 入力エリア */}
       <div className="flex-shrink-0 bg-white border-t border-[#E8E0F0] px-4 py-3">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-end gap-3 bg-[#F8F5FF] border border-[#E8E0F0] focus-within:border-amber-500/50 rounded-2xl px-4 py-3 transition-colors">
+          <div className="flex items-end gap-3 bg-white border border-[#E8E0F0] focus-within:border-[#9B8EC4] rounded-2xl px-4 py-3 transition-colors">
             <textarea
               ref={textareaRef}
               value={input}
@@ -219,7 +219,7 @@ export default function LeoPage() {
               onKeyDown={handleKeyDown}
               placeholder="相談内容を入力... (Enter で送信 / Shift+Enter で改行)"
               rows={1}
-              className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none"
+              className="flex-1 bg-transparent text-sm text-[#2C2C2C] placeholder-[#6B7280] resize-none focus:outline-none"
               style={{ minHeight: '24px', maxHeight: '120px' }}
             />
             <button
@@ -227,7 +227,7 @@ export default function LeoPage() {
               disabled={!input.trim() || isLoading}
               className="flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-[#C4728A] to-[#9B8EC4] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 transition-all shadow-lg"
             >
-              <Send className="w-4 h-4 text-[#2C2C2C]" />
+              <Send className="w-4 h-4 text-white" />
             </button>
           </div>
           <p className="text-center text-xs text-[#6B7280] mt-2">

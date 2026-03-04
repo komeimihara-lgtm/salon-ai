@@ -13,7 +13,7 @@
 }
 
 body {
-  background-color: #F8F5FF;
+  background-color: #FDFAF7;
   color: #2C2C2C;
   font-family: var(--font-noto-sans), 'Noto Sans JP', sans-serif;
 }
@@ -51,6 +51,7 @@ body {
   animation: pulse-ring 1.5s ease-out infinite;
 }
 
+/* SOLAアバター 音声波形アニメーション */
 @keyframes sola-wave {
   from { transform: scaleY(0.5); }
   to { transform: scaleY(1.5); }
