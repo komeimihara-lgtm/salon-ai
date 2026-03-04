@@ -18,6 +18,25 @@ body {
   font-family: var(--font-noto-sans), 'Noto Sans JP', sans-serif;
 }
 
+/* 完成版デザイン用ユーティリティ */
+.gradient-line {
+  width: 24px;
+  height: 4px;
+  background: linear-gradient(to right, #C4728A, #9B8EC4);
+  border-radius: 9999px;
+}
+.section-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #2C2C2C;
+}
+.font-dm-sans {
+  font-family: var(--font-noto-sans), 'Noto Sans JP', sans-serif;
+}
+.card-shadow {
+  box-shadow: 0 4px 24px rgba(90,74,110,0.08);
+}
+
 /* スクロールバー */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: #F8F5FF; }
