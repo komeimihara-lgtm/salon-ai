@@ -466,7 +466,7 @@ function CounselingContent() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col max-w-lg mx-auto">
+    <div className="min-h-screen bg-white flex flex-col max-w-3xl mx-auto w-full">
       {/* ヘッダー */}
       <header className="flex items-center h-14 px-4 border-b border-gray-100 shrink-0">
         <Link href="/dashboard" className="p-2 -ml-2 text-[#3D3D3D]">
