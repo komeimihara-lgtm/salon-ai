@@ -312,11 +312,11 @@ function CounselingContent() {
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'エラー')
       const assistantMsg = json.message || 'ありがとうございます。'
-      setData((d) => ({ ...d, messages: [...d.messages, { role: 'user', content: userMsg }, { role: 'assistant', content: assistantMsg }] }))
+      setData((d) => ({ ...d, messages: [...newMessages, { role: 'assistant', content: assistantMsg }] }))
       scrollChatToBottom()
       speakMessage(assistantMsg)
     } catch {
-      setData((d) => ({ ...d, messages: [...d.messages, { role: 'user', content: userMsg }, { role: 'assistant', content: '申し訳ございません。もう一度お試しください。' }] }))
+      setData((d) => ({ ...d, messages: [...newMessages, { role: 'assistant', content: '申し訳ございません。もう一度お試しください。' }] }))
     } finally {
       setChatLoading(false)
     }
