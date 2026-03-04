@@ -29,7 +29,7 @@ const DAYS_JP = ['月', '火', '水', '木', '金', '土', '日']
 const STATUS_MAP = {
   confirmed: { label: '確定', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
   completed: { label: '完了', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  cancelled: { label: 'キャンセル', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30' },
+  cancelled: { label: 'キャンセル', color: 'bg-slate-500/20 text-[#6B7280] border-slate-500/30' },
   no_show: { label: '無断キャンセル', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
 }
 
@@ -43,29 +43,29 @@ function ReservationCard({
 }) {
   const { label, color } = STATUS_MAP[reservation.status]
   return (
-    <div className="bg-[#1A2535] border border-[#2E3F5C] rounded-xl p-3 space-y-2">
+    <div className="bg-white border border-[#E8E0F0] rounded-xl p-3 space-y-2">
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-1.5">
-            <User className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-sm font-bold text-white">{reservation.customer_name}</span>
+            <User className="w-3.5 h-3.5 text-[#6B7280]" />
+            <span className="text-sm font-bold text-[#2C2C2C]">{reservation.customer_name}</span>
           </div>
           {reservation.customer_phone && (
             <div className="flex items-center gap-1 mt-0.5">
-              <Phone className="w-3 h-3 text-slate-500" />
-              <span className="text-xs text-slate-400">{reservation.customer_phone}</span>
+              <Phone className="w-3 h-3 text-[#6B7280]" />
+              <span className="text-xs text-[#6B7280]">{reservation.customer_phone}</span>
             </div>
           )}
         </div>
         <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${color}`}>{label}</span>
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-slate-400">
+      <div className="flex items-center gap-3 text-xs text-[#6B7280]">
         <div className="flex items-center gap-1">
           <Clock className="w-3 h-3" />
           <span>{reservation.start_time.slice(0, 5)}{reservation.end_time ? `〜${reservation.end_time.slice(0, 5)}` : ''}</span>
         </div>
-        {reservation.menu && <span className="text-slate-300">｜ {reservation.menu}</span>}
+        {reservation.menu && <span className="text-[#2C2C2C]">｜ {reservation.menu}</span>}
         {reservation.staff_name && <span>担当: {reservation.staff_name}</span>}
       </div>
 
@@ -89,7 +89,7 @@ function ReservationCard({
           </button>
           <button
             onClick={() => onStatusChange(reservation.id, 'cancelled')}
-            className="flex items-center justify-center bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-slate-400 rounded-lg px-2 py-1.5 text-xs transition-colors"
+            className="flex items-center justify-center bg-[#F8F5FF] hover:bg-[#E8E0F0] border border-[#E8E0F0] text-[#6B7280] rounded-lg px-2 py-1.5 text-xs transition-colors"
           >
             <X className="w-3 h-3" />
           </button>
@@ -147,56 +147,56 @@ function NewReservationModal({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1A2535] border border-[#2E3F5C] rounded-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-5 border-b border-[#2E3F5C]">
-          <h2 className="text-base font-bold text-white">新規予約</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+      <div className="bg-white border border-[#E8E0F0] rounded-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-5 border-b border-[#E8E0F0]">
+          <h2 className="text-base font-bold text-[#2C2C2C]">新規予約</h2>
+          <button onClick={onClose} className="text-[#6B7280] hover:text-[#2C2C2C]"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
           {error && <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">顧客名 *</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">顧客名 *</label>
               <input value={form.customer_name} onChange={e => setForm(p => ({ ...p, customer_name: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
                 placeholder="山田 花子" />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">電話番号</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">電話番号</label>
               <input value={form.customer_phone} onChange={e => setForm(p => ({ ...p, customer_phone: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
                 placeholder="090-0000-0000" />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">予約日</label>
+            <label className="text-xs text-[#6B7280] mb-1 block">予約日</label>
             <input type="date" value={form.reservation_date} onChange={e => setForm(p => ({ ...p, reservation_date: e.target.value }))}
-              className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50" />
+              className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]" />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">開始時間</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">開始時間</label>
               <select value={form.start_time} onChange={e => setForm(p => ({ ...p, start_time: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50">
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]">
                 {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">終了時間</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">終了時間</label>
               <select value={form.end_time} onChange={e => setForm(p => ({ ...p, end_time: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50">
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]">
                 {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">メニュー</label>
+            <label className="text-xs text-[#6B7280] mb-1 block">メニュー</label>
             <select value={form.menu} onChange={e => setForm(p => ({ ...p, menu: e.target.value }))}
-              className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50">
+              className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]">
               <option value="">選択してください</option>
               {MENUS.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
@@ -204,32 +204,32 @@ function NewReservationModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">担当スタッフ</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">担当スタッフ</label>
               <input value={form.staff_name} onChange={e => setForm(p => ({ ...p, staff_name: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
                 placeholder="田中" />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">料金（円）</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">料金（円）</label>
               <input type="number" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
                 placeholder="15000" />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">メモ</label>
+            <label className="text-xs text-[#6B7280] mb-1 block">メモ</label>
             <textarea value={form.memo} onChange={e => setForm(p => ({ ...p, memo: e.target.value }))}
-              rows={2} className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 resize-none"
+              rows={2} className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4] resize-none"
               placeholder="アレルギーや注意事項など" />
           </div>
         </div>
-        <div className="flex gap-3 p-5 border-t border-[#2E3F5C]">
-          <button onClick={onClose} className="flex-1 bg-[#0F1923] border border-[#2E3F5C] text-slate-400 rounded-xl py-2.5 text-sm hover:text-white transition-colors">
+        <div className="flex gap-3 p-5 border-t border-[#E8E0F0]">
+          <button onClick={onClose} className="flex-1 bg-[#F8F5FF] border border-[#E8E0F0] text-[#6B7280] rounded-xl py-2.5 text-sm hover:text-[#2C2C2C] transition-colors">
             キャンセル
           </button>
           <button onClick={handleSubmit} disabled={saving}
-            className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-xl py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2">
+            className="flex-1 bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white rounded-xl py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             {saving ? '保存中...' : '予約を登録'}
           </button>
@@ -290,22 +290,22 @@ export default function ReservationsPage() {
   const weekRevenue = reservations.filter(r => r.status === 'completed').reduce((sum, r) => sum + r.price, 0)
 
   return (
-    <div className="min-h-screen bg-[#0F1923]">
+    <div className="min-h-screen bg-[#F8F5FF]">
       {/* ヘッダー */}
-      <header className="bg-[#1A2535] border-b border-[#2E3F5C] px-4 py-3 sticky top-0 z-10">
+      <header className="bg-white border-b border-[#E8E0F0] px-4 py-3 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-slate-400 hover:text-white transition-colors">
+            <Link href="/dashboard" className="text-[#6B7280] hover:text-[#2C2C2C] transition-colors">
               <ChevronLeft className="w-5 h-5" />
             </Link>
             <div className="flex items-center gap-2">
               <Calendar className="w-5 h-5 text-emerald-400" />
-              <h1 className="text-base font-bold text-white">予約管理</h1>
+              <h1 className="text-base font-bold text-[#2C2C2C]">予約管理</h1>
             </div>
           </div>
           <button
             onClick={() => setShowNewModal(true)}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg px-3 py-1.5 text-xs font-bold hover:opacity-90 transition-opacity"
+            className="flex items-center gap-1.5 bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white rounded-lg px-3 py-1.5 text-xs font-bold hover:opacity-90 transition-opacity"
           >
             <Plus className="w-3.5 h-3.5" /> 新規予約
           </button>
@@ -320,26 +320,26 @@ export default function ReservationsPage() {
             { label: '完了済み', value: `${weekCompleted}件`, color: 'text-emerald-400' },
             { label: '今週の売上', value: `¥${(weekRevenue / 10000).toFixed(1)}万`, color: 'text-amber-400' },
           ].map(({ label, value, color }) => (
-            <div key={label} className="bg-[#1A2535] border border-[#2E3F5C] rounded-xl p-3 text-center">
-              <p className="text-xs text-slate-400">{label}</p>
+            <div key={label} className="bg-white border border-[#E8E0F0] rounded-xl p-3 text-center">
+              <p className="text-xs text-[#6B7280]">{label}</p>
               <p className={`text-lg font-bold ${color}`}>{value}</p>
             </div>
           ))}
         </div>
 
         {/* 週ナビゲーション */}
-        <div className="bg-[#1A2535] border border-[#2E3F5C] rounded-xl p-4">
+        <div className="bg-white border border-[#E8E0F0] rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <button onClick={() => { const d = new Date(currentWeek); d.setDate(d.getDate() - 7); setCurrentWeek(d) }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2E3F5C] transition-colors">
-              <ChevronLeft className="w-4 h-4 text-slate-400" />
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F8F5FF] transition-colors">
+              <ChevronLeft className="w-4 h-4 text-[#6B7280]" />
             </button>
-            <span className="text-sm font-bold text-white">
+            <span className="text-sm font-bold text-[#2C2C2C]">
               {weekDates[0].getMonth() + 1}月{weekDates[0].getDate()}日 〜 {weekDates[6].getMonth() + 1}月{weekDates[6].getDate()}日
             </span>
             <button onClick={() => { const d = new Date(currentWeek); d.setDate(d.getDate() + 7); setCurrentWeek(d) }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2E3F5C] transition-colors">
-              <ChevronRight className="w-4 h-4 text-slate-400" />
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#F8F5FF] transition-colors">
+              <ChevronRight className="w-4 h-4 text-[#6B7280]" />
             </button>
           </div>
 
@@ -360,16 +360,16 @@ export default function ReservationsPage() {
                   className={`flex flex-col items-center py-2 rounded-xl transition-all ${
                     isSelected
                       ? 'bg-emerald-500/20 border border-emerald-500/50'
-                      : 'hover:bg-[#2E3F5C] border border-transparent'
+                      : 'hover:bg-[#F8F5FF] border border-transparent'
                   }`}
                 >
-                  <span className={`text-xs mb-1 ${isSat ? 'text-blue-400' : isSun ? 'text-red-400' : 'text-slate-400'}`}>
+                  <span className={`text-xs mb-1 ${isSat ? 'text-blue-400' : isSun ? 'text-red-400' : 'text-[#6B7280]'}`}>
                     {DAYS_JP[i]}
                   </span>
                   <span className={`text-sm font-bold ${
                     isToday ? 'text-emerald-400' :
                     isSat ? 'text-blue-300' :
-                    isSun ? 'text-red-300' : 'text-white'
+                    isSun ? 'text-red-300' : 'text-[#2C2C2C]'
                   }`}>
                     {date.getDate()}
                   </span>
@@ -387,9 +387,9 @@ export default function ReservationsPage() {
         {/* 選択日の予約一覧 */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-white">
+            <h2 className="text-sm font-bold text-[#2C2C2C]">
               {new Date(selectedDate).getMonth() + 1}月{new Date(selectedDate + 'T00:00:00').getDate()}日の予約
-              <span className="ml-2 text-slate-400 font-normal">({selectedDateReservations.length}件)</span>
+              <span className="ml-2 text-[#6B7280] font-normal">({selectedDateReservations.length}件)</span>
             </h2>
           </div>
 
@@ -398,9 +398,9 @@ export default function ReservationsPage() {
               <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
             </div>
           ) : selectedDateReservations.length === 0 ? (
-            <div className="text-center py-10 bg-[#1A2535] border border-[#2E3F5C] rounded-xl">
-              <Calendar className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-              <p className="text-slate-400 text-sm">この日の予約はありません</p>
+            <div className="text-center py-10 bg-white border border-[#E8E0F0] rounded-xl">
+              <Calendar className="w-10 h-10 text-[#6B7280] mx-auto mb-2" />
+              <p className="text-[#6B7280] text-sm">この日の予約はありません</p>
               <button
                 onClick={() => setShowNewModal(true)}
                 className="mt-3 text-sm text-emerald-400 hover:text-emerald-300 underline"

@@ -56,7 +56,7 @@ export default function DashboardPage() {
             href="/leo"
             className="ml-auto flex-shrink-0 text-xs text-red-600 hover:text-red-700 font-semibold underline"
           >
-            LEOに相談
+            AI経営会議に相談
           </Link>
         </div>
 

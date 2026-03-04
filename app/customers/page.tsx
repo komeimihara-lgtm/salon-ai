@@ -35,44 +35,44 @@ function CustomerCard({ customer, onClick }: { customer: Customer; onClick: () =
   return (
     <div
       onClick={onClick}
-      className="bg-[#1A2535] hover:bg-[#1E2D42] border border-[#2E3F5C] hover:border-[#3E5080] rounded-xl p-4 cursor-pointer transition-all group"
+      className="bg-white hover:bg-[#F8F5FF] border border-[#E8E0F0] hover:border-[#9B8EC4]/50 rounded-xl p-4 cursor-pointer transition-all group"
     >
       <div className="flex items-start justify-between mb-3">
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors">
+            <h3 className="text-sm font-bold text-[#2C2C2C] group-hover:text-[#C4728A] transition-colors">
               {customer.name}
             </h3>
             {customer.name_kana && (
-              <span className="text-xs text-slate-500">{customer.name_kana}</span>
+              <span className="text-xs text-[#6B7280]">{customer.name_kana}</span>
             )}
           </div>
           {customer.phone && (
             <div className="flex items-center gap-1 mt-1">
-              <Phone className="w-3 h-3 text-slate-500" />
-              <span className="text-xs text-slate-400">{customer.phone}</span>
+              <Phone className="w-3 h-3 text-[#6B7280]" />
+              <span className="text-xs text-[#6B7280]">{customer.phone}</span>
             </div>
           )}
         </div>
         <StatusBadge status={customer.status} />
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#2E3F5C]">
+      <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#E8E0F0]">
         <div className="text-center">
-          <p className="text-xs text-slate-500">来店回数</p>
-          <p className="text-sm font-bold text-white">{customer.visit_count}回</p>
+          <p className="text-xs text-[#6B7280]">来店回数</p>
+          <p className="text-sm font-bold text-[#2C2C2C]">{customer.visit_count}回</p>
         </div>
         <div className="text-center">
-          <p className="text-xs text-slate-500">客単価</p>
-          <p className="text-sm font-bold text-white">
+          <p className="text-xs text-[#6B7280]">客単価</p>
+          <p className="text-sm font-bold text-[#2C2C2C]">
             ¥{customer.avg_unit_price.toLocaleString()}
           </p>
         </div>
         <div className="text-center">
-          <p className="text-xs text-slate-500">最終来店</p>
+          <p className="text-xs text-[#6B7280]">最終来店</p>
           <p className={`text-sm font-bold ${
             daysSinceVisit && daysSinceVisit > 90 ? 'text-red-400' :
-            daysSinceVisit && daysSinceVisit > 60 ? 'text-amber-400' : 'text-white'
+            daysSinceVisit && daysSinceVisit > 60 ? 'text-amber-600' : 'text-[#2C2C2C]'
           }`}>
             {daysSinceVisit !== null ? `${daysSinceVisit}日前` : '—'}
           </p>
@@ -113,10 +113,10 @@ function NewCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1A2535] border border-[#2E3F5C] rounded-2xl w-full max-w-lg">
-        <div className="flex items-center justify-between p-5 border-b border-[#2E3F5C]">
-          <h2 className="text-base font-bold text-white">新規顧客登録</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+      <div className="bg-white border border-[#E8E0F0] rounded-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between p-5 border-b border-[#E8E0F0]">
+          <h2 className="text-base font-bold text-[#2C2C2C]">新規顧客登録</h2>
+          <button onClick={onClose} className="text-[#6B7280] hover:text-white">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -128,40 +128,40 @@ function NewCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
           )}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">氏名 *</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">氏名 *</label>
               <input
                 value={form.name}
                 onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
                 placeholder="山田 花子"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">フリガナ</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">フリガナ</label>
               <input
                 value={form.name_kana}
                 onChange={e => setForm(p => ({ ...p, name_kana: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
                 placeholder="ヤマダ ハナコ"
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">電話番号</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">電話番号</label>
               <input
                 value={form.phone}
                 onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
                 placeholder="090-0000-0000"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">性別</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">性別</label>
               <select
                 value={form.gender}
                 onChange={e => setForm(p => ({ ...p, gender: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
               >
                 <option value="female">女性</option>
                 <option value="male">男性</option>
@@ -171,56 +171,56 @@ function NewCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
             </div>
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">メールアドレス</label>
+            <label className="text-xs text-[#6B7280] mb-1 block">メールアドレス</label>
             <input
               value={form.email}
               onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-              className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+              className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
               placeholder="example@email.com"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">初回来店日</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">初回来店日</label>
               <input
                 type="date"
                 value={form.first_visit_date}
                 onChange={e => setForm(p => ({ ...p, first_visit_date: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">最終来店日</label>
+              <label className="text-xs text-[#6B7280] mb-1 block">最終来店日</label>
               <input
                 type="date"
                 value={form.last_visit_date}
                 onChange={e => setForm(p => ({ ...p, last_visit_date: e.target.value }))}
-                className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50"
+                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
               />
             </div>
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">メモ</label>
+            <label className="text-xs text-[#6B7280] mb-1 block">メモ</label>
             <textarea
               value={form.memo}
               onChange={e => setForm(p => ({ ...p, memo: e.target.value }))}
               rows={3}
-              className="w-full bg-[#0F1923] border border-[#2E3F5C] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/50 resize-none"
+              className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4] resize-none"
               placeholder="肌タイプ、アレルギー、特記事項など"
             />
           </div>
         </div>
-        <div className="flex gap-3 p-5 border-t border-[#2E3F5C]">
+        <div className="flex gap-3 p-5 border-t border-[#E8E0F0]">
           <button
             onClick={onClose}
-            className="flex-1 bg-[#0F1923] border border-[#2E3F5C] text-slate-400 rounded-xl py-2.5 text-sm hover:text-white transition-colors"
+            className="flex-1 bg-[#F8F5FF] border border-[#E8E0F0] text-[#6B7280] rounded-xl py-2.5 text-sm hover:text-[#2C2C2C] transition-colors"
           >
             キャンセル
           </button>
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-1 bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white rounded-xl py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             {saving ? '保存中...' : '登録する'}
@@ -274,10 +274,10 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#1A2535] border border-[#2E3F5C] rounded-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-5 border-b border-[#2E3F5C]">
-          <h2 className="text-base font-bold text-white">ペンギン CSVインポート</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+      <div className="bg-white border border-[#E8E0F0] rounded-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-5 border-b border-[#E8E0F0]">
+          <h2 className="text-base font-bold text-[#2C2C2C]">ペンギン CSVインポート</h2>
+          <button onClick={onClose} className="text-[#6B7280] hover:text-white"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-4">
           {!result ? (
@@ -289,14 +289,14 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
                 </p>
               </div>
               <div
-                className="border-2 border-dashed border-[#2E3F5C] rounded-xl p-8 text-center cursor-pointer hover:border-amber-500/50 transition-colors"
+                className="border-2 border-dashed border-[#E8E0F0] rounded-xl p-8 text-center cursor-pointer hover:border-amber-500/50 transition-colors"
                 onClick={() => document.getElementById('csv-input')?.click()}
               >
-                <Upload className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+                <Upload className="w-8 h-8 text-[#6B7280] mx-auto mb-2" />
                 {file ? (
                   <p className="text-sm text-amber-400 font-medium">{file.name}</p>
                 ) : (
-                  <p className="text-sm text-slate-400">CSVファイルを選択</p>
+                  <p className="text-sm text-[#6B7280]">CSVファイルを選択</p>
                 )}
                 <input
                   id="csv-input"
@@ -317,15 +317,15 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
               <div className="w-14 h-14 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Check className="w-7 h-7 text-emerald-400" />
               </div>
-              <p className="text-lg font-bold text-white mb-1">{result.imported}件 インポート完了</p>
-              <p className="text-sm text-slate-400">{result.message}</p>
+              <p className="text-lg font-bold text-[#2C2C2C] mb-1">{result.imported}件 インポート完了</p>
+              <p className="text-sm text-[#6B7280]">{result.message}</p>
             </div>
           )}
         </div>
-        <div className="flex gap-3 p-5 border-t border-[#2E3F5C]">
+        <div className="flex gap-3 p-5 border-t border-[#E8E0F0]">
           <button
             onClick={onClose}
-            className="flex-1 bg-[#0F1923] border border-[#2E3F5C] text-slate-400 rounded-xl py-2.5 text-sm hover:text-white transition-colors"
+            className="flex-1 bg-[#F8F5FF] border border-[#E8E0F0] text-[#6B7280] rounded-xl py-2.5 text-sm hover:text-[#2C2C2C] transition-colors"
           >
             {result ? '閉じる' : 'キャンセル'}
           </button>
@@ -385,33 +385,33 @@ export default function CustomersPage() {
   const vipCount = customers.filter(c => c.status === 'vip').length
 
   return (
-    <div className="min-h-screen bg-[#0F1923]">
+    <div className="min-h-screen bg-[#F8F5FF]">
       {/* ヘッダー */}
-      <header className="bg-[#1A2535] border-b border-[#2E3F5C] px-4 py-3 sticky top-0 z-10">
+      <header className="bg-white border-b border-[#E8E0F0] px-4 py-3 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-slate-400 hover:text-white transition-colors">
+            <Link href="/dashboard" className="text-[#6B7280] hover:text-[#2C2C2C] transition-colors">
               <ChevronLeft className="w-5 h-5" />
             </Link>
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-blue-400" />
-              <h1 className="text-base font-bold text-white">顧客管理</h1>
+              <h1 className="text-base font-bold text-[#2C2C2C]">顧客管理</h1>
             </div>
-            <span className="text-xs text-slate-400 bg-[#0F1923] rounded-full px-2 py-0.5">
+            <span className="text-xs text-[#6B7280] bg-[#F8F5FF] rounded-full px-2 py-0.5">
               {total.toLocaleString()}名
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-1.5 bg-[#0F1923] border border-[#2E3F5C] hover:border-blue-500/50 text-slate-300 hover:text-white rounded-lg px-3 py-1.5 text-xs transition-all"
+              className="flex items-center gap-1.5 bg-[#F8F5FF] border border-[#E8E0F0] hover:border-[#9B8EC4] text-[#2C2C2C] hover:text-[#2C2C2C] rounded-lg px-3 py-1.5 text-xs transition-all"
             >
               <Upload className="w-3.5 h-3.5" />
               CSVインポート
             </button>
             <button
               onClick={() => setShowNewModal(true)}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg px-3 py-1.5 text-xs font-bold hover:opacity-90 transition-opacity"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white rounded-lg px-3 py-1.5 text-xs font-bold hover:opacity-90 transition-opacity"
             >
               <Plus className="w-3.5 h-3.5" />
               新規登録
@@ -432,7 +432,7 @@ export default function CustomersPage() {
               </p>
             </div>
             <Link href="/leo" className="text-xs text-red-400 hover:text-red-300 font-semibold underline">
-              LEOに対策を相談 →
+              AI経営会議に対策を相談 →
             </Link>
           </div>
         )}
@@ -440,18 +440,18 @@ export default function CustomersPage() {
         {/* 検索・フィルター */}
         <div className="flex gap-3 mb-5">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6B7280]" />
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder="氏名・フリガナ・電話番号で検索..."
-              className="w-full bg-[#1A2535] border border-[#2E3F5C] focus:border-amber-500/50 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none transition-colors"
+              className="w-full bg-white border border-[#E8E0F0] focus:border-[#9B8EC4] rounded-xl pl-9 pr-4 py-2.5 text-sm text-[#2C2C2C] placeholder-[#6B7280] focus:outline-none transition-colors"
             />
           </div>
           <select
             value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
-            className="bg-[#1A2535] border border-[#2E3F5C] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500/50"
+            className="bg-white border border-[#E8E0F0] rounded-xl px-3 py-2.5 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
           >
             <option value="">全員</option>
             <option value="active">アクティブ</option>
@@ -467,11 +467,11 @@ export default function CustomersPage() {
             { label: '失客', value: lostCount, icon: AlertTriangle, color: 'text-red-400' },
             { label: 'VIP', value: vipCount, icon: Crown, color: 'text-amber-400' },
           ].map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="bg-[#1A2535] border border-[#2E3F5C] rounded-xl p-3 flex items-center gap-3">
+            <div key={label} className="bg-white border border-[#E8E0F0] rounded-xl p-3 flex items-center gap-3">
               <Icon className={`w-5 h-5 ${color}`} />
               <div>
-                <p className="text-xs text-slate-400">{label}</p>
-                <p className="text-lg font-bold text-white">{value.toLocaleString()}</p>
+                <p className="text-xs text-[#6B7280]">{label}</p>
+                <p className="text-lg font-bold text-[#2C2C2C]">{value.toLocaleString()}</p>
               </div>
             </div>
           ))}
@@ -484,8 +484,8 @@ export default function CustomersPage() {
           </div>
         ) : customers.length === 0 ? (
           <div className="text-center py-20">
-            <Users className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-            <p className="text-slate-400 mb-2">
+            <Users className="w-12 h-12 text-[#6B7280] mx-auto mb-3" />
+            <p className="text-[#6B7280] mb-2">
               {search || statusFilter ? '検索結果が見つかりません' : '顧客データがありません'}
             </p>
             {!search && !statusFilter && (
@@ -496,7 +496,7 @@ export default function CustomersPage() {
                 >
                   CSVでインポートする
                 </button>
-                <span className="text-slate-600">or</span>
+                <span className="text-[#6B7280]">or</span>
                 <button
                   onClick={() => setShowNewModal(true)}
                   className="text-sm text-amber-400 hover:text-amber-300 underline"
@@ -524,19 +524,19 @@ export default function CustomersPage() {
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="w-8 h-8 rounded-lg bg-[#1A2535] border border-[#2E3F5C] flex items-center justify-center disabled:opacity-30 hover:border-amber-500/50 transition-colors"
+              className="w-8 h-8 rounded-lg bg-white border border-[#E8E0F0] flex items-center justify-center disabled:opacity-30 hover:border-amber-500/50 transition-colors"
             >
-              <ChevronLeft className="w-4 h-4 text-slate-400" />
+              <ChevronLeft className="w-4 h-4 text-[#6B7280]" />
             </button>
-            <span className="text-sm text-slate-400">
+            <span className="text-sm text-[#6B7280]">
               {page} / {totalPages}ページ
             </span>
             <button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="w-8 h-8 rounded-lg bg-[#1A2535] border border-[#2E3F5C] flex items-center justify-center disabled:opacity-30 hover:border-amber-500/50 transition-colors"
+              className="w-8 h-8 rounded-lg bg-white border border-[#E8E0F0] flex items-center justify-center disabled:opacity-30 hover:border-amber-500/50 transition-colors"
             >
-              <ChevronRight className="w-4 h-4 text-slate-400" />
+              <ChevronRight className="w-4 h-4 text-[#6B7280]" />
             </button>
           </div>
         )}

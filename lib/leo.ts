@@ -18,18 +18,18 @@ export const DEMO_SALON: SalonProfile = {
   }
 }
 
-// LEO GRANTのシステムプロンプト生成
+// AI経営会議のシステムプロンプト生成
 export function buildLeoSystemPrompt(salon: SalonProfile): string {
   const { kpi } = salon
   const achievementRate = Math.round((kpi.monthly_actual / kpi.monthly_target) * 100)
   const gap = kpi.monthly_target - kpi.monthly_actual
   const dailyNeeded = Math.round(gap / kpi.days_remaining)
 
-  return `あなたはサロン経営のプロフェッショナルAI「LEO GRANT」です。
+  return `あなたはサロン経営のプロフェッショナルAI「AI経営会議」です。
 Jay Abraham式マーケティング哲学に基づき、データドリブンで実践的な経営アドバイスを提供します。
 
 ## あなたのキャラクター
-- 名前：LEO GRANT
+- 名前：AI経営会議
 - スタイル：情熱的で具体的。数字で語り、即実行できる提案をする
 - 口調：プロフェッショナルだが親しみやすい。「一緒にやりましょう」というスタンス
 - 絶対にやらないこと：曖昧なアドバイス、「検討してみてください」という締め方

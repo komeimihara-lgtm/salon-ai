@@ -8,10 +8,10 @@ import { ChatMessage, LeoMessage } from '@/types'
 
 // クイック質問サジェスト
 const QUICK_QUESTIONS = [
-  { icon: TrendingUp, text: '今月の売上目標を達成するには？', color: 'text-blue-400' },
-  { icon: Users, text: '失客しているお客様を取り戻したい', color: 'text-red-400' },
-  { icon: AlertTriangle, text: 'リピート率を上げる施策を教えて', color: 'text-amber-400' },
-  { icon: Zap, text: '今すぐできるキャンペーンを考えて', color: 'text-purple-400' },
+  { icon: TrendingUp, text: '今月の売上目標を達成するには？', color: 'text-[#C4728A]' },
+  { icon: Users, text: '失客しているお客様を取り戻したい', color: 'text-[#C4728A]' },
+  { icon: AlertTriangle, text: 'リピート率を上げる施策を教えて', color: 'text-[#9B8EC4]' },
+  { icon: Zap, text: '今すぐできるキャンペーンを考えて', color: 'text-[#9B8EC4]' },
 ]
 
 function MessageBubble({ message }: { message: ChatMessage }) {
@@ -19,22 +19,22 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in-up`}>
       {!isUser && (
-        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mr-3 mt-1 shadow-lg">
+        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[#C4728A] to-[#9B8EC4] flex items-center justify-center mr-3 mt-1 shadow-lg">
           <Sparkles className="w-4 h-4 text-white" />
         </div>
       )}
       <div className={`max-w-[78%] ${isUser ? 'order-1' : ''}`}>
         {!isUser && (
-          <p className="text-xs font-bold text-amber-400 mb-1 ml-1">LEO GRANT</p>
+          <p className="text-xs font-bold text-[#9B8EC4] mb-1 ml-1">AI経営会議</p>
         )}
         <div className={`rounded-2xl px-4 py-3 ${
           isUser
-            ? 'bg-gradient-to-br from-[#1A2F5A] to-[#2E4A8A] text-white rounded-tr-sm shadow-lg'
-            : 'bg-[#1E2D42] border border-[#2E3F5C] text-slate-200 rounded-tl-sm shadow-md'
+            ? 'bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white rounded-tr-sm shadow-lg'
+            : 'bg-white border border-[#E8E0F0] text-[#2C2C2C] rounded-tl-sm shadow-sm'
         }`}>
           <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
         </div>
-        <p className="text-xs text-slate-600 mt-1 mx-1">
+        <p className="text-xs text-[#6B7280] mt-1 mx-1">
           {message.timestamp.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
         </p>
       </div>
@@ -45,22 +45,22 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 function TypingIndicator() {
   return (
     <div className="flex justify-start animate-fade-in-up">
-      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mr-3 shadow-lg">
+      <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-[#C4728A] to-[#9B8EC4] flex items-center justify-center mr-3 shadow-lg">
         <Sparkles className="w-4 h-4 text-white animate-pulse" />
       </div>
-      <div className="bg-[#1E2D42] border border-[#2E3F5C] rounded-2xl rounded-tl-sm px-4 py-3">
+      <div className="bg-white border border-[#E8E0F0] rounded-2xl rounded-tl-sm px-4 py-3">
         <div className="flex items-center gap-1.5">
           {[0, 150, 300].map((delay) => (
             <span
               key={delay}
-              className="w-2 h-2 bg-amber-400 rounded-full"
+              className="w-2 h-2 bg-[#9B8EC4] rounded-full"
               style={{
                 animation: 'pulse-dot 1.2s ease-in-out infinite',
                 animationDelay: `${delay}ms`
               }}
             />
           ))}
-          <span className="text-xs text-slate-400 ml-1">LEOが分析中...</span>
+          <span className="text-xs text-[#6B7280] ml-1">分析中...</span>
         </div>
       </div>
     </div>
@@ -73,7 +73,7 @@ export default function LeoPage() {
     {
       id: '0',
       role: 'assistant',
-      content: `${salon.owner_name}さん、こんにちは。LEO GRANTです。\n\n現在の状況を確認しました。今月の達成率は${Math.round((salon.kpi.monthly_actual / salon.kpi.monthly_target) * 100)}%、残り${salon.kpi.days_remaining}日で¥${((salon.kpi.monthly_target - salon.kpi.monthly_actual) / 10000).toFixed(0)}万円が必要です。\n\n特に気になるのは失客${salon.kpi.lost_customers}名です。今すぐ手を打てば今月中に取り戻せます。\n\n何から始めますか？`,
+      content: `${salon.owner_name}さん、こんにちは。AI経営会議です。\n\n現在の状況を確認しました。今月の達成率は${Math.round((salon.kpi.monthly_actual / salon.kpi.monthly_target) * 100)}%、残り${salon.kpi.days_remaining}日で¥${((salon.kpi.monthly_target - salon.kpi.monthly_actual) / 10000).toFixed(0)}万円が必要です。\n\n特に気になるのは失客${salon.kpi.lost_customers}名です。今すぐ手を打てば今月中に取り戻せます。\n\n何から始めますか？`,
       timestamp: new Date(),
     }
   ])
@@ -152,23 +152,23 @@ export default function LeoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0F1923] flex flex-col">
+    <div className="min-h-screen bg-[#F8F5FF] flex flex-col">
 
       {/* ヘッダー */}
-      <header className="flex-shrink-0 bg-[#1A2535] border-b border-[#2E3F5C] px-4 py-3">
+      <header className="flex-shrink-0 bg-white border-b border-[#E8E0F0] px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#C4728A] to-[#9B8EC4] flex items-center justify-center shadow-lg">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-base font-bold text-white">LEO GRANT</h1>
-              <p className="text-xs text-slate-400">経営会議AI — {salon.name}</p>
+              <h1 className="text-base font-bold text-[#2C2C2C]">AI経営会議</h1>
+              <p className="text-xs text-[#6B7280]">経営会議AI — {salon.name}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 bg-[#0F1923] rounded-full px-3 py-1.5">
+          <div className="flex items-center gap-2 bg-[#F8F5FF] rounded-full px-3 py-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs text-slate-400">オンライン</span>
+            <span className="text-xs text-[#6B7280]">オンライン</span>
           </div>
         </div>
       </header>
@@ -192,16 +192,16 @@ export default function LeoPage() {
       {/* クイック質問（最初のメッセージのみ） */}
       {messages.length === 1 && !isLoading && (
         <div className="flex-shrink-0 max-w-4xl mx-auto w-full px-4 pb-2">
-          <p className="text-xs text-slate-500 mb-2 ml-1">よく使う質問</p>
+          <p className="text-xs text-[#6B7280] mb-2 ml-1">よく使う質問</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {QUICK_QUESTIONS.map(({ icon: Icon, text, color }) => (
               <button
                 key={text}
                 onClick={() => sendMessage(text)}
-                className="flex items-center gap-2 bg-[#1A2535] hover:bg-[#1E2D42] border border-[#2E3F5C] hover:border-[#3E5080] rounded-xl px-3 py-2.5 text-left transition-all group"
+                className="flex items-center gap-2 bg-white hover:bg-[#F8F5FF] border border-[#E8E0F0] hover:border-[#9B8EC4]/50 rounded-xl px-3 py-2.5 text-left transition-all group"
               >
                 <Icon className={`w-4 h-4 flex-shrink-0 ${color}`} />
-                <span className="text-sm text-slate-300 group-hover:text-white">{text}</span>
+                <span className="text-sm text-[#2C2C2C] group-hover:text-[#9B8EC4]">{text}</span>
               </button>
             ))}
           </div>
@@ -209,29 +209,29 @@ export default function LeoPage() {
       )}
 
       {/* 入力エリア */}
-      <div className="flex-shrink-0 bg-[#1A2535] border-t border-[#2E3F5C] px-4 py-3">
+      <div className="flex-shrink-0 bg-white border-t border-[#E8E0F0] px-4 py-3">
         <div className="max-w-4xl mx-auto">
-          <div className="flex items-end gap-3 bg-[#0F1923] border border-[#2E3F5C] focus-within:border-amber-500/50 rounded-2xl px-4 py-3 transition-colors">
+          <div className="flex items-end gap-3 bg-white border border-[#E8E0F0] focus-within:border-[#9B8EC4] rounded-2xl px-4 py-3 transition-colors">
             <textarea
               ref={textareaRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="LEOに相談する... (Enter で送信 / Shift+Enter で改行)"
+              placeholder="相談内容を入力... (Enter で送信 / Shift+Enter で改行)"
               rows={1}
-              className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none"
+              className="flex-1 bg-transparent text-sm text-[#2C2C2C] placeholder-[#6B7280] resize-none focus:outline-none"
               style={{ minHeight: '24px', maxHeight: '120px' }}
             />
             <button
               onClick={() => sendMessage(input)}
               disabled={!input.trim() || isLoading}
-              className="flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 transition-all shadow-lg"
+              className="flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-[#C4728A] to-[#9B8EC4] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed hover:opacity-90 active:scale-95 transition-all shadow-lg"
             >
               <Send className="w-4 h-4 text-white" />
             </button>
           </div>
-          <p className="text-center text-xs text-slate-600 mt-2">
-            LEO GRANTはサロンの実データを基に回答します
+          <p className="text-center text-xs text-[#6B7280] mt-2">
+            AI経営会議はサロンの実データを基に回答します
           </p>
         </div>
       </div>

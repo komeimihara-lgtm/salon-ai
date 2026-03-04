@@ -40,13 +40,13 @@ export default function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <aside className="w-60 min-h-screen bg-[#5A4A6E] flex flex-col shrink-0">
-      <div className="p-5 border-b border-[#5A4A6E]/80">
+    <aside className="w-60 min-h-screen bg-white border-r border-[#E8E0F0] flex flex-col shrink-0">
+      <div className="p-5 border-b border-[#E8E0F0]">
         <Link href="/dashboard" className="block">
           <h1 className="text-xl font-bold bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] bg-clip-text text-transparent">
             SOLA
           </h1>
-          <p className="text-[10px] text-white/70 mt-0.5 tracking-wider">AI SALON MANAGER</p>
+          <p className="text-[10px] text-[#6B7280] mt-0.5 tracking-wider">AI SALON MANAGER</p>
         </Link>
       </div>
       <nav className="flex-1 py-4 overflow-y-auto">
@@ -58,8 +58,8 @@ export default function Sidebar() {
               href={href}
               className={`flex items-center gap-3 px-5 py-2.5 mx-2 rounded-lg transition-colors ${
                 isActive
-                  ? 'bg-[#C4728A]/20 text-[#C4728A] border-l-[3px] border-[#C4728A]'
-                  : 'text-white/60 hover:text-white hover:bg-white/5'
+                  ? 'bg-[#9B8EC4]/15 text-[#9B8EC4] border-l-[3px] border-[#9B8EC4]'
+                  : 'text-[#6B7280] hover:text-[#2C2C2C] hover:bg-[#F8F5FF]'
               }`}
             >
               <Icon className="w-5 h-5 shrink-0" />
@@ -68,9 +68,9 @@ export default function Sidebar() {
           )
         })}
       </nav>
-      <div className="p-4 border-t border-white/10">
-        <p className="text-xs text-white/60 truncate">エステサロン ルミエール</p>
-        <p className="text-xs text-[#C4728A] font-medium mt-0.5">KOMEIさん</p>
+      <div className="p-4 border-t border-[#E8E0F0]">
+        <p className="text-xs text-[#6B7280] truncate">エステサロン ルミエール</p>
+        <p className="text-xs text-[#9B8EC4] font-medium mt-0.5">KOMEIさん</p>
       </div>
     </aside>
   )
