@@ -206,7 +206,7 @@ const DEFAULT_SESSION: SessionData = {
 
 function CounselingContent() {
   const searchParams = useSearchParams()
-  const mode = (searchParams.get('mode') === 'salon' ? 'salon' : 'online') as 'online' | 'salon'
+  const mode = (searchParams.get('mode') === 'online' ? 'online' : 'salon') as 'online' | 'salon'
 
   const [step, setStep] = useState(1)
   const [data, setData] = useState<SessionData>(DEFAULT_SESSION)
@@ -443,7 +443,7 @@ function CounselingContent() {
 
   if (completed) {
     return (
-      <div className="min-h-screen bg-white flex flex-col">
+      <div className="bg-white flex flex-col h-[calc(100vh-64px)]">
         <header className="flex items-center h-14 px-4 border-b border-gray-100">
           <Link href="/dashboard" className="p-2 -ml-2 text-[#3D3D3D]">
             <BackIcon className="w-5 h-5" />
@@ -482,7 +482,7 @@ function CounselingContent() {
   const useSplitLayout = isChatStep
 
   return (
-    <div className={`min-h-screen bg-white flex flex-col ${useSplitLayout ? 'lg:flex-row lg:max-w-none' : 'max-w-lg mx-auto'}`}>
+    <div className={`bg-white flex flex-col h-[calc(100vh-64px)] ${useSplitLayout ? 'lg:flex-row lg:max-w-none -mx-4 lg:-mx-8 -mt-4 lg:-mt-8' : 'max-w-lg mx-auto'}`}>
       <header className={`flex items-center h-14 px-4 border-b border-gray-100 shrink-0 ${useSplitLayout ? 'lg:absolute lg:top-0 lg:left-0 lg:right-0 lg:z-20 lg:bg-white/95 lg:backdrop-blur' : ''}`}>
         <Link href="/dashboard" className="p-2 -ml-2 text-[#3D3D3D]">
           <BackIcon className="w-5 h-5" />
@@ -643,7 +643,7 @@ function CounselingContent() {
               {data.messages.length === 0 && (
                 <div className="flex gap-2">
                   <SolaAvatarImg size={32} isSpeaking={isSpeaking} />
-                  <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-sm text-[#3D3D3D] max-w-[85%]">
+                  <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%]">
                     はじめまして、私はSOLAのAIビューティーカウンセラー『Sola（ソラ）』です ✨
                     今日は施術前に、あなたのお肌やお悩みについてゆっくりお聞きしたいと思います。
                     本日はどんなことでお越しになりましたか？ 🌸
@@ -660,7 +660,7 @@ function CounselingContent() {
                 ) : (
                   <div key={i} className="flex gap-2">
                     <SolaAvatarImg size={32} isSpeaking={isSpeaking} />
-                    <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-sm text-[#3D3D3D] max-w-[85%]">
+                    <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%]">
                       {m.content}
                     </div>
                   </div>
