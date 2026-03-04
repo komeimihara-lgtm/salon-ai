@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
-  "buildCommand": "npm run build",
+  "buildCommand": "VERCEL_FORCE_NO_BUILD_CACHE=1 npm run build",
   "installCommand": "npm install"
 }

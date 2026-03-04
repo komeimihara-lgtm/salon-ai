@@ -27,11 +27,22 @@ git pull origin main
 - `fix: ElevenLabs音声エラーを修正`
 - `add: LINE連携画面を追加`
 
-### 4. Vercelデプロイ
+### 4. Vercelデプロイ（必ずこの順番で実行）
 
-- GitHub連携済みのため、**pushするだけで自動デプロイ**
-- 手動で `vercel deploy` は不要
+```bash
+# 1. 必ず先にpush（GitHubを最新にする）
+git add .
+git commit -m "メッセージ"
+git push origin main
+
+# 2. その後にデプロイ（--forceでキャッシュ無効化）
+npm run deploy
+```
+
+- **順番厳守**: push → deploy。逆は禁止。
+- **`--force`**: ビルドキャッシュを無効化し、古いバージョンが混入するのを防ぐ
+- `vercel.json` の `VERCEL_FORCE_NO_BUILD_CACHE=1` で二重対策
 
 ## 背景
 
-以前、GitHub未連携の状態で不完全なコードをpushしてしまい、完成済みの画面が消えるトラブルが発生。今後は必ずcommit & pushを徹底する。
+以前、デプロイ時に古いバージョンが表示されるトラブルが発生。原因はビルドキャッシュ。`--force` と `VERCEL_FORCE_NO_BUILD_CACHE` で根本解決。
