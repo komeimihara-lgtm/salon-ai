@@ -6,68 +6,93 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 })
 
-function daysSince(dateStr: string | null): number {
-  if (!dateStr) return 9999
-  const d = new Date(dateStr)
-  const now = new Date()
-  return Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
-}
-
-function daysUntilBirthday(birthday: string | null): number | null {
-  if (!birthday) return null
-  const [y, m, d] = birthday.split('-').map(Number)
-  const today = new Date()
-  const thisYear = new Date(today.getFullYear(), m - 1, d)
-  if (thisYear < today) {
-    thisYear.setFullYear(today.getFullYear() + 1)
-  }
-  return Math.ceil((thisYear.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-}
+// キャッシュ（サーバーメモリ、デプロイまでの間保持）
+let cachedProposals: unknown = null
+let cacheDate: string = ''
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = getSupabaseAdmin()
-    const { data: customers } = await supabase
-      .from('customers')
-      .select('id, name, visit_count, last_visit_date, status, birthday, memo')
-      .eq('salon_id', DEMO_SALON_ID)
-      .in('status', ['active', 'vip'])
-      .order('last_visit_date', { ascending: false })
-      .limit(50)
+    const today = new Date().toISOString().slice(0, 10)
 
-    const summary = (customers || []).map((c) => {
-      const daysSinceVisit = daysSince(c.last_visit_date)
-      const daysToBirthday = daysUntilBirthday(c.birthday)
+    // 同じ日のキャッシュがあれば返す
+    if (cachedProposals && cacheDate === today) {
+      return NextResponse.json({ proposals: cachedProposals })
+    }
+
+    const supabase = getSupabaseAdmin()
+
+    // 今日〜3日以内の予約を取得
+    const in3days = new Date()
+    in3days.setDate(in3days.getDate() + 3)
+    const in3daysStr = in3days.toISOString().slice(0, 10)
+
+    const { data: reservations } = await supabase
+      .from('reservations')
+      .select('customer_id, customer_name, reservation_date, menu, start_time')
+      .eq('salon_id', DEMO_SALON_ID)
+      .eq('status', 'confirmed')
+      .gte('reservation_date', today)
+      .lte('reservation_date', in3daysStr)
+      .order('reservation_date', { ascending: true })
+      .limit(20)
+
+    if (!reservations || reservations.length === 0) {
+      return NextResponse.json({ proposals: [], message: '今後3日以内の予約がありません' })
+    }
+
+    // 顧客詳細を取得
+    const customerIds = reservations
+      .filter(r => r.customer_id)
+      .map(r => r.customer_id)
+
+    const { data: customers } = customerIds.length > 0
+      ? await supabase
+          .from('customers')
+          .select('id, name, visit_count, last_visit_date, birthday, memo, concerns')
+          .in('id', customerIds)
+      : { data: [] }
+
+    const summary = reservations.map(r => {
+      const customer = customers?.find(c => c.id === r.customer_id)
+      const birthday = customer?.birthday
+      let daysToBirthday = null
+      if (birthday) {
+        const [y, m, d] = birthday.split('-').map(Number)
+        const bday = new Date(new Date().getFullYear(), m - 1, d)
+        if (bday < new Date()) bday.setFullYear(bday.getFullYear() + 1)
+        daysToBirthday = Math.ceil((bday.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+      }
       return {
-        name: c.name,
-        visit_count: c.visit_count || 0,
-        days_since_visit: daysSinceVisit,
-        status: c.status,
-        birthday_soon: daysToBirthday !== null && daysToBirthday >= 0 && daysToBirthday <= 30,
+        name: r.customer_name,
+        reservation_date: r.reservation_date,
+        menu: r.menu || '',
+        visit_count: customer?.visit_count || 0,
+        birthday_soon: daysToBirthday !== null && daysToBirthday >= 0 && daysToBirthday <= 14,
         days_to_birthday: daysToBirthday,
-        memo: (c.memo || '').slice(0, 100),
+        concerns: customer?.concerns || '',
+        memo: (customer?.memo || '').slice(0, 100),
       }
     })
 
     const systemPrompt = `あなたはエステサロンの「感動体験」を設計するプロのコンサルタントです。
-顧客データを分析し、「普通のサービスを超えた感動」を生む取り組みを提案してください。
+これから来店するお客様に対して、「普通のサービスを超えた感動」を生む準備・取り組みを提案してください。
 
 提案の考え方：
-- 誕生日・来店記念日など「特別な日」を逃さない
-- 長期間未来店・失客寸前の顧客への心のこもったアプローチ
-- VIP・リピーターへの特別感のあるサプライズ
-- 一人ひとりの状況に寄り添ったパーソナルな提案
-- 施術以外の「気づかい」で差別化
+- 来店前に送るウェルカムメッセージ
+- 誕生日が近いお客様への特別サプライズ
+- リピーター・VIPへの特別な気遣い
+- 初回来店のお客様への丁寧なお出迎え準備
+- お悩みに寄り添ったパーソナルな提案
 
 出力は必ず以下のJSON形式のみ。説明文は含めない。
 {"proposals":[{"customer_name":"顧客名","reason":"提案理由（短く）","initiative":"具体的な取り組み内容","action_type":"message|task|offer|surprise","message_template":"実行用のメッセージ文（LINE等で送る場合）","priority":1}]}
 
 priorityは1-5（1が最優先）。最大5件まで。`
 
-    const userPrompt = `【顧客データ】
+    const userPrompt = `【今後3日以内の来店予定顧客】
 ${JSON.stringify(summary, null, 2)}
 
-上記の顧客データを分析し、感動レベルの顧客満足UPの取り組みを提案してください。`
+上記のお客様の来店に向けて、感動レベルの体験を準備するための取り組みを提案してください。`
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -77,20 +102,9 @@ ${JSON.stringify(summary, null, 2)}
     })
 
     const content = response.content[0]
-    if (content.type !== 'text') {
-      throw new Error('予期しないレスポンス形式')
-    }
+    if (content.type !== 'text') throw new Error('予期しないレスポンス形式')
 
-    let parsed: {
-      proposals?: {
-        customer_name: string
-        reason: string
-        initiative: string
-        action_type: string
-        message_template?: string
-        priority: number
-      }[]
-    }
+    let parsed: { proposals?: unknown[] }
     try {
       const text = content.text.replace(/```json\n?|\n?```/g, '').trim()
       const jsonMatch = text.match(/\{[\s\S]*\}/)
@@ -100,6 +114,11 @@ ${JSON.stringify(summary, null, 2)}
     }
 
     const proposals = (parsed.proposals || []).slice(0, 5)
+
+    // 当日キャッシュに保存
+    cachedProposals = proposals
+    cacheDate = today
+
     return NextResponse.json({ proposals })
   } catch (error) {
     console.error('customer-delight API Error:', error)
