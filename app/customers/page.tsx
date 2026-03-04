@@ -4,17 +4,37 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   Users, Search, Plus, Upload, ChevronLeft, ChevronRight,
-  AlertTriangle, Crown, Star, Phone, Mail, Calendar,
-  TrendingUp, X, Check, Loader2
+  AlertTriangle, Crown, Phone, X, Check, Loader2, Ticket, Minus, Repeat
 } from 'lucide-react'
 import { Customer } from '@/types'
+import {
+  getCoursesByCustomer,
+  getCoursePacks,
+  addCustomerCourse,
+  consumeCourse,
+  isExpired,
+  daysUntilExpiry,
+  type CustomerCourse,
+} from '@/lib/courses'
+import {
+  getSubscriptionsByCustomer,
+  getSubscriptionPlans,
+  addCustomerSubscription,
+  useSubscriptionSession,
+  pauseSubscription,
+  resumeSubscription,
+  ensureBillingPeriodCurrent,
+  getRemainingSessions,
+  daysUntilNextBilling,
+  type CustomerSubscription,
+} from '@/lib/subscriptions'
 
 // ステータスバッジ
 function StatusBadge({ status }: { status: Customer['status'] }) {
   const map = {
     active: { label: 'アクティブ', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-    lost: { label: '失客', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
-    vip: { label: 'VIP', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+    lost: { label: '失客', color: 'bg-red-500/20 text-red-600 border-red-500/30' },
+    vip: { label: 'VIP', color: 'bg-amber-500/20 text-[#0891B2] border-amber-500/30' },
   }
   const { label, color } = map[status]
   return (
@@ -23,6 +43,327 @@ function StatusBadge({ status }: { status: Customer['status'] }) {
       {status === 'lost' && <AlertTriangle className="w-3 h-3 inline mr-1" />}
       {label}
     </span>
+  )
+}
+
+// 顧客詳細モーダル（コース表示・購入・消化）
+function CustomerDetailModal({
+  customer,
+  onClose,
+  onCourseUpdated,
+}: {
+  customer: Customer
+  onClose: () => void
+  onCourseUpdated?: () => void
+}) {
+  const [courses, setCourses] = useState<CustomerCourse[]>([])
+  const [packs, setPacks] = useState<ReturnType<typeof getCoursePacks>>([])
+  const [purchaseOpen, setPurchaseOpen] = useState(false)
+  const [selectedPack, setSelectedPack] = useState<ReturnType<typeof getCoursePacks>[0] | null>(null)
+  const [consumeTarget, setConsumeTarget] = useState<CustomerCourse | null>(null)
+
+  const [subs, setSubs] = useState<CustomerSubscription[]>([])
+  const [subPlans, setSubPlans] = useState<ReturnType<typeof getSubscriptionPlans>>([])
+  const [subPurchaseOpen, setSubPurchaseOpen] = useState(false)
+  const [selectedSubPlan, setSelectedSubPlan] = useState<ReturnType<typeof getSubscriptionPlans>[0] | null>(null)
+  const [subUseTarget, setSubUseTarget] = useState<CustomerSubscription | null>(null)
+
+  const refresh = useCallback(() => {
+    setCourses(getCoursesByCustomer(customer.id))
+    setPacks(getCoursePacks())
+    setSubs(getSubscriptionsByCustomer(customer.id).map(s => ensureBillingPeriodCurrent(s)))
+    setSubPlans(getSubscriptionPlans())
+    onCourseUpdated?.()
+  }, [customer.id, onCourseUpdated])
+
+  useEffect(() => {
+    refresh()
+    const handler = () => refresh()
+    window.addEventListener('customer-courses-updated', handler)
+    window.addEventListener('customer-subscriptions-updated', handler)
+    return () => {
+      window.removeEventListener('customer-courses-updated', handler)
+      window.removeEventListener('customer-subscriptions-updated', handler)
+    }
+  }, [refresh])
+
+  const handlePurchase = () => {
+    if (!selectedPack) return
+    addCustomerCourse(customer.id, customer.name, selectedPack)
+    refresh()
+    setPurchaseOpen(false)
+    setSelectedPack(null)
+  }
+
+  const handleConsume = (c: CustomerCourse) => {
+    consumeCourse(c.id)
+    refresh()
+    setConsumeTarget(null)
+  }
+
+  const handleSubJoin = () => {
+    if (!selectedSubPlan) return
+    addCustomerSubscription(customer.id, customer.name, selectedSubPlan)
+    refresh()
+    setSubPurchaseOpen(false)
+    setSelectedSubPlan(null)
+  }
+
+  const handleSubUse = (s: CustomerSubscription) => {
+    useSubscriptionSession(s.id)
+    refresh()
+    setSubUseTarget(null)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-5 border-b border-[#BAE6FD]">
+          <h2 className="text-base font-bold text-[#1A202C]">{customer.name} 様</h2>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/chart/${customer.id}`}
+              onClick={onClose}
+              className="px-3 py-1.5 rounded-lg bg-rose text-white text-sm font-medium hover:opacity-90"
+            >
+              カルテ
+            </Link>
+            <button onClick={onClose} className="text-[#4A5568] hover:text-[#1A202C]">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-[#4A5568]">来店回数</p>
+              <p className="font-bold text-[#1A202C]">{customer.visit_count}回</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#4A5568]">客単価</p>
+              <p className="font-bold text-[#1A202C]">¥{customer.avg_unit_price.toLocaleString()}</p>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-[#1A202C] flex items-center gap-2">
+                <Ticket className="w-4 h-4" />
+                保有コース
+              </h3>
+              <button
+                onClick={() => setPurchaseOpen(true)}
+                className="text-xs font-semibold text-rose hover:underline"
+              >
+                + 購入
+              </button>
+            </div>
+            {courses.length === 0 ? (
+              <p className="text-sm text-[#4A5568] py-2">保有コースはありません</p>
+            ) : (
+              <div className="space-y-2">
+                {courses.map(c => {
+                  const expired = isExpired(c)
+                  const days = daysUntilExpiry(c)
+                  return (
+                    <div
+                      key={c.id}
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg ${
+                        expired ? 'bg-red-500/10' : 'bg-white border border-[#BAE6FD]'
+                      }`}
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-[#1A202C]">{c.courseName}</p>
+                        <p className="text-xs text-[#4A5568]">
+                          残り{c.remainingSessions}/{c.totalSessions}回 · 期限{c.expiryDate}
+                          {!expired && c.remainingSessions > 0 && ` (残${days}日)`}
+                        </p>
+                      </div>
+                      {c.remainingSessions > 0 && !expired && (
+                        <button
+                          onClick={() => setConsumeTarget(c)}
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded"
+                        >
+                          <Minus className="w-3 h-3" />消化
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-[#1A202C] flex items-center gap-2">
+                <Repeat className="w-4 h-4" />
+                サブスク
+              </h3>
+              <button
+                onClick={() => setSubPurchaseOpen(true)}
+                className="text-xs font-semibold text-rose hover:underline"
+              >
+                + 加入
+              </button>
+            </div>
+            {subs.length === 0 ? (
+              <p className="text-sm text-[#4A5568] py-2">サブスク加入はありません</p>
+            ) : (
+              <div className="space-y-2">
+                {subs.map(s => {
+                  const remaining = getRemainingSessions(s)
+                  const days = daysUntilNextBilling(s)
+                  return (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-[#BAE6FD]"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-[#1A202C]">{s.planName}</p>
+                        <p className="text-xs text-[#4A5568]">
+                          今月残り{remaining}/{s.sessionsPerMonth}回 · 次回課金{s.nextBillingDate}（残{days}日）
+                        </p>
+                      </div>
+                      {remaining > 0 && (
+                        <button
+                          onClick={() => setSubUseTarget(s)}
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded"
+                        >
+                          <Minus className="w-3 h-3" />利用
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {purchaseOpen && (
+          <div className="p-5 border-t border-[#BAE6FD] bg-white/50 rounded-b-2xl">
+            <p className="text-sm font-medium text-[#1A202C] mb-2">コースを選択</p>
+            <div className="space-y-2 mb-4">
+              {packs.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setSelectedPack(p)}
+                  className={`w-full text-left px-3 py-2 rounded-lg border ${
+                    selectedPack?.id === p.id ? 'border-rose bg-rose/5' : 'border-[#BAE6FD]'
+                  }`}
+                >
+                  <p className="text-sm font-medium">{p.name}</p>
+                  <p className="text-xs text-[#4A5568]">
+                    ¥{p.price.toLocaleString()} · {p.totalSessions}回 · 有効{p.expiryMonths}ヶ月
+                  </p>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setPurchaseOpen(false); setSelectedPack(null) }}
+                className="flex-1 py-2 rounded-xl border border-[#BAE6FD] text-[#4A5568]"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handlePurchase}
+                disabled={!selectedPack}
+                className="flex-1 py-2 rounded-xl bg-gradient-to-r from-[#0891B2] to-[#0e7490] text-white font-bold disabled:opacity-50"
+              >
+                購入登録
+              </button>
+            </div>
+          </div>
+        )}
+
+        {subPurchaseOpen && (
+          <div className="p-5 border-t border-[#BAE6FD] bg-white/50 rounded-b-2xl">
+            <p className="text-sm font-medium text-[#1A202C] mb-2">プランを選択</p>
+            <div className="space-y-2 mb-4">
+              {subPlans.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setSelectedSubPlan(p)}
+                  className={`w-full text-left px-3 py-2 rounded-lg border ${
+                    selectedSubPlan?.id === p.id ? 'border-rose bg-rose/5' : 'border-[#BAE6FD]'
+                  }`}
+                >
+                  <p className="text-sm font-medium">{p.name}</p>
+                  <p className="text-xs text-[#4A5568]">
+                    ¥{p.price.toLocaleString()}/月 · {p.menuName} {p.sessionsPerMonth}回
+                  </p>
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setSubPurchaseOpen(false); setSelectedSubPlan(null) }}
+                className="flex-1 py-2 rounded-xl border border-[#BAE6FD] text-[#4A5568]"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSubJoin}
+                disabled={!selectedSubPlan}
+                className="flex-1 py-2 rounded-xl bg-gradient-to-r from-[#0891B2] to-[#0e7490] text-white font-bold disabled:opacity-50"
+              >
+                加入登録
+              </button>
+            </div>
+          </div>
+        )}
+
+        {consumeTarget && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
+            <div className="bg-white rounded-xl p-5 max-w-sm w-full">
+              <p className="text-sm mb-4">
+                {consumeTarget.courseName} を1回消化しますか？
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConsumeTarget(null)}
+                  className="flex-1 py-2 rounded-lg border"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={() => handleConsume(consumeTarget)}
+                  className="flex-1 py-2 rounded-lg bg-rose text-white font-medium"
+                >
+                  消化する
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {subUseTarget && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
+            <div className="bg-white rounded-xl p-5 max-w-sm w-full">
+              <p className="text-sm mb-4">
+                {subUseTarget.planName} を1回利用しますか？
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSubUseTarget(null)}
+                  className="flex-1 py-2 rounded-lg border"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={() => handleSubUse(subUseTarget)}
+                  className="flex-1 py-2 rounded-lg bg-rose text-white font-medium"
+                >
+                  利用する
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -35,44 +376,48 @@ function CustomerCard({ customer, onClick }: { customer: Customer; onClick: () =
   return (
     <div
       onClick={onClick}
-      className="bg-white hover:bg-[#F8F5FF] border border-[#E8E0F0] hover:border-[#9B8EC4]/50 rounded-xl p-4 cursor-pointer transition-all group"
+      className="bg-[#F0F9FF] hover:bg-[#E0F2FE] border border-[#BAE6FD] hover:border-[#0891B2] rounded-xl p-4 cursor-pointer transition-all group"
     >
       <div className="flex items-start justify-between mb-3">
-        <div>
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-[#2C2C2C] group-hover:text-[#C4728A] transition-colors">
+            <Link
+              href={`/chart/${customer.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="text-sm font-bold text-[#1A202C] group-hover:text-[#0891B2] transition-colors hover:underline"
+            >
               {customer.name}
-            </h3>
+            </Link>
             {customer.name_kana && (
-              <span className="text-xs text-[#6B7280]">{customer.name_kana}</span>
+              <span className="text-xs text-[#4A5568]">{customer.name_kana}</span>
             )}
           </div>
           {customer.phone && (
             <div className="flex items-center gap-1 mt-1">
-              <Phone className="w-3 h-3 text-[#6B7280]" />
-              <span className="text-xs text-[#6B7280]">{customer.phone}</span>
+              <Phone className="w-3 h-3 text-[#4A5568]" />
+              <span className="text-xs text-[#4A5568]">{customer.phone}</span>
             </div>
           )}
         </div>
         <StatusBadge status={customer.status} />
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#E8E0F0]">
+      <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#BAE6FD]">
         <div className="text-center">
-          <p className="text-xs text-[#6B7280]">来店回数</p>
-          <p className="text-sm font-bold text-[#2C2C2C]">{customer.visit_count}回</p>
+          <p className="text-xs text-[#4A5568]">来店回数</p>
+          <p className="text-sm font-bold text-[#1A202C]">{customer.visit_count}回</p>
         </div>
         <div className="text-center">
-          <p className="text-xs text-[#6B7280]">客単価</p>
-          <p className="text-sm font-bold text-[#2C2C2C]">
+          <p className="text-xs text-[#4A5568]">客単価</p>
+          <p className="text-sm font-bold text-[#1A202C]">
             ¥{customer.avg_unit_price.toLocaleString()}
           </p>
         </div>
         <div className="text-center">
-          <p className="text-xs text-[#6B7280]">最終来店</p>
+          <p className="text-xs text-[#4A5568]">最終来店</p>
           <p className={`text-sm font-bold ${
-            daysSinceVisit && daysSinceVisit > 90 ? 'text-red-400' :
-            daysSinceVisit && daysSinceVisit > 60 ? 'text-amber-600' : 'text-[#2C2C2C]'
+            daysSinceVisit && daysSinceVisit > 90 ? 'text-red-600' :
+            daysSinceVisit && daysSinceVisit > 60 ? 'text-[#0891B2]' : 'text-[#1A202C]'
           }`}>
             {daysSinceVisit !== null ? `${daysSinceVisit}日前` : '—'}
           </p>
@@ -113,55 +458,55 @@ function NewCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white border border-[#E8E0F0] rounded-2xl w-full max-w-lg">
-        <div className="flex items-center justify-between p-5 border-b border-[#E8E0F0]">
-          <h2 className="text-base font-bold text-[#2C2C2C]">新規顧客登録</h2>
-          <button onClick={onClose} className="text-[#6B7280] hover:text-white">
+      <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between p-5 border-b border-[#BAE6FD]">
+          <h2 className="text-base font-bold text-[#1A202C]">新規顧客登録</h2>
+          <button onClick={onClose} className="text-[#4A5568] hover:text-[#1A202C]">
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-sm text-red-400">
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-sm text-red-600">
               {error}
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-[#6B7280] mb-1 block">氏名 *</label>
+              <label className="text-xs text-[#4A5568] mb-1 block">氏名 *</label>
               <input
                 value={form.name}
                 onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
                 placeholder="山田 花子"
               />
             </div>
             <div>
-              <label className="text-xs text-[#6B7280] mb-1 block">フリガナ</label>
+              <label className="text-xs text-[#4A5568] mb-1 block">フリガナ</label>
               <input
                 value={form.name_kana}
                 onChange={e => setForm(p => ({ ...p, name_kana: e.target.value }))}
-                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
                 placeholder="ヤマダ ハナコ"
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-[#6B7280] mb-1 block">電話番号</label>
+              <label className="text-xs text-[#4A5568] mb-1 block">電話番号</label>
               <input
                 value={form.phone}
                 onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
-                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
                 placeholder="090-0000-0000"
               />
             </div>
             <div>
-              <label className="text-xs text-[#6B7280] mb-1 block">性別</label>
+              <label className="text-xs text-[#4A5568] mb-1 block">性別</label>
               <select
                 value={form.gender}
                 onChange={e => setForm(p => ({ ...p, gender: e.target.value }))}
-                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
               >
                 <option value="female">女性</option>
                 <option value="male">男性</option>
@@ -171,56 +516,56 @@ function NewCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
             </div>
           </div>
           <div>
-            <label className="text-xs text-[#6B7280] mb-1 block">メールアドレス</label>
+            <label className="text-xs text-[#4A5568] mb-1 block">メールアドレス</label>
             <input
               value={form.email}
               onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-              className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
               placeholder="example@email.com"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-[#6B7280] mb-1 block">初回来店日</label>
+              <label className="text-xs text-[#4A5568] mb-1 block">初回来店日</label>
               <input
                 type="date"
                 value={form.first_visit_date}
                 onChange={e => setForm(p => ({ ...p, first_visit_date: e.target.value }))}
-                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
               />
             </div>
             <div>
-              <label className="text-xs text-[#6B7280] mb-1 block">最終来店日</label>
+              <label className="text-xs text-[#4A5568] mb-1 block">最終来店日</label>
               <input
                 type="date"
                 value={form.last_visit_date}
                 onChange={e => setForm(p => ({ ...p, last_visit_date: e.target.value }))}
-                className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
               />
             </div>
           </div>
           <div>
-            <label className="text-xs text-[#6B7280] mb-1 block">メモ</label>
+            <label className="text-xs text-[#4A5568] mb-1 block">メモ</label>
             <textarea
               value={form.memo}
               onChange={e => setForm(p => ({ ...p, memo: e.target.value }))}
               rows={3}
-              className="w-full bg-[#F8F5FF] border border-[#E8E0F0] rounded-lg px-3 py-2 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4] resize-none"
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2] resize-none"
               placeholder="肌タイプ、アレルギー、特記事項など"
             />
           </div>
         </div>
-        <div className="flex gap-3 p-5 border-t border-[#E8E0F0]">
+        <div className="flex gap-3 p-5 border-t border-[#BAE6FD]">
           <button
             onClick={onClose}
-            className="flex-1 bg-[#F8F5FF] border border-[#E8E0F0] text-[#6B7280] rounded-xl py-2.5 text-sm hover:text-[#2C2C2C] transition-colors"
+            className="flex-1 bg-white border border-[#BAE6FD] text-[#4A5568] rounded-xl py-2.5 text-sm hover:text-[#1A202C] transition-colors"
           >
             キャンセル
           </button>
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="flex-1 bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white rounded-xl py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-1 bg-gradient-to-r from-[#0891B2] to-[#0e7490] text-white rounded-xl py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             {saving ? '保存中...' : '登録する'}
@@ -274,10 +619,10 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white border border-[#E8E0F0] rounded-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-5 border-b border-[#E8E0F0]">
-          <h2 className="text-base font-bold text-[#2C2C2C]">ペンギン CSVインポート</h2>
-          <button onClick={onClose} className="text-[#6B7280] hover:text-white"><X className="w-5 h-5" /></button>
+      <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-5 border-b border-[#BAE6FD]">
+          <h2 className="text-base font-bold text-[#1A202C]">ペンギン CSVインポート</h2>
+          <button onClick={onClose} className="text-[#4A5568] hover:text-[#1A202C]"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-4">
           {!result ? (
@@ -289,14 +634,14 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
                 </p>
               </div>
               <div
-                className="border-2 border-dashed border-[#E8E0F0] rounded-xl p-8 text-center cursor-pointer hover:border-amber-500/50 transition-colors"
+                className="border-2 border-dashed border-[#BAE6FD] rounded-xl p-8 text-center cursor-pointer hover:border-[#0891B2] transition-colors"
                 onClick={() => document.getElementById('csv-input')?.click()}
               >
-                <Upload className="w-8 h-8 text-[#6B7280] mx-auto mb-2" />
+                <Upload className="w-8 h-8 text-[#4A5568] mx-auto mb-2" />
                 {file ? (
-                  <p className="text-sm text-amber-400 font-medium">{file.name}</p>
+                  <p className="text-sm text-[#0891B2] font-medium">{file.name}</p>
                 ) : (
-                  <p className="text-sm text-[#6B7280]">CSVファイルを選択</p>
+                  <p className="text-sm text-[#4A5568]">CSVファイルを選択</p>
                 )}
                 <input
                   id="csv-input"
@@ -307,7 +652,7 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
                 />
               </div>
               {error && (
-                <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                <p className="text-sm text-red-600 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
                   {error}
                 </p>
               )}
@@ -317,15 +662,15 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
               <div className="w-14 h-14 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Check className="w-7 h-7 text-emerald-400" />
               </div>
-              <p className="text-lg font-bold text-[#2C2C2C] mb-1">{result.imported}件 インポート完了</p>
-              <p className="text-sm text-[#6B7280]">{result.message}</p>
+              <p className="text-lg font-bold text-[#1A202C] mb-1">{result.imported}件 インポート完了</p>
+              <p className="text-sm text-[#4A5568]">{result.message}</p>
             </div>
           )}
         </div>
-        <div className="flex gap-3 p-5 border-t border-[#E8E0F0]">
+        <div className="flex gap-3 p-5 border-t border-[#BAE6FD]">
           <button
             onClick={onClose}
-            className="flex-1 bg-[#F8F5FF] border border-[#E8E0F0] text-[#6B7280] rounded-xl py-2.5 text-sm hover:text-[#2C2C2C] transition-colors"
+            className="flex-1 bg-white border border-[#BAE6FD] text-[#4A5568] rounded-xl py-2.5 text-sm hover:text-[#1A202C] transition-colors"
           >
             {result ? '閉じる' : 'キャンセル'}
           </button>
@@ -333,7 +678,7 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
             <button
               onClick={handleImport}
               disabled={!file || importing}
-              className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+              className="flex-1 bg-gradient-to-r from-[#0891B2] to-[#0e7490] text-white rounded-xl py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
               {importing ? 'インポート中...' : 'インポート開始'}
@@ -355,24 +700,41 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [showNewModal, setShowNewModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
+    setFetchError(null)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15秒でタイムアウト
     try {
       const params = new URLSearchParams({
         page: page.toString(),
         ...(search && { search }),
         ...(statusFilter && { status: statusFilter }),
       })
-      const res = await fetch(`/api/customers/list?${params}`)
-      const data = await res.json()
+      const res = await fetch(`/api/customers/list?${params}`, { signal: controller.signal })
+      clearTimeout(timeoutId)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setFetchError(data.error || `エラー (${res.status})`)
+        setCustomers([])
+        setTotal(0)
+        return
+      }
       setCustomers(data.customers || [])
-      setTotal(data.total || 0)
+      setTotal(data.total ?? 0)
     } catch (err) {
-      console.error(err)
+      if ((err as Error).name === 'AbortError') {
+        setFetchError('通信がタイムアウトしました。しばらくしてから再試行してください。')
+      } else {
+        setFetchError(err instanceof Error ? err.message : '顧客データの取得に失敗しました')
+      }
+      setCustomers([])
+      setTotal(0)
     } finally {
       setLoading(false)
     }
@@ -385,54 +747,38 @@ export default function CustomersPage() {
   const vipCount = customers.filter(c => c.status === 'vip').length
 
   return (
-    <div className="min-h-screen bg-[#F8F5FF]">
-      {/* ヘッダー */}
-      <header className="bg-white border-b border-[#E8E0F0] px-4 py-3 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-[#6B7280] hover:text-[#2C2C2C] transition-colors">
-              <ChevronLeft className="w-5 h-5" />
-            </Link>
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-blue-400" />
-              <h1 className="text-base font-bold text-[#2C2C2C]">顧客管理</h1>
-            </div>
-            <span className="text-xs text-[#6B7280] bg-[#F8F5FF] rounded-full px-2 py-0.5">
-              {total.toLocaleString()}名
-            </span>
-          </div>
+    <div className="max-w-5xl mx-auto space-y-5">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-text-sub">{total.toLocaleString()}名</span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-1.5 bg-[#F8F5FF] border border-[#E8E0F0] hover:border-[#9B8EC4] text-[#2C2C2C] hover:text-[#2C2C2C] rounded-lg px-3 py-1.5 text-xs transition-all"
+              className="flex items-center gap-1.5 bg-white border border-gray-200 hover:border-rose text-text-main rounded-lg px-3 py-1.5 text-xs transition-all"
             >
               <Upload className="w-3.5 h-3.5" />
               CSVインポート
             </button>
             <button
               onClick={() => setShowNewModal(true)}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white rounded-lg px-3 py-1.5 text-xs font-bold hover:opacity-90 transition-opacity"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-rose to-lavender text-white rounded-lg px-3 py-1.5 text-xs font-bold hover:opacity-90 transition-opacity"
             >
               <Plus className="w-3.5 h-3.5" />
               新規登録
             </button>
           </div>
         </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 py-5">
         {/* アラートバー */}
         {lostCount > 0 && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 mb-5 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-400" />
-              <p className="text-sm text-red-300">
+              <AlertTriangle className="w-4 h-4 text-red-600" />
+              <p className="text-sm text-red-700">
                 <span className="font-bold">失客アラート：</span>
                 {lostCount}名が3ヶ月以上未来店です
               </p>
             </div>
-            <Link href="/leo" className="text-xs text-red-400 hover:text-red-300 font-semibold underline">
-              AI経営会議に対策を相談 →
+            <Link href="/leo" className="text-xs text-red-600 hover:text-red-700 font-semibold underline">
+              LEOに対策を相談 →
             </Link>
           </div>
         )}
@@ -440,18 +786,18 @@ export default function CustomersPage() {
         {/* 検索・フィルター */}
         <div className="flex gap-3 mb-5">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6B7280]" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4A5568]" />
             <input
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder="氏名・フリガナ・電話番号で検索..."
-              className="w-full bg-white border border-[#E8E0F0] focus:border-[#9B8EC4] rounded-xl pl-9 pr-4 py-2.5 text-sm text-[#2C2C2C] placeholder-[#6B7280] focus:outline-none transition-colors"
+              className="w-full bg-[#F0F9FF] border border-[#BAE6FD] focus:border-[#0891B2] rounded-xl pl-9 pr-4 py-2.5 text-sm text-[#1A202C] placeholder-[#4A5568] focus:outline-none transition-colors"
             />
           </div>
           <select
             value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
-            className="bg-white border border-[#E8E0F0] rounded-xl px-3 py-2.5 text-sm text-[#2C2C2C] focus:outline-none focus:border-[#9B8EC4]"
+            className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-xl px-3 py-2.5 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
           >
             <option value="">全員</option>
             <option value="active">アクティブ</option>
@@ -464,28 +810,41 @@ export default function CustomersPage() {
         <div className="grid grid-cols-3 gap-3 mb-5">
           {[
             { label: '総顧客数', value: total, icon: Users, color: 'text-blue-400' },
-            { label: '失客', value: lostCount, icon: AlertTriangle, color: 'text-red-400' },
-            { label: 'VIP', value: vipCount, icon: Crown, color: 'text-amber-400' },
+            { label: '失客', value: lostCount, icon: AlertTriangle, color: 'text-red-600' },
+            { label: 'VIP', value: vipCount, icon: Crown, color: 'text-[#0891B2]' },
           ].map(({ label, value, icon: Icon, color }) => (
-            <div key={label} className="bg-white border border-[#E8E0F0] rounded-xl p-3 flex items-center gap-3">
+            <div key={label} className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-xl p-3 flex items-center gap-3">
               <Icon className={`w-5 h-5 ${color}`} />
               <div>
-                <p className="text-xs text-[#6B7280]">{label}</p>
-                <p className="text-lg font-bold text-[#2C2C2C]">{value.toLocaleString()}</p>
+                <p className="text-xs text-[#4A5568]">{label}</p>
+                <p className="text-lg font-bold text-[#1A202C]">{value.toLocaleString()}</p>
               </div>
             </div>
           ))}
         </div>
 
+        {/* エラー表示 */}
+        {fetchError && (
+          <div className="mb-5 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+            <p className="text-sm text-red-700 flex-1">{fetchError}</p>
+            <button
+              onClick={() => fetchCustomers()}
+              className="text-xs font-semibold text-red-600 hover:text-red-700 underline whitespace-nowrap"
+            >
+              再試行
+            </button>
+          </div>
+        )}
+
         {/* 顧客一覧 */}
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
+            <Loader2 className="w-8 h-8 text-[#0891B2] animate-spin" />
           </div>
         ) : customers.length === 0 ? (
           <div className="text-center py-20">
-            <Users className="w-12 h-12 text-[#6B7280] mx-auto mb-3" />
-            <p className="text-[#6B7280] mb-2">
+            <Users className="w-12 h-12 text-[#4A5568] mx-auto mb-3" />
+            <p className="text-[#4A5568] mb-2">
               {search || statusFilter ? '検索結果が見つかりません' : '顧客データがありません'}
             </p>
             {!search && !statusFilter && (
@@ -496,10 +855,10 @@ export default function CustomersPage() {
                 >
                   CSVでインポートする
                 </button>
-                <span className="text-[#6B7280]">or</span>
+                <span className="text-[#4A5568]">or</span>
                 <button
                   onClick={() => setShowNewModal(true)}
-                  className="text-sm text-amber-400 hover:text-amber-300 underline"
+                  className="text-sm text-[#0891B2] hover:text-amber-300 underline"
                 >
                   手動で登録する
                 </button>
@@ -524,23 +883,22 @@ export default function CustomersPage() {
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="w-8 h-8 rounded-lg bg-white border border-[#E8E0F0] flex items-center justify-center disabled:opacity-30 hover:border-amber-500/50 transition-colors"
+              className="w-8 h-8 rounded-lg bg-[#F0F9FF] border border-[#BAE6FD] flex items-center justify-center disabled:opacity-30 hover:border-[#0891B2] transition-colors"
             >
-              <ChevronLeft className="w-4 h-4 text-[#6B7280]" />
+              <ChevronLeft className="w-4 h-4 text-[#4A5568]" />
             </button>
-            <span className="text-sm text-[#6B7280]">
+            <span className="text-sm text-[#4A5568]">
               {page} / {totalPages}ページ
             </span>
             <button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="w-8 h-8 rounded-lg bg-white border border-[#E8E0F0] flex items-center justify-center disabled:opacity-30 hover:border-amber-500/50 transition-colors"
+              className="w-8 h-8 rounded-lg bg-[#F0F9FF] border border-[#BAE6FD] flex items-center justify-center disabled:opacity-30 hover:border-[#0891B2] transition-colors"
             >
-              <ChevronRight className="w-4 h-4 text-[#6B7280]" />
+              <ChevronRight className="w-4 h-4 text-[#4A5568]" />
             </button>
           </div>
         )}
-      </main>
 
       {/* モーダル */}
       {showNewModal && (
@@ -553,6 +911,12 @@ export default function CustomersPage() {
         <ImportModal
           onClose={() => setShowImportModal(false)}
           onImported={() => fetchCustomers()}
+        />
+      )}
+      {selectedCustomer && (
+        <CustomerDetailModal
+          customer={selectedCustomer}
+          onClose={() => setSelectedCustomer(null)}
         />
       )}
     </div>
