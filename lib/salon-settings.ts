@@ -24,10 +24,7 @@ export function getSalonSettings(): SalonSettings {
   if (typeof window === 'undefined') return DEFAULT
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      return { ...DEFAULT, ...parsed }
-    }
+    return raw ? { ...DEFAULT, ...JSON.parse(raw) } : DEFAULT
   } catch (_) {}
   return DEFAULT
 }

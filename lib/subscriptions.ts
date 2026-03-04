@@ -13,10 +13,7 @@ export function getSubscriptionPlans(): SubscriptionPlan[] {
   if (typeof window === 'undefined') return []
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed : []
-    }
+    return raw ? JSON.parse(raw) : []
   } catch (_) {}
   return []
 }

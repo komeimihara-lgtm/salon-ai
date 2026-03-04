@@ -91,7 +91,7 @@ export default function QAChatPage() {
             <div
               className={`max-w-[78%] rounded-2xl px-4 py-3 ${
                 msg.role === 'user'
-                  ? 'bg-deep text-white rounded-tr-sm'
+                  ? 'bg-gradient-to-r from-rose to-lavender text-white rounded-tr-sm'
                   : 'bg-light-lav border border-gray-200 text-text-main rounded-tl-sm'
               }`}
             >

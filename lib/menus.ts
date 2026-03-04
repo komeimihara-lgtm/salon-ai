@@ -8,9 +8,12 @@ export interface MenuItem {
 }
 
 const DEFAULT_MENUS: MenuItem[] = [
-  { id: '1', name: 'フェイシャル', duration: 60, price: 8000 },
-  { id: '2', name: 'ボディケア', duration: 90, price: 12000 },
-  { id: '3', name: 'フルコース', duration: 120, price: 20000 },
+  { id: '1', name: 'フェイシャル60分', duration: 60, price: 8000 },
+  { id: '2', name: 'フェイシャル90分', duration: 90, price: 12000 },
+  { id: '3', name: 'ボディ60分', duration: 60, price: 10000 },
+  { id: '4', name: 'ボディ90分', duration: 90, price: 15000 },
+  { id: '5', name: '美白コース', duration: 90, price: 18000 },
+  { id: '6', name: 'エイジングケア', duration: 60, price: 12000 },
 ]
 
 export function getMenus(): MenuItem[] {

@@ -14,11 +14,6 @@ module.exports = {
         deep: '#5A4A6E',
         'off-white': '#FDFAF7',
         'light-lav': '#F8F5FF',
-        'text-main': '#2C2C2C',
-        'text-sub': '#6B7280',
-      },
-      boxShadow: {
-        'card': '0 4px 24px rgba(90,74,110,0.08)',
       },
       fontFamily: {
         sans: ['var(--font-noto-sans)', 'Noto Sans JP', 'sans-serif'],
