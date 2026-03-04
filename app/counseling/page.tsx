@@ -23,6 +23,12 @@ import {
 
 const STORAGE_KEY = 'sola_counseling_draft'
 
+// Web Speech API types (browser-specific)
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList
+}
+type SpeechRecognitionCtor = new () => { lang: string; continuous: boolean; interimResults: boolean; onresult: ((e: SpeechRecognitionEvent) => void) | null; onerror: (() => void) | null; onend: (() => void) | null; start: () => void; stop: () => void }
+
 // タイピングアニメーション（3点ドット）
 function TypingDots() {
   return (
@@ -89,7 +95,6 @@ function VoiceInputField({
       alert('お使いのブラウザは音声入力に対応していません')
       return
     }
-    type SpeechRecognitionCtor = new () => SpeechRecognition
     const SpeechRecognition = (window as unknown as { webkitSpeechRecognition?: SpeechRecognitionCtor; SpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition || (window as unknown as { SpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition
     if (!SpeechRecognition) return
     const recognition = new SpeechRecognition()
