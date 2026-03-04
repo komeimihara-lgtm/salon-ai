@@ -60,11 +60,11 @@ function CustomerCard({ customer, onClick }: { customer: Customer; onClick: () =
       <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-[#E8E0F0]">
         <div className="text-center">
           <p className="text-xs text-[#6B7280]">来店回数</p>
-          <p className="text-sm font-bold text-[#2C2C2C]">{customer.visit_count}回</p>
+          <p className="text-sm font-bold text-white">{customer.visit_count}回</p>
         </div>
         <div className="text-center">
           <p className="text-xs text-[#6B7280]">客単価</p>
-          <p className="text-sm font-bold text-[#2C2C2C]">
+          <p className="text-sm font-bold text-white">
             ¥{customer.avg_unit_price.toLocaleString()}
           </p>
         </div>
@@ -116,7 +116,7 @@ function NewCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
       <div className="bg-white border border-[#E8E0F0] rounded-2xl w-full max-w-lg">
         <div className="flex items-center justify-between p-5 border-b border-[#E8E0F0]">
           <h2 className="text-base font-bold text-[#2C2C2C]">新規顧客登録</h2>
-          <button onClick={onClose} className="text-[#6B7280] hover:text-white">
+          <button onClick={onClose} className="text-[#6B7280] hover:text-[#2C2C2C]">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -277,7 +277,7 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
       <div className="bg-white border border-[#E8E0F0] rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between p-5 border-b border-[#E8E0F0]">
           <h2 className="text-base font-bold text-[#2C2C2C]">ペンギン CSVインポート</h2>
-          <button onClick={onClose} className="text-[#6B7280] hover:text-white"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-[#6B7280] hover:text-[#2C2C2C]"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-4">
           {!result ? (
