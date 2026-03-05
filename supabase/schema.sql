@@ -277,13 +277,28 @@ CREATE TABLE IF NOT EXISTS sales (
   staff_name TEXT,
   payment_method TEXT DEFAULT 'cash',
   memo TEXT,
-  sale_type TEXT DEFAULT 'cash' CHECK (sale_type IN ('cash', 'card', 'online', 'loan', 'ticket_consume', 'subscription_consume')),
+  sale_type TEXT DEFAULT 'cash' CHECK (sale_type IN ('cash', 'card', 'online', 'loan', 'ticket_consume', 'subscription_consume', 'product')),
   ticket_id UUID REFERENCES customer_tickets(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sales_salon_id ON sales(salon_id);
 CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(sale_date);
 CREATE INDEX IF NOT EXISTS idx_sales_sale_type ON sales(sale_type);
+
+-- ============================================================
+-- 日報（daily_reports）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS daily_reports (
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id uuid NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
+  report_date date NOT NULL,
+  kpi_data jsonb DEFAULT '{}',
+  ai_content text,
+  edited_content text,
+  created_at timestamptz DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_daily_reports_salon_id ON daily_reports(salon_id);
+CREATE INDEX IF NOT EXISTS idx_daily_reports_report_date ON daily_reports(report_date);
 
 -- ============================================================
 -- マイグレーション（既存DBで実行する場合）
@@ -297,3 +312,5 @@ CREATE INDEX IF NOT EXISTS idx_sales_sale_type ON sales(sale_type);
 --   ALTER TABLE ticket_plans DROP COLUMN IF EXISTS unit_price;
 --   ALTER TABLE ticket_plans ADD COLUMN IF NOT EXISTS unit_price INTEGER;
 --   UPDATE ticket_plans SET unit_price = ROUND(price::numeric / NULLIF(total_sessions, 0));
+-- daily_reports:
+--   CREATE TABLE IF NOT EXISTS daily_reports (...);

@@ -17,6 +17,8 @@ import {
   MessageSquare,
   Heart,
   Smartphone,
+  BarChart2,
+  BookOpen,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -26,6 +28,8 @@ const NAV_ITEMS = [
   { href: '/reservations', icon: Calendar, label: '予約管理' },
   { href: '/follow', icon: Send, label: '自動フォロー' },
   { href: '/kpi', icon: TrendingUp, label: '売上分析' },
+  { href: '/management', icon: BarChart2, label: '経営管理' },
+  { href: '/daily-report', icon: BookOpen, label: 'AI日報' },
   { href: '/marketing', icon: Megaphone, label: 'AI集客' },
   { href: '/counseling', icon: MessageCircle, label: 'AIカウンセリング' },
   { href: '/menu', icon: UtensilsCrossed, label: 'メニュー設定' },

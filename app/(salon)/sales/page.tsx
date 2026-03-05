@@ -71,6 +71,7 @@ export default function SalesPage() {
   const [editSale, setEditSale] = useState<Sale | null>(null)
   const [ticketPlans, setTicketPlans] = useState<TicketPlan[]>([])
   const [ticketPurchasing, setTicketPurchasing] = useState(false)
+  const [isProductSale, setIsProductSale] = useState(false)
 
   const fetchSales = useCallback(async () => {
     try {
@@ -127,6 +128,7 @@ export default function SalesPage() {
   }
 
   const addToCart = (menu: { id: string; name: string; price: number; category: string }) => {
+    if (menu.category === '物販') setIsProductSale(true)
     setCart(prev => {
       const found = prev.find(c => c.menuId === menu.id)
       if (found) return prev.map(c => c.menuId === menu.id ? { ...c, qty: c.qty + 1 } : c)
@@ -134,7 +136,13 @@ export default function SalesPage() {
     })
   }
 
-  const removeFromCart = (menuId: string) => setCart(prev => prev.filter(c => c.menuId !== menuId))
+  const removeFromCart = (menuId: string) => {
+    setCart(prev => {
+      const next = prev.filter(c => c.menuId !== menuId)
+      if (next.every(c => c.category !== '物販')) setIsProductSale(false)
+      return next
+    })
+  }
   const updateCartQty = (menuId: string, qty: number) => {
     if (qty < 1) return removeFromCart(menuId)
     setCart(prev => prev.map(c => c.menuId === menuId ? { ...c, qty } : c))
@@ -171,6 +179,7 @@ export default function SalesPage() {
     }
     setSaving(true); setError('')
     try {
+      const hasProduct = isProductSale || cart.some(c => c.category === '物販')
       const salesToCreate = cart.flatMap(c =>
         Array.from({ length: c.qty }, () => ({
           salon_id: process.env.NEXT_PUBLIC_SALON_ID || 'default',
@@ -181,6 +190,7 @@ export default function SalesPage() {
           menu: c.name,
           staff_name: selectedStaff?.name || null,
           payment_method: paymentMethod,
+          sale_type: hasProduct || c.category === '物販' ? 'product' : paymentMethod,
         }))
       )
       const res = await fetch('/api/kpi/sales', {
@@ -190,7 +200,7 @@ export default function SalesPage() {
       })
       if (!res.ok) throw new Error()
       setCart([]); setSelectedCustomer(null); setSelectedStaff(null)
-      setDiscountType(null); setDiscountValue(0); setPaymentConfirmed(false)
+      setDiscountType(null); setDiscountValue(0); setPaymentConfirmed(false); setIsProductSale(false)
       fetchSales()
     } catch { setError('登録に失敗しました') } finally { setSaving(false) }
   }
@@ -370,6 +380,18 @@ export default function SalesPage() {
                     <option value="">選択なし</option>
                     {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label className="text-xs text-text-sub block mb-1">物販</label>
+                  <button
+                    onClick={() => setIsProductSale(prev => !prev)}
+                    className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium border transition-all mb-2 ${isProductSale ? 'bg-amber-100 border-amber-400 text-amber-700' : 'border-gray-200 text-text-sub hover:border-amber-300'}`}
+                  >
+                    <span className={`w-4 h-4 rounded border-2 flex items-center justify-center ${isProductSale ? 'bg-amber-500 border-amber-500' : 'border-gray-300'}`}>
+                      {isProductSale && <span className="text-white text-xs">✓</span>}
+                    </span>
+                    {isProductSale ? '物販として登録' : '物販として登録する'}
+                  </button>
                 </div>
                 <div>
                   <label className="text-xs text-text-sub block mb-1">支払方法</label>
