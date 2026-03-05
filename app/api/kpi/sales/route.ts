@@ -1,13 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
-import { DEMO_SALON_ID } from '@/lib/supabase'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
+  const supabase = getSupabaseAdmin()
   const { searchParams } = new URL(req.url)
   const start = searchParams.get('start')
   const end = searchParams.get('end')
@@ -28,6 +23,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const supabase = getSupabaseAdmin()
   try {
     const body = await req.json()
     const sales = Array.isArray(body.sales) ? body.sales : (body.sale_date != null ? [body] : [])

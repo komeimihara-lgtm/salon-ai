@@ -21,6 +21,7 @@ import {
   type DashboardReservation,
 } from '@/lib/dashboard-reservations'
 import { getSalonSettings } from '@/lib/salon-settings'
+import { getAchievementRate, getAchievementColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
 import {
   fetchExpiringSoonTickets,
   fetchExpiredTickets,
@@ -89,25 +90,30 @@ export default function DashboardPage() {
   const [beds, setBeds] = useState<string[]>(['A', 'B'])
   const [courseAlerts, setCourseAlerts] = useState<{ id: string; type: string; text: string; action: string }[]>([])
   const [salesSummary, setSalesSummary] = useState<{ cashSales: number; consumeSales: number; serviceLiability: number } | null>(null)
+  const [todaySales, setTodaySales] = useState(0)
 
   useEffect(() => {
     const s = getSalonSettings()
     const now = new Date()
     const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
     const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
+    const today = now.toISOString().slice(0, 10)
     Promise.all([
       fetch(`/api/kpi/sales?start=${start}&end=${end}`),
       fetch(`/api/kpi/summary?start=${start}&end=${end}`),
+      fetch(`/api/kpi/sales?start=${today}&end=${today}`),
     ])
-      .then(([salesRes, summaryRes]) => Promise.all([salesRes.json(), summaryRes.json()]))
-      .then(([salesJson, summaryJson]) => {
+      .then(([salesRes, summaryRes, todayRes]) => Promise.all([salesRes.json(), summaryRes.json(), todayRes.json()]))
+      .then(([salesJson, summaryJson, todayJson]) => {
         const sales = salesJson.sales || []
+        const todaySalesList = todayJson.sales || []
+        setTodaySales(todaySalesList.reduce((sum: number, s: { amount: number }) => sum + s.amount, 0))
         const totalSales = sales.reduce((sum: number, sale: { amount: number }) => sum + sale.amount, 0)
         const visits = sales.length
         const avgPrice = visits > 0 ? Math.round(totalSales / visits) : 0
-        const salesRate = Math.round((totalSales / s.targets.sales) * 100)
-        const visitsRate = Math.round((visits / s.targets.visits) * 100)
-        const avgRate = Math.round((avgPrice / s.targets.avgPrice) * 100)
+        const salesRate = getAchievementRate(totalSales, s.targets.sales)
+        const visitsRate = getAchievementRate(visits, s.targets.visits)
+        const avgRate = getAchievementRate(avgPrice, s.targets.avgPrice)
         setKpiData([
           { label: '今月売上', value: `¥${totalSales.toLocaleString()}`, sub: `目標 ¥${s.targets.sales.toLocaleString()}`, rate: salesRate, diff: 0, diffUp: true },
           { label: '来店数', value: `${visits}名`, sub: `目標 ${s.targets.visits}名`, rate: visitsRate, diff: 0, diffUp: true },
@@ -204,6 +210,13 @@ export default function DashboardPage() {
     setReservationModalOpen(false)
     setReservationDetail(null)
   }
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  const workingDays = getWorkingDaysInMonth(year, month)
+  const dailyTarget = getDailyTarget(getSalonSettings().targets.sales, workingDays)
+  const dailyRate = getAchievementRate(todaySales, dailyTarget)
+
   const staffShifts = todayShifts.length > 0
     ? todayShifts.map(s => ({
         name: s.staffName,
@@ -215,9 +228,6 @@ export default function DashboardPage() {
         free: s.freeSlots ?? '-',
       }))
     : FALLBACK_STAFF
-  const dailyTarget = 30000
-  const dailyCurrent = 18500
-  const dailyRate = Math.round((dailyCurrent / dailyTarget) * 100)
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-6">
@@ -250,18 +260,21 @@ export default function DashboardPage() {
           <span className="section-label font-dm-sans text-2xl font-bold text-text-main">月間KPI</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {kpiData.map((k) => (
+          {kpiData.map((k) => {
+            const rateColor = getAchievementColor(k.rate)
+            const barColor = k.rate >= 100 ? 'bg-emerald-500' : k.rate >= 80 ? 'bg-blue-500' : k.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+            return (
             <div
               key={k.label}
               className="bg-white rounded-2xl p-5 card-shadow overflow-hidden"
             >
               <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-5 -mt-5 mb-4" />
               <p className="text-xs text-text-sub font-dm-sans mb-1">{k.label}</p>
-              <p className="text-3xl font-bold text-rose font-dm-sans mb-2">{k.value}</p>
-              <p className="text-xs text-text-sub mb-2">{k.sub} / 達成率 {k.rate}%</p>
+              <p className={`text-3xl font-bold font-dm-sans mb-2 ${rateColor}`}>{k.value}</p>
+              <p className="text-xs text-text-sub mb-2">{k.sub} / 達成率 <span className={rateColor}>{k.rate}%</span></p>
               <div className="h-1.5 bg-light-lav rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-rose to-lavender rounded-full transition-all"
+                  className={`h-full ${barColor} rounded-full transition-all`}
                   style={{ width: `${Math.min(k.rate, 100)}%` }}
                 />
               </div>
@@ -277,8 +290,22 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
-          ))}
+          )})}
         </div>
+        {salesSummary && kpiData[0] && (
+          <div className="mt-4 p-4 rounded-xl bg-white border border-[#E8E0F0] card-shadow">
+            <p className="text-xs text-text-sub mb-2">月間目標達成率</p>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-3 bg-light-lav rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${kpiData[0].rate >= 100 ? 'bg-emerald-500' : kpiData[0].rate >= 80 ? 'bg-blue-500' : kpiData[0].rate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  style={{ width: `${Math.min(kpiData[0].rate, 100)}%` }}
+                />
+              </div>
+              <span className={`text-sm font-bold ${getAchievementColor(kpiData[0].rate)}`}>{kpiData[0].rate}%</span>
+            </div>
+          </div>
+        )}
         {salesSummary && (
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="bg-white rounded-xl p-4 card-shadow border border-[#BAE6FD]">
@@ -321,9 +348,9 @@ export default function DashboardPage() {
                   <path
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     fill="none"
-                    stroke="url(#ringGradient)"
+                    stroke={dailyRate >= 100 ? '#10B981' : dailyRate >= 80 ? '#3B82F6' : dailyRate >= 50 ? '#F59E0B' : '#DC2626'}
                     strokeWidth="3"
-                    strokeDasharray={`${dailyRate}, 100`}
+                    strokeDasharray={`${Math.min(dailyRate, 100)}, 100`}
                     strokeLinecap="round"
                   />
                   <defs>
@@ -334,16 +361,16 @@ export default function DashboardPage() {
                   </defs>
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-bold text-rose font-dm-sans">{dailyRate}%</span>
+                  <span className={`text-2xl font-bold font-dm-sans ${getAchievementColor(dailyRate)}`}>{dailyRate}%</span>
                   <span className="text-xs text-text-sub">達成率</span>
                 </div>
               </div>
             </div>
             <p className="text-center text-sm text-text-main font-dm-sans">
-              現在 ¥{dailyCurrent.toLocaleString()} / 目標 ¥{dailyTarget.toLocaleString()}
+              現在 ¥{todaySales.toLocaleString()} / 目標 ¥{dailyTarget.toLocaleString()}
             </p>
             <p className="text-center text-sm text-rose font-semibold mt-1">
-              残り ¥{(dailyTarget - dailyCurrent).toLocaleString()} で達成！
+              残り ¥{Math.max(0, dailyTarget - todaySales).toLocaleString()} で達成！
             </p>
           </div>
         </section>

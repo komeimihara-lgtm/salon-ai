@@ -21,11 +21,14 @@ export async function GET(req: NextRequest) {
 
     let cashSales = 0
     let consumeSales = 0
+    let productSales = 0
     for (const s of sales || []) {
       const amt = Number(s.amount ?? 0)
       const st = (s.sale_type as string) || 'cash'
       if (st === 'ticket_consume' || st === 'subscription_consume') {
         consumeSales += amt
+      } else if (st === 'product') {
+        productSales += amt
       } else {
         cashSales += amt
       }
@@ -71,6 +74,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       cashSales,
       consumeSales,
+      productSales,
       serviceLiability,
       visitors,
       unitPrice,

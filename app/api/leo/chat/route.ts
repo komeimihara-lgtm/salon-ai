@@ -9,7 +9,8 @@ const anthropic = new Anthropic({
 
 export async function POST(req: NextRequest) {
   try {
-    const { messages }: { messages: LeoMessage[] } = await req.json()
+    const body = await req.json()
+    const { messages, context }: { messages: LeoMessage[]; context?: { targets?: Record<string, number>; kpi?: Record<string, number> } } = body
 
     if (!messages || messages.length === 0) {
       return NextResponse.json({ error: 'メッセージが必要です' }, { status: 400 })
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
     // サロンデータ取得（デモ）
     // 本番ではSupabaseからサロンIDで取得
     const salon = DEMO_SALON
-    const systemPrompt = buildLeoSystemPrompt(salon)
+    const systemPrompt = buildLeoSystemPrompt(salon, context)
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',

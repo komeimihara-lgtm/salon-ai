@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { getSalonSettings } from '@/lib/salon-settings'
+import { getDailyTarget, getWorkingDaysInMonth, getAchievementRate, getAchievementColor } from '@/lib/goals'
 
 type DailyRow = {
   date: string
@@ -97,6 +98,8 @@ export default function ManagementPage() {
 
   const settings = getSalonSettings()
   const monthlyTarget = settings.targets.sales || 3000000
+  const workingDays = getWorkingDaysInMonth(year, month)
+  const dailyTarget = getDailyTarget(monthlyTarget, workingDays)
 
   const fetchDaily = useCallback(async () => {
     setLoading(true)
@@ -146,9 +149,17 @@ export default function ManagementPage() {
     try {
       const data = tab === 'daily' ? dailyData : yearlyData
       if (!data) return
+      const targets = {
+        sales: settings.targets.sales,
+        visits: settings.targets.visits,
+        avgPrice: settings.targets.avgPrice,
+        productSales: settings.targets.productSales,
+        newCustomers: settings.targets.newCustomers,
+        newReservations: settings.targets.newReservations,
+      }
       const payload = tab === 'daily'
-        ? { type: 'monthly', data: { year, month, rows: (data as { rows: DailyRow[] }).rows, totals: data.totals, monthlyTarget: data.monthlyTarget } }
-        : { type: 'yearly', data: { year, rows: (data as { rows: MonthlyRow[] }).rows, totals: data.totals, monthlyTarget: data.monthlyTarget } }
+        ? { type: 'monthly', data: { year, month, rows: (data as { rows: DailyRow[] }).rows, totals: data.totals, monthlyTarget: data.monthlyTarget, targets } }
+        : { type: 'yearly', data: { year, rows: (data as { rows: MonthlyRow[] }).rows, totals: data.totals, monthlyTarget: data.monthlyTarget, targets } }
       const res = await fetch('/api/management/advice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -287,6 +298,9 @@ export default function ManagementPage() {
             </div>
           ) : tab === 'daily' && dailyData ? (
             <div id="print-area">
+              <div className="mb-4 p-3 rounded-xl bg-light-lav/50 text-sm">
+                <p className="text-text-sub">日次目標（月間目標÷営業日数）: ¥{dailyTarget.toLocaleString()} / 営業日数: {workingDays}日</p>
+              </div>
               <table className="w-full text-sm min-w-[900px]">
                 <thead>
                   <tr className="bg-light-lav/50">
@@ -325,19 +339,26 @@ export default function ManagementPage() {
                     <td className="p-2 text-right">¥{(dailyData.totals.consumeSales ?? 0).toLocaleString()}</td>
                     <td className="p-2 text-right">¥{(dailyData.totals.productSales ?? 0).toLocaleString()}</td>
                     <td className="p-2 text-right">¥{dailyData.rows[0]?.serviceLiability.toLocaleString() ?? 0}</td>
-                    <td className="p-2 text-right">{dailyData.totals.visitors ?? 0}</td>
+                    <td className="p-2 text-right">{dailyData.totals.visitors ?? 0} <span className="text-xs font-normal">/ 目標{settings.targets.visits}</span></td>
                     <td className="p-2 text-right">
                       ¥{((dailyData.totals.visitors ?? 0) > 0 ? Math.round((dailyData.totals.consumeSales ?? 0) / (dailyData.totals.visitors ?? 1)) : 0).toLocaleString()}
                     </td>
-                    <td className="p-2 text-right">{dailyData.totals.newVisitors ?? 0}</td>
-                    <td className="p-2 text-right">{dailyData.totals.newReservations ?? 0}</td>
-                    <td className="p-2 text-right">{dailyData.achievementRate}%</td>
+                    <td className="p-2 text-right">{dailyData.totals.newVisitors ?? 0} <span className="text-xs font-normal">/ {settings.targets.newCustomers ?? 0}</span></td>
+                    <td className="p-2 text-right">{dailyData.totals.newReservations ?? 0} <span className="text-xs font-normal">/ {settings.targets.newReservations ?? 0}</span></td>
+                    <td className={`p-2 text-right ${getAchievementColor(dailyData.achievementRate)}`}>目標対比 {dailyData.achievementRate}%</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           ) : tab === 'monthly' && yearlyData ? (
             <div id="print-area">
+              <div className="mb-4 p-3 rounded-xl bg-light-lav/50 text-sm flex flex-wrap gap-4">
+                <span className="text-text-sub">月間目標: ¥{monthlyTarget.toLocaleString()}</span>
+                <span className="text-text-sub">年間目標: ¥{(monthlyTarget * 12).toLocaleString()}</span>
+                <span className={getAchievementColor(getAchievementRate((yearlyData.totals.totalSales ?? 0), monthlyTarget * 12))}>
+                  年間実績: ¥{(yearlyData.totals.totalSales ?? 0).toLocaleString()}（達成率 {getAchievementRate((yearlyData.totals.totalSales ?? 0), monthlyTarget * 12)}%）
+                </span>
+              </div>
               <table className="w-full text-sm min-w-[900px]">
                 <thead>
                   <tr className="bg-light-lav/50">
@@ -357,15 +378,15 @@ export default function ManagementPage() {
                   {yearlyData.rows.map((r, i) => (
                     <tr key={r.month} className={i % 2 === 0 ? 'bg-white' : 'bg-off-white'}>
                       <td className="p-2">{r.monthLabel}</td>
-                      <td className="p-2 text-right">¥{r.cashSales.toLocaleString()}</td>
+                      <td className="p-2 text-right">¥{r.cashSales.toLocaleString()} <span className="text-xs text-text-sub">/ ¥{monthlyTarget.toLocaleString()}</span></td>
                       <td className="p-2 text-right">¥{r.consumeSales.toLocaleString()}</td>
-                      <td className="p-2 text-right">¥{r.productSales.toLocaleString()}</td>
+                      <td className="p-2 text-right">¥{r.productSales.toLocaleString()} <span className="text-xs text-text-sub">/ ¥{(settings.targets.productSales ?? 0).toLocaleString()}</span></td>
                       <td className="p-2 text-right">¥{r.serviceLiability.toLocaleString()}</td>
-                      <td className="p-2 text-right">{r.visitors}</td>
-                      <td className="p-2 text-right">¥{r.unitPrice.toLocaleString()}</td>
-                      <td className="p-2 text-right">{r.newVisitors}</td>
-                      <td className="p-2 text-right">{r.newReservations}</td>
-                      <td className="p-2 text-right">{r.achievementRate}%</td>
+                      <td className="p-2 text-right">{r.visitors} <span className="text-xs text-text-sub">/ {settings.targets.visits}</span></td>
+                      <td className="p-2 text-right">¥{r.unitPrice.toLocaleString()} <span className="text-xs text-text-sub">/ ¥{(settings.targets.avgPrice ?? 0).toLocaleString()}</span></td>
+                      <td className="p-2 text-right">{r.newVisitors} <span className="text-xs text-text-sub">/ {settings.targets.newCustomers ?? 0}</span></td>
+                      <td className="p-2 text-right">{r.newReservations} <span className="text-xs text-text-sub">/ {settings.targets.newReservations ?? 0}</span></td>
+                      <td className={`p-2 text-right ${getAchievementColor(r.achievementRate)}`}>{r.achievementRate}%</td>
                     </tr>
                   ))}
                   <tr className="total bg-rose/5 font-semibold">
@@ -378,7 +399,9 @@ export default function ManagementPage() {
                     <td className="p-2 text-right">¥{(yearlyData.totals.avgUnitPrice ?? 0).toLocaleString()}</td>
                     <td className="p-2 text-right">{yearlyData.totals.newVisitors ?? 0}</td>
                     <td className="p-2 text-right">{yearlyData.totals.newReservations ?? 0}</td>
-                    <td className="p-2 text-right">{yearlyData.totals.avgAchievementRate ?? 0}%</td>
+                    <td className={`p-2 text-right ${getAchievementColor(getAchievementRate((yearlyData.totals.totalSales ?? 0), monthlyTarget * 12))}`}>
+                      {getAchievementRate((yearlyData.totals.totalSales ?? 0), monthlyTarget * 12)}%
+                    </td>
                   </tr>
                 </tbody>
               </table>

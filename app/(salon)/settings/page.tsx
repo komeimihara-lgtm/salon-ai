@@ -13,7 +13,7 @@ export default function SettingsPage() {
     businessHours: '10:00〜20:00',
     beds: [],
     staff: [],
-    targets: { sales: 600000, visits: 60, avgPrice: 10000 },
+    targets: { sales: 600000, visits: 60, avgPrice: 10000, productSales: 50000, newCustomers: 10, newReservations: 15 },
     externalUrls: { hotpepper: '', salonHp: '' },
   })
   const [newBed, setNewBed] = useState('')
@@ -278,6 +278,33 @@ export default function SettingsPage() {
                 type="number"
                 value={settings.targets.avgPrice}
                 onChange={(e) => setSettings(s => ({ ...s, targets: { ...s.targets, avgPrice: Number(e.target.value) } }))}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-main mb-1">物販売上目標（円）</label>
+              <input
+                type="number"
+                value={settings.targets.productSales ?? 0}
+                onChange={(e) => setSettings(s => ({ ...s, targets: { ...s.targets, productSales: Number(e.target.value) } }))}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-main mb-1">新規客数目標（名）</label>
+              <input
+                type="number"
+                value={settings.targets.newCustomers ?? 0}
+                onChange={(e) => setSettings(s => ({ ...s, targets: { ...s.targets, newCustomers: Number(e.target.value) } }))}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-main mb-1">新規予約数目標（件）</label>
+              <input
+                type="number"
+                value={settings.targets.newReservations ?? 0}
+                onChange={(e) => setSettings(s => ({ ...s, targets: { ...s.targets, newReservations: Number(e.target.value) } }))}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
             </div>

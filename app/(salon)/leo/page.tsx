@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Sparkles, TrendingUp, Users, AlertTriangle, Zap } from 'lucide-react'
 import KPISummary from '@/components/ui/KPISummary'
 import { DEMO_SALON } from '@/lib/leo'
+import { getSalonSettings } from '@/lib/salon-settings'
 import { ChatMessage, LeoMessage } from '@/types'
 
 // クイック質問サジェスト
@@ -69,19 +70,55 @@ function TypingIndicator() {
 
 export default function LeoPage() {
   const salon = DEMO_SALON
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: '0',
-      role: 'assistant',
-      content: `${salon.owner_name}さん、こんにちは。LEO GRANTです。\n\n現在の状況を確認しました。今月の達成率は${Math.round((salon.kpi.monthly_actual / salon.kpi.monthly_target) * 100)}%、残り${salon.kpi.days_remaining}日で¥${((salon.kpi.monthly_target - salon.kpi.monthly_actual) / 10000).toFixed(0)}万円が必要です。\n\n特に気になるのは失客${salon.kpi.lost_customers}名です。今すぐ手を打てば今月中に取り戻せます。\n\n何から始めますか？`,
-      timestamp: new Date(),
-    }
-  ])
+  const [kpiContext, setKpiContext] = useState<{ targets?: Record<string, number>; kpi?: Record<string, number> } | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [history, setHistory] = useState<LeoMessage[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const fetchKpiContext = useCallback(async () => {
+    const now = new Date()
+    const settings = getSalonSettings()
+    try {
+      const res = await fetch(`/api/kpi/summary?year=${now.getFullYear()}&month=${now.getMonth() + 1}`)
+      const json = await res.json()
+      if (json.error) return
+      const kpi = {
+        monthly_target: json.monthly_target ?? settings.targets.sales ?? 3000000,
+        monthly_actual: json.monthly_actual ?? json.totalSales ?? 0,
+        achievement_rate: json.achievement_rate ?? 0,
+        gap: json.gap ?? 0,
+        days_remaining: json.days_remaining ?? 0,
+        daily_needed: json.daily_needed ?? 0,
+        customer_count: json.customer_count ?? 0,
+        lost_count: json.lost_count ?? 0,
+        unique_visitors: json.unique_visitors ?? 0,
+        avg_unit_price: json.avg_unit_price ?? 0,
+        totalSales: json.totalSales ?? 0,
+      }
+      setKpiContext({
+        targets: settings.targets,
+        kpi,
+      })
+      const rate = kpi.monthly_target > 0 ? Math.round((kpi.monthly_actual / kpi.monthly_target) * 100) : 0
+      const initialMsg = `${salon.owner_name}さん、こんにちは。LEO GRANTです。\n\n現在の状況を確認しました。今月の達成率は${rate}%、残り${kpi.days_remaining}日で¥${(kpi.gap / 10000).toFixed(0)}万円が必要です。\n\n特に気になるのは失客${kpi.lost_count}名です。今すぐ手を打てば今月中に取り戻せます。\n\n何から始めますか？`
+      setMessages([{ id: '0', role: 'assistant', content: initialMsg, timestamp: new Date() }])
+    } catch {
+      const rate = Math.round((salon.kpi.monthly_actual / salon.kpi.monthly_target) * 100)
+      setMessages([{
+        id: '0',
+        role: 'assistant',
+        content: `${salon.owner_name}さん、こんにちは。LEO GRANTです。\n\n現在の状況を確認しました。今月の達成率は${rate}%、残り${salon.kpi.days_remaining}日で¥${((salon.kpi.monthly_target - salon.kpi.monthly_actual) / 10000).toFixed(0)}万円が必要です。\n\n特に気になるのは失客${salon.kpi.lost_customers}名です。今すぐ手を打てば今月中に取り戻せます。\n\n何から始めますか？`,
+        timestamp: new Date(),
+      }])
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchKpiContext()
+  }, [fetchKpiContext])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -115,7 +152,7 @@ export default function LeoPage() {
       const res = await fetch('/api/leo/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newHistory }),
+        body: JSON.stringify({ messages: newHistory, context: kpiContext }),
       })
 
       const data = await res.json()
@@ -155,7 +192,18 @@ export default function LeoPage() {
     <div className="flex flex-col max-w-4xl mx-auto">
       {/* KPIサマリー */}
       <div className="flex-shrink-0 max-w-4xl mx-auto w-full px-4 pt-4">
-        <KPISummary kpi={salon.kpi} salonName={salon.name} />
+        <KPISummary
+          kpi={kpiContext?.kpi ? {
+            monthly_target: kpiContext.kpi.monthly_target ?? salon.kpi.monthly_target,
+            monthly_actual: kpiContext.kpi.monthly_actual ?? salon.kpi.monthly_actual,
+            customer_count: kpiContext.kpi.customer_count ?? salon.kpi.customer_count,
+            repeat_rate: salon.kpi.repeat_rate,
+            lost_customers: kpiContext.kpi.lost_count ?? salon.kpi.lost_customers,
+            avg_unit_price: kpiContext.kpi.avg_unit_price ?? salon.kpi.avg_unit_price,
+            days_remaining: kpiContext.kpi.days_remaining ?? salon.kpi.days_remaining,
+          } : salon.kpi}
+          salonName={salon.name}
+        />
       </div>
 
       {/* AI経営会議チャット */}

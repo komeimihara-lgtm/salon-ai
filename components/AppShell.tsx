@@ -38,7 +38,7 @@ const NAV_ITEMS = [
   { href: '/reservations', icon: Calendar, label: '予約管理' },
   { href: '/follow', icon: Send, label: '自動フォロー' },
   { href: '/sales', icon: ShoppingCart, label: '売上・レジ' },
-  { href: '/kpi', icon: TrendingUp, label: '売上分析' },
+  { href: '/sales-analysis', icon: TrendingUp, label: '売上分析' },
   { href: '/management', icon: BarChart2, label: '経営管理' },
   { href: '/daily-report', icon: BookOpen, label: 'AI日報' },
   { href: '/marketing', icon: Megaphone, label: 'AI集客' },

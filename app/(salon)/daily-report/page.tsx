@@ -10,6 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
+import { getSalonSettings } from '@/lib/salon-settings'
+import { getDailyTarget, getWorkingDaysInMonth, getAchievementRate, getAchievementColor } from '@/lib/goals'
 
 type Report = {
   id: string
@@ -23,6 +25,7 @@ type Report = {
 type KpiData = {
   cashSales: number
   consumeSales: number
+  productSales?: number
   serviceLiability: number
   visitors: number
   unitPrice: number
@@ -83,13 +86,28 @@ export default function DailyReportPage() {
     fetchHistory()
   }, [fetchHistory])
 
+  const settings = getSalonSettings()
+  const [y, m] = [parseInt(selectedDate.slice(0, 4), 10), parseInt(selectedDate.slice(5, 7), 10)]
+  const workingDays = getWorkingDaysInMonth(y, m)
+  const dailyTarget = getDailyTarget(settings.targets.sales || 0, workingDays)
+
   const handleGenerateAi = async () => {
     setAiLoading(true)
     try {
       const res = await fetch('/api/daily-report/advice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: selectedDate }),
+        body: JSON.stringify({
+          date: selectedDate,
+          targets: {
+            dailyTarget,
+            visits: settings.targets.visits,
+            avgPrice: settings.targets.avgPrice,
+            productSales: settings.targets.productSales,
+            newCustomers: settings.targets.newCustomers,
+            newReservations: settings.targets.newReservations,
+          },
+        }),
       })
       const json = await res.json()
       if (json.error) throw new Error(json.error)
@@ -164,21 +182,33 @@ export default function DailyReportPage() {
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {kpiData && [
-              { label: '着金売上', value: `¥${kpiData.cashSales.toLocaleString()}`, color: 'text-[#1A202C]' },
-              { label: '消化売上', value: `¥${kpiData.consumeSales.toLocaleString()}`, color: 'text-rose' },
-              { label: '役務残', value: `¥${kpiData.serviceLiability.toLocaleString()}`, color: 'text-lavender' },
-              { label: '来店人数', value: `${kpiData.visitors}名`, color: 'text-emerald-600' },
-              { label: '施術単価', value: `¥${kpiData.unitPrice.toLocaleString()}`, color: 'text-amber-600' },
-              { label: '新規来店', value: `${kpiData.newVisitors}名`, color: 'text-blue-600' },
-              { label: '新規予約', value: `${kpiData.newReservations}件`, color: 'text-blue-600' },
-              { label: 'タスク完了', value: `${kpiData.completedReservations}/${kpiData.totalReservations} (${kpiData.taskCompletionRate}%)`, color: 'text-text-main' },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="bg-white rounded-xl p-4 border border-[#E8E0F0] card-shadow">
-                <p className="text-xs text-text-sub mb-0.5">{label}</p>
-                <p className={`font-bold ${color}`}>{value}</p>
-              </div>
-            ))}
+            {kpiData && (() => {
+              const totalSales = kpiData.cashSales + kpiData.consumeSales + (kpiData.productSales ?? 0)
+              const salesRate = getAchievementRate(totalSales, dailyTarget)
+              const visitsRate = getAchievementRate(kpiData.visitors, Math.round((settings.targets.visits || 0) / workingDays))
+              const avgPriceRate = getAchievementRate(kpiData.unitPrice, settings.targets.avgPrice || 0)
+              const productRate = getAchievementRate(kpiData.productSales ?? 0, Math.round((settings.targets.productSales || 0) / workingDays))
+              const newCustRate = getAchievementRate(kpiData.newVisitors, Math.round((settings.targets.newCustomers || 0) / workingDays))
+              const newResRate = getAchievementRate(kpiData.newReservations, Math.round((settings.targets.newReservations || 0) / workingDays))
+              return [
+                { label: '売上合計', value: `¥${totalSales.toLocaleString()}`, sub: `日割り目標 ¥${dailyTarget.toLocaleString()}`, rate: salesRate, color: 'text-[#1A202C]' },
+                { label: '着金売上', value: `¥${kpiData.cashSales.toLocaleString()}`, sub: null, rate: 0, color: 'text-[#1A202C]' },
+                { label: '消化売上', value: `¥${kpiData.consumeSales.toLocaleString()}`, sub: null, rate: 0, color: 'text-rose' },
+                { label: '物販売上', value: `¥${(kpiData.productSales ?? 0).toLocaleString()}`, sub: `目標/日 ¥${Math.round((settings.targets.productSales || 0) / workingDays).toLocaleString()}`, rate: productRate, color: 'text-lavender' },
+                { label: '役務残', value: `¥${kpiData.serviceLiability.toLocaleString()}`, sub: null, rate: 0, color: 'text-lavender' },
+                { label: '来店人数', value: `${kpiData.visitors}名`, sub: `目標/日 ${Math.round((settings.targets.visits || 0) / workingDays)}名`, rate: visitsRate, color: 'text-emerald-600' },
+                { label: '施術単価', value: `¥${kpiData.unitPrice.toLocaleString()}`, sub: `目標 ¥${(settings.targets.avgPrice || 0).toLocaleString()}`, rate: avgPriceRate, color: 'text-amber-600' },
+                { label: '新規来店', value: `${kpiData.newVisitors}名`, sub: `目標/日 ${Math.round((settings.targets.newCustomers || 0) / workingDays)}名`, rate: newCustRate, color: 'text-blue-600' },
+                { label: '新規予約', value: `${kpiData.newReservations}件`, sub: `目標/日 ${Math.round((settings.targets.newReservations || 0) / workingDays)}件`, rate: newResRate, color: 'text-blue-600' },
+                { label: 'タスク完了', value: `${kpiData.completedReservations}/${kpiData.totalReservations} (${kpiData.taskCompletionRate}%)`, sub: null, rate: 0, color: 'text-text-main' },
+              ].map(({ label, value, sub, rate, color }) => (
+                <div key={label} className="bg-white rounded-xl p-4 border border-[#E8E0F0] card-shadow">
+                  <p className="text-xs text-text-sub mb-0.5">{label}</p>
+                  <p className={`font-bold ${color}`}>{value}</p>
+                  {sub && <p className={`text-xs mt-0.5 ${getAchievementColor(rate)}`}>{sub}（{rate}%）</p>}
+                </div>
+              ))
+            })()}
           </div>
 
           <div className="bg-white rounded-2xl border border-[#E8E0F0] p-6 card-shadow">

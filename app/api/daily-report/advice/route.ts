@@ -29,11 +29,14 @@ export async function POST(req: NextRequest) {
 
     let cashSales = 0
     let consumeSales = 0
+    let productSales = 0
     for (const s of sales || []) {
       const amt = Number(s.amount ?? 0)
       const st = (s.sale_type as string) || 'cash'
       if (st === 'ticket_consume' || st === 'subscription_consume') {
         consumeSales += amt
+      } else if (st === 'product') {
+        productSales += amt
       } else {
         cashSales += amt
       }
@@ -76,10 +79,17 @@ export async function POST(req: NextRequest) {
     const totalReservations = (reservations || []).length
     const completedReservations = (reservations || []).filter((r: { status: string }) => r.status === 'completed').length
 
+    const totalSales = cashSales + consumeSales + productSales
+    const targets = body.targets || {}
+    const dailyTarget = Number(targets.dailyTarget) || 0
+    const achievementRate = dailyTarget > 0 ? Math.round((totalSales / dailyTarget) * 100) : 0
+
     const kpiData = {
       date,
       cashSales,
       consumeSales,
+      productSales,
+      totalSales,
       serviceLiability,
       visitors,
       unitPrice,
@@ -88,17 +98,26 @@ export async function POST(req: NextRequest) {
       totalReservations,
       completedReservations,
       taskCompletionRate: totalReservations > 0 ? Math.round((completedReservations / totalReservations) * 100) : 0,
+      targets: {
+        dailyTarget,
+        visits: targets.visits ?? 0,
+        avgPrice: targets.avgPrice ?? 0,
+        productSales: targets.productSales ?? 0,
+        newCustomers: targets.newCustomers ?? 0,
+        newReservations: targets.newReservations ?? 0,
+      },
+      achievementRate,
     }
 
     const systemPrompt = `あなたはサロン経営の専門コンサルタントです。当日のデータを分析し、日報用のアドバイスを生成してください。
 出力は以下の4セクションに分けて、箇条書きで簡潔に記載してください。温かみのある文体で、スタッフのモチベーションを上げる表現を使ってください。
 
-1. 本日の数字まとめ
+1. 本日の数字まとめ（目標の何%達成かを必ず含める。例：日割り目標の85%達成）
 2. 素晴らしかった点（具体的に褒める）
 3. 改善点と明日へのアクション
 4. 一言メッセージ（モチベーションアップ）`
 
-    const userContent = `以下の${date}の経営データを分析し、日報用のアドバイスを生成してください。\n\n${JSON.stringify(kpiData, null, 2)}`
+    const userContent = `以下の${date}の経営データを分析し、日報用のアドバイスを生成してください。目標対比・達成率を評価コメントに反映してください。\n\n${JSON.stringify(kpiData, null, 2)}`
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
