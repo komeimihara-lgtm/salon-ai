@@ -39,7 +39,7 @@ function TypingDots() {
   )
 }
 
-function SolaAvatarImg({ size = 24, isSpeaking = false }: { size?: number; isSpeaking?: boolean }) {
+function SolaAvatarImg({ size = 36, isSpeaking = false }: { size?: number; isSpeaking?: boolean }) {
   return (
     <div className="relative shrink-0">
       <div
@@ -48,7 +48,7 @@ function SolaAvatarImg({ size = 24, isSpeaking = false }: { size?: number; isSpe
       >
         <Image
           src={SOLA_AVATAR_URL}
-          alt="SOLA（ソラ）"
+          alt="SOLA"
           width={size}
           height={size}
           className="w-full h-full object-cover"
@@ -368,7 +368,7 @@ function CounselingContent() {
     if (step === 5 && data.menus.length === 0) fetchMenus()
   }, [step, data.menus.length, fetchMenus])
 
-  const INITIAL_GREETING = 'はじめまして、私はSOLAのAIビューティーカウンセラー『Sola（ソラ）』です ✨ 今日は施術前に、あなたのお肌やお悩みについてゆっくりお聞きしたいと思います。本日はどんなことでお越しになりましたか？ 🌸'
+  const INITIAL_GREETING = 'はじめまして、私はSOLAのAIビューティーカウンセラーです。今日は施術前に、あなたのお肌やお悩みについてゆっくりお聞きしたいと思います。本日はどんなことでお越しになりましたか？'
   useEffect(() => {
     if (step === 2 && data.messages.length === 0 && !initialSpokenRef.current) {
       initialSpokenRef.current = true
@@ -452,10 +452,10 @@ function CounselingContent() {
           <div className="w-9" />
         </header>
         <div className="flex-1 flex flex-col items-center justify-center p-6">
-          <div className="w-24 h-24 rounded-full overflow-hidden ring-2 ring-offset-2 ring-[#9B8EC4] mb-4">
-            <Image src={SOLA_AVATAR_URL} alt="SOLA（ソラ）" width={96} height={96} className="w-full h-full object-cover" />
+          <div className="w-36 h-36 rounded-full overflow-hidden ring-2 ring-offset-2 ring-[#9B8EC4] mb-4">
+            <Image src={SOLA_AVATAR_URL} alt="SOLA" width={144} height={144} className="w-full h-full object-cover" />
           </div>
-          <p className="text-sm font-medium text-[#C4728A] mb-1">Sola（ソラ）</p>
+          <p className="text-sm font-medium text-[#C4728A] mb-1">SOLA</p>
           <h2 className="text-xl font-bold text-[#3D3D3D] mb-2">
             {mode === 'online' ? 'スタッフに送信しました' : 'カルテに保存しました'}
           </h2>
@@ -482,8 +482,8 @@ function CounselingContent() {
   const useSplitLayout = isChatStep
 
   return (
-    <div className={`bg-white flex flex-col h-[calc(100vh-64px)] ${useSplitLayout ? 'lg:flex-row lg:max-w-none -mx-4 lg:-mx-8 -mt-4 lg:-mt-8' : 'max-w-lg mx-auto'}`}>
-      <header className={`flex items-center h-14 px-4 border-b border-gray-100 shrink-0 ${useSplitLayout ? 'lg:absolute lg:top-0 lg:left-0 lg:right-0 lg:z-20 lg:bg-white/95 lg:backdrop-blur' : ''}`}>
+    <div className={`bg-white flex flex-col h-[calc(100vh-128px)] ${useSplitLayout ? 'lg:flex-row lg:max-w-none -mx-4 lg:-mx-8 -mt-4 lg:-mt-8' : 'max-w-lg mx-auto'}`}>
+      <header className="flex items-center h-14 px-4 border-b border-gray-100 shrink-0">
         <Link href="/dashboard" className="p-2 -ml-2 text-[#3D3D3D]">
           <BackIcon className="w-5 h-5" />
         </Link>
@@ -529,11 +529,11 @@ function CounselingContent() {
 
       {!useSplitLayout && (
         <div className="flex flex-col items-center py-4 shrink-0">
-          <div className={`relative inline-block w-24 h-24 rounded-full overflow-hidden ring-2 ring-offset-2 ring-[#9B8EC4] bg-gray-100 ${isSpeaking ? 'sola-speaking' : ''}`}>
-            <Image src={SOLA_AVATAR_URL} alt="SOLA（ソラ）" width={96} height={96} className="w-full h-full object-cover" />
+          <div className={`relative inline-block w-36 h-36 rounded-full overflow-hidden ring-2 ring-offset-2 ring-[#9B8EC4] bg-gray-100 ${isSpeaking ? 'sola-speaking' : ''}`}>
+            <Image src={SOLA_AVATAR_URL} alt="SOLA" width={144} height={144} className="w-full h-full object-cover" />
           </div>
           <SolaWaveform isSpeaking={isSpeaking} />
-          <p className="text-sm font-medium text-[#3D3D3D] mt-2">✨ SOLA（ソラ）</p>
+          <p className="text-sm font-medium text-[#3D3D3D] mt-2">✨ SOLA</p>
           <p className="text-xs text-gray-500">AIビューティーカウンセラー</p>
         </div>
       )}
@@ -621,14 +621,14 @@ function CounselingContent() {
         )}
 
         {step === 2 && (
-          <div className={`flex flex-col lg:flex-row lg:flex-1 lg:min-h-0 ${useSplitLayout ? 'lg:h-[calc(100vh-140px)]' : 'h-[calc(100vh-320px)] min-h-[280px]'}`}>
+          <div className={`flex flex-col lg:flex-row lg:flex-1 lg:min-h-0 ${useSplitLayout ? 'lg:h-[calc(100vh-200px)]' : 'h-[calc(100vh-320px)] min-h-[280px]'}`}>
             {/* デスクトップ: 左40% アバターエリア */}
             <div className="hidden lg:flex lg:w-2/5 lg:flex-col lg:items-center lg:justify-center lg:py-12 lg:border-r lg:border-gray-100" style={{ background: 'linear-gradient(135deg, #F8F5FF, #FDFAF7)' }}>
-              <div className={`w-48 h-48 rounded-full overflow-hidden ring-2 ring-offset-2 ring-[#9B8EC4] bg-gray-100 ${isSpeaking ? 'sola-speaking' : ''}`}>
-                <Image src={SOLA_AVATAR_URL} alt="SOLA（ソラ）" width={192} height={192} className="w-full h-full object-cover" />
+              <div className={`w-72 h-72 rounded-full overflow-hidden ring-2 ring-offset-2 ring-[#9B8EC4] bg-gray-100 ${isSpeaking ? 'sola-speaking' : ''}`}>
+                <Image src={SOLA_AVATAR_URL} alt="SOLA" width={288} height={288} className="w-full h-full object-cover" />
               </div>
               <SolaWaveform isSpeaking={isSpeaking} />
-              <h2 className="text-xl font-bold mt-6" style={{ fontFamily: 'var(--font-noto-serif)', color: '#5A4A6E' }}>SOLA（ソラ）</h2>
+              <h2 className="text-xl font-bold mt-6" style={{ fontFamily: 'var(--font-noto-serif)', color: '#5A4A6E' }}>SOLA</h2>
               <p className="text-sm mt-1" style={{ color: '#9B8EC4', fontFamily: 'var(--font-noto-sans)' }}>AIビューティーカウンセラー</p>
               <div className="mt-4 flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-rose-400 animate-pulse' : chatLoading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
@@ -639,12 +639,12 @@ function CounselingContent() {
             </div>
             {/* 右60% チャットエリア */}
             <div className="flex flex-col flex-1 min-h-0 lg:w-3/5 lg:border-l lg:border-gray-100">
-            <div className="flex-1 overflow-y-auto space-y-4 pb-4 px-2 lg:px-6">
+            <div className="flex-1 overflow-y-auto space-y-4 pt-4 pb-4 px-2 lg:px-6 lg:pt-20">
               {data.messages.length === 0 && (
                 <div className="flex gap-2">
-                  <SolaAvatarImg size={32} isSpeaking={isSpeaking} />
-                  <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%]">
-                    はじめまして、私はSOLAのAIビューティーカウンセラー『Sola（ソラ）』です ✨
+                  <SolaAvatarImg size={48} isSpeaking={isSpeaking} />
+                  <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%] leading-relaxed">
+                    はじめまして、私はSOLAのAIビューティーカウンセラーです ✨
                     今日は施術前に、あなたのお肌やお悩みについてゆっくりお聞きしたいと思います。
                     本日はどんなことでお越しになりましたか？ 🌸
                   </div>
@@ -659,8 +659,8 @@ function CounselingContent() {
                   </div>
                 ) : (
                   <div key={i} className="flex gap-2">
-                    <SolaAvatarImg size={32} isSpeaking={isSpeaking} />
-                    <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%]">
+                    <SolaAvatarImg size={48} isSpeaking={isSpeaking} />
+                    <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%] leading-relaxed">
                       {m.content}
                     </div>
                   </div>
@@ -668,7 +668,7 @@ function CounselingContent() {
               )}
               {chatLoading && (
                 <div className="flex gap-2">
-                  <SolaAvatarImg size={32} isSpeaking={isSpeaking} />
+                  <SolaAvatarImg size={48} isSpeaking={isSpeaking} />
                   <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-sm text-[#3D3D3D]">
                     <TypingDots />
                   </div>
@@ -811,7 +811,7 @@ function CounselingContent() {
               <div><span className="text-gray-500">選んだメニュー:</span><p className="text-[#3D3D3D]">{data.selectedMenu?.name || '-'}</p></div>
               {solaComment && (
                 <div className="bg-[#F8F5FF] rounded-xl p-4">
-                  <span className="text-gray-500 text-xs block mb-1">Solaからのコメント</span>
+                  <span className="text-gray-500 text-xs block mb-1">SOLAからのコメント</span>
                   <p className="text-[#3D3D3D]">{solaComment}</p>
                 </div>
               )}
