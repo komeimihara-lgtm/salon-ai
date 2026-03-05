@@ -298,6 +298,9 @@ export default function SalesPage() {
                 ))}
               </div>
               <h3 className="text-sm font-bold text-text-main mb-2 mt-4">回数券</h3>
+              {!selectedCustomer && filteredTicketPlans.length > 0 && (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">先に顧客を選択してください</p>
+              )}
               <div className="grid grid-cols-2 gap-2 max-h-28 overflow-y-auto">
                 {filteredTicketPlans.map(p => (
                   <button
@@ -316,6 +319,9 @@ export default function SalesPage() {
                 )}
               </div>
               <h3 className="text-sm font-bold text-text-main mb-2 mt-4">サブスク</h3>
+              {!selectedCustomer && filteredSubPlans.length > 0 && (
+                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">先に顧客を選択してください</p>
+              )}
               <div className="grid grid-cols-2 gap-2 max-h-28 overflow-y-auto">
                 {filteredSubPlans.map(p => (
                   <button
