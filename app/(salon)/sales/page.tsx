@@ -6,6 +6,7 @@ import {
   ChevronLeft, ChevronRight, Loader2, Tag, AlertCircle,
 } from 'lucide-react'
 import { getMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, type MenuItem, type Campaign } from '@/lib/menus'
+import { DEMO_SALON_ID } from '@/lib/supabase'
 import { getStaffList } from '@/lib/staff-management'
 import { fetchTicketPlans, addCustomerTicket, type TicketPlan } from '@/lib/tickets'
 import { fetchSubscriptionPlans, addCustomerSubscription, type SubscriptionPlan } from '@/lib/subscriptions'
@@ -29,12 +30,17 @@ interface Sale {
   memo?: string
 }
 
+type CartItemType = 'menu' | 'ticket' | 'subscription'
+
 interface CartItem {
+  type: CartItemType
   menuId: string
   name: string
   price: number
   qty: number
   category: string
+  ticketPlan?: TicketPlan
+  subPlan?: SubscriptionPlan
 }
 
 export default function SalesPage() {
@@ -72,9 +78,14 @@ export default function SalesPage() {
   const [editSale, setEditSale] = useState<Sale | null>(null)
   const [ticketPlans, setTicketPlans] = useState<TicketPlan[]>([])
   const [subPlans, setSubPlans] = useState<SubscriptionPlan[]>([])
-  const [ticketPurchasing, setTicketPurchasing] = useState(false)
-  const [subPurchasing, setSubPurchasing] = useState(false)
   const [isProductSale, setIsProductSale] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null)
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   const fetchSales = useCallback(async () => {
     try {
@@ -128,54 +139,38 @@ export default function SalesPage() {
       })
     : subPlans
 
-  if (typeof window !== 'undefined') {
-    console.log('[sales] selectedCategory:', selectedCategory, 'ticketPlans:', ticketPlans.map(p => ({ name: p.name, category: p.category })), 'filteredTicketPlans:', filteredTicketPlans.length)
-  }
-
-  const handleTicketPurchase = async (plan: TicketPlan) => {
+  const addTicketToCart = (plan: TicketPlan) => {
     if (!selectedCustomer) {
       setError('先に顧客を選択してください')
       return
     }
-    setTicketPurchasing(true)
     setError('')
-    try {
-      await addCustomerTicket(selectedCustomer.id, selectedCustomer.name, plan)
-      alert(`${plan.name} を購入登録しました`)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '登録に失敗しました'
-      console.error('[sales] 回数券登録エラー:', msg)
-      setError(msg)
-    } finally {
-      setTicketPurchasing(false)
-    }
+    setCart(prev => {
+      const found = prev.find(c => c.type === 'ticket' && c.menuId === plan.id)
+      if (found) return prev.map(c => c.type === 'ticket' && c.menuId === plan.id ? { ...c, qty: c.qty + 1 } : c)
+      return [...prev, { type: 'ticket' as const, menuId: plan.id, name: plan.name, price: plan.price, qty: 1, category: plan.category || selectedCategory, ticketPlan: plan }]
+    })
   }
 
-  const handleSubPurchase = async (plan: SubscriptionPlan) => {
+  const addSubToCart = (plan: SubscriptionPlan) => {
     if (!selectedCustomer) {
       setError('先に顧客を選択してください')
       return
     }
-    setSubPurchasing(true)
     setError('')
-    try {
-      await addCustomerSubscription(selectedCustomer.id, selectedCustomer.name, plan)
-      alert(`${plan.name} を加入登録しました`)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : '登録に失敗しました'
-      console.error('[sales] サブスク登録エラー:', msg)
-      setError(msg)
-    } finally {
-      setSubPurchasing(false)
-    }
+    setCart(prev => {
+      const found = prev.find(c => c.type === 'subscription' && c.menuId === plan.id)
+      if (found) return prev.map(c => c.type === 'subscription' && c.menuId === plan.id ? { ...c, qty: c.qty + 1 } : c)
+      return [...prev, { type: 'subscription' as const, menuId: plan.id, name: plan.name, price: plan.price, qty: 1, category: plan.category || selectedCategory, subPlan: plan }]
+    })
   }
 
   const addToCart = (menu: { id: string; name: string; price: number; category: string }) => {
     if (menu.category === '物販') setIsProductSale(true)
     setCart(prev => {
-      const found = prev.find(c => c.menuId === menu.id)
-      if (found) return prev.map(c => c.menuId === menu.id ? { ...c, qty: c.qty + 1 } : c)
-      return [...prev, { menuId: menu.id, name: menu.name, price: menu.price, qty: 1, category: menu.category }]
+      const found = prev.find(c => c.type === 'menu' && c.menuId === menu.id)
+      if (found) return prev.map(c => c.type === 'menu' && c.menuId === menu.id ? { ...c, qty: c.qty + 1 } : c)
+      return [...prev, { type: 'menu' as const, menuId: menu.id, name: menu.name, price: menu.price, qty: 1, category: menu.category }]
     })
   }
 
@@ -216,7 +211,7 @@ export default function SalesPage() {
   }
 
   const handleRegister = async () => {
-    if (cart.length === 0) { setError('メニューを追加してください'); return }
+    if (cart.length === 0) { setError('メニュー・回数券・サブスクを追加してください'); return }
     if (!selectedCustomer) {
       setError('顧客を選択してください')
       return
@@ -227,38 +222,66 @@ export default function SalesPage() {
     setSaving(true); setError('')
     try {
       const hasProduct = isProductSale || cart.some(c => c.category === '物販')
-      const salesToCreate = cart.flatMap(c =>
-        Array.from({ length: c.qty }, () => ({
-          salon_id: process.env.NEXT_PUBLIC_SALON_ID || 'default',
+      const salesToCreate: Array<Record<string, unknown>> = []
+
+      for (const c of cart) {
+        const amt = Math.round(c.price * (1 - (discountType === 'percent' ? discountValue / 100 : 0)))
+        const saleBase = {
+          salon_id: process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID,
           sale_date: saleDate,
-          amount: Math.round(c.price * (1 - (discountType === 'percent' ? discountValue / 100 : 0))),
+          amount: amt,
           customer_id: selectedCustomer?.id || null,
           customer_name: selectedCustomer?.name || null,
           menu: c.name,
           staff_name: selectedStaff?.name || null,
           payment_method: paymentMethod,
           sale_type: hasProduct || c.category === '物販' ? 'product' : paymentMethod,
-        }))
-      )
-      const res = await fetch('/api/kpi/sales', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sales: salesToCreate }),
-      })
-      if (!res.ok) throw new Error()
+        }
+        if (c.type === 'ticket' && c.ticketPlan) {
+          for (let i = 0; i < c.qty; i++) {
+            await addCustomerTicket(selectedCustomer!.id, selectedCustomer!.name, c.ticketPlan)
+            salesToCreate.push({ ...saleBase })
+          }
+        } else if (c.type === 'subscription' && c.subPlan) {
+          for (let i = 0; i < c.qty; i++) {
+            await addCustomerSubscription(selectedCustomer!.id, selectedCustomer!.name, c.subPlan)
+            salesToCreate.push({ ...saleBase })
+          }
+        } else {
+          for (let i = 0; i < c.qty; i++) {
+            salesToCreate.push({ ...saleBase })
+          }
+        }
+      }
+
+      if (salesToCreate.length > 0) {
+        const res = await fetch('/api/kpi/sales', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sales: salesToCreate }),
+        })
+        if (!res.ok) throw new Error()
+      }
       setCart([]); setSelectedCustomer(null); setSelectedStaff(null)
       setDiscountType(null); setDiscountValue(0); setPaymentConfirmed(false); setIsProductSale(false)
       fetchSales()
-    } catch { setError('登録に失敗しました') } finally { setSaving(false) }
+      showToast('売上を登録しました')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '登録に失敗しました'
+      setError(msg)
+      showToast(msg, 'error')
+    } finally { setSaving(false) }
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('この売上を削除しますか？')) return
     try {
       const res = await fetch(`/api/kpi/sales/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
+      setDeleteTarget(null)
       fetchSales()
-    } catch { alert('削除に失敗しました') }
+    } catch {
+      showToast('削除に失敗しました', 'error')
+    }
   }
 
   const prevMonth = () => {
@@ -321,8 +344,8 @@ export default function SalesPage() {
                 {filteredTicketPlans.map(p => (
                   <button
                     key={p.id}
-                    onClick={() => handleTicketPurchase(p)}
-                    disabled={!selectedCustomer || ticketPurchasing}
+                    onClick={() => addTicketToCart(p)}
+                    disabled={!selectedCustomer}
                     className="p-3 rounded-xl border border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <p className="font-medium text-text-main text-sm">{p.name}</p>
@@ -331,7 +354,7 @@ export default function SalesPage() {
                   </button>
                 ))}
                 {filteredTicketPlans.length === 0 && (
-                  <p className="col-span-2 text-xs text-text-sub py-2">このカテゴリの回数券はありません（顧客選択後に購入可能）</p>
+                  <p className="col-span-2 text-xs text-text-sub py-2">このカテゴリの回数券はありません（顧客選択後にカートへ追加可能）</p>
                 )}
               </div>
               <h3 className="text-sm font-bold text-text-main mb-2 mt-4">サブスク</h3>
@@ -339,8 +362,8 @@ export default function SalesPage() {
                 {filteredSubPlans.map(p => (
                   <button
                     key={p.id}
-                    onClick={() => handleSubPurchase(p)}
-                    disabled={!selectedCustomer || subPurchasing}
+                    onClick={() => addSubToCart(p)}
+                    disabled={!selectedCustomer}
                     className="p-3 rounded-xl border border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <p className="font-medium text-text-main text-sm">{p.name}</p>
@@ -349,7 +372,7 @@ export default function SalesPage() {
                   </button>
                 ))}
                 {filteredSubPlans.length === 0 && (
-                  <p className="col-span-2 text-xs text-text-sub py-2">このカテゴリのサブスクはありません（顧客選択後に加入可能）</p>
+                  <p className="col-span-2 text-xs text-text-sub py-2">このカテゴリのサブスクはありません（顧客選択後にカートへ追加可能）</p>
                 )}
               </div>
             </div>
@@ -359,9 +382,9 @@ export default function SalesPage() {
               <h3 className="text-sm font-bold text-text-main mb-3">カート</h3>
               <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
                 {cart.length === 0 ? (
-                  <p className="text-sm text-text-sub py-4">メニューを選択してください</p>
+                  <p className="text-sm text-text-sub py-4">メニュー・回数券・サブスクを選択してください</p>
                 ) : cart.map(c => (
-                  <div key={c.menuId} className="flex items-center gap-3 p-3 bg-light-lav/50 rounded-xl">
+                  <div key={`${c.type}-${c.menuId}`} className="flex items-center gap-3 p-3 bg-light-lav/50 rounded-xl">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-text-main truncate text-sm">{c.name}</p>
                       <p className="text-xs text-text-sub">¥{c.price.toLocaleString()} × {c.qty}</p>
@@ -546,7 +569,7 @@ export default function SalesPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs bg-white rounded-full px-2 py-0.5">{PAYMENTS.find(p => p.value === s.payment_method)?.label ?? s.payment_method}</span>
                     <button onClick={() => setEditSale(s)} className="p-2 text-text-sub hover:text-rose rounded-lg"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => handleDelete(s.id)} className="p-2 text-text-sub hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                    <button onClick={() => setDeleteTarget(s)} className="p-2 text-text-sub hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
               ))}
@@ -581,6 +604,33 @@ export default function SalesPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 削除確認モーダル */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm card-shadow">
+            <h3 className="font-bold text-text-main mb-2">売上を削除</h3>
+            <p className="text-sm text-text-main mb-6">この売上を削除しますか？</p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteTarget(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-text-main">
+                キャンセル
+              </button>
+              <button onClick={() => handleDelete(deleteTarget.id)}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600">
+                削除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* トースト */}
+      {toast && (
+        <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+          <span className="text-sm font-medium">{toast.message}</span>
         </div>
       )}
     </div>
