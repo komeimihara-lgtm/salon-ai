@@ -1,6 +1,7 @@
 const STORAGE_KEY = 'sola_menus'
 const STORAGE_TAX = 'sola_tax_settings'
 const STORAGE_CAMPAIGNS = 'sola_campaigns'
+const STORAGE_COUPONS = 'sola_coupons'
 
 export interface MenuItem {
   id: string
@@ -25,6 +26,16 @@ export interface Campaign {
   endDate?: string
 }
 
+export interface Coupon {
+  id: string
+  name: string
+  targetMenu?: string
+  discountType: 'percent' | 'amount'
+  discountValue: number
+  conditions?: string
+  expiryDate?: string
+}
+
 export const DEFAULT_CATEGORIES = [
   'フェイシャル',
   'ボディ',
@@ -32,6 +43,7 @@ export const DEFAULT_CATEGORIES = [
   'オプション',
   '物販',
   'キャンペーン',
+  'クーポン',
 ]
 
 const DEFAULT_MENUS: MenuItem[] = [
@@ -108,6 +120,20 @@ export function getCampaigns(): Campaign[] {
 export function setCampaigns(campaigns: Campaign[]) {
   if (typeof window === 'undefined') return
   localStorage.setItem(STORAGE_CAMPAIGNS, JSON.stringify(campaigns))
+}
+
+export function getCoupons(): Coupon[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem(STORAGE_COUPONS)
+    if (raw) return JSON.parse(raw)
+  } catch (_) {}
+  return []
+}
+
+export function setCoupons(coupons: Coupon[]) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(STORAGE_COUPONS, JSON.stringify(coupons))
 }
 
 export function calcTaxAmount(price: number, tax: TaxSettings): number {
