@@ -228,7 +228,7 @@ export default function MenuSettingsPage() {
 
           {/* 大分類管理 */}
           <div>
-            <h3 className="text-sm font-bold text-text-main mb-3">大分類管理</h3>
+            <h3 className="text-sm font-bold text-text-main mb-3">大分類</h3>
             <div className="flex flex-wrap gap-2 mb-3">
               {categories.map(cat => (
                 <div key={cat} className="flex items-center gap-1 px-3 py-1.5 bg-light-lav rounded-lg">
@@ -264,7 +264,7 @@ export default function MenuSettingsPage() {
           {/* 小分類メニュー一覧 */}
           <div>
             <h3 className="text-sm font-bold text-text-main mb-3">
-              {selectedCategory ? `「${selectedCategory}」のメニュー` : '全メニュー'}
+              小分類メニュー {selectedCategory ? `（${selectedCategory}）` : '（全て）'}
             </h3>
             <div className="space-y-2">
               {filteredMenus.map(m => (
