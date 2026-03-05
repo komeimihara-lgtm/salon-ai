@@ -293,6 +293,8 @@ export default function MenuSettingsPage() {
   const [subSessions, setSubSessions] = useState(2)
   const [subBillingDay, setSubBillingDay] = useState(1)
   const [showImport, setShowImport] = useState(false)
+  const [categoryEditMode, setCategoryEditMode] = useState(false)
+  const [showTaxConfirm, setShowTaxConfirm] = useState(false)
 
   useEffect(() => {
     const m = getMenus()
@@ -317,12 +319,6 @@ export default function MenuSettingsPage() {
   const filteredMenus = selectedCategory
     ? menus.filter(m => m.category === selectedCategory)
     : menus
-  const filteredTicketPlans = selectedCategory
-    ? ticketPlans.filter(p => (p.category || '') === selectedCategory)
-    : ticketPlans
-  const filteredSubPlans = selectedCategory
-    ? subPlans.filter(p => (p.category || '') === selectedCategory)
-    : subPlans
 
   const addMenu = () => {
     if (!newName.trim()) return
@@ -376,6 +372,7 @@ export default function MenuSettingsPage() {
   }
 
   const removeCategory = (cat: string) => {
+    if (!confirm(`「${cat}」を削除しますか？\nこのカテゴリのメニューは削除されません。`)) return
     const next = categories.filter(c => c !== cat)
     setCategoriesState(next)
     setCategories(next)
@@ -383,6 +380,7 @@ export default function MenuSettingsPage() {
 
   const saveTax = () => {
     setTaxSettings(taxSettings)
+    setShowTaxConfirm(false)
     alert('消費税設定を保存しました')
   }
 
@@ -448,9 +446,9 @@ export default function MenuSettingsPage() {
   }
 
   const TABS = [
-    { id: 'menus', label: '施術メニュー' },
+    { id: 'menus', label: '通常メニュー' },
     { id: 'campaigns', label: 'キャンペーン' },
-    { id: 'courses', label: '回数券' },
+    { id: 'courses', label: '回数チケット' },
     { id: 'subscriptions', label: 'サブスク' },
     { id: 'tax', label: '消費税設定' },
   ]
@@ -481,14 +479,31 @@ export default function MenuSettingsPage() {
         ))}
       </div>
 
-      {/* 施術メニュー */}
+      {/* 通常メニュー */}
       {activeTab === 'menus' && (
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden space-y-6">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
 
           {/* 大分類（カテゴリタブ） */}
           <div>
-            <h3 className="text-sm font-bold text-text-main mb-3">カテゴリ</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-text-main">カテゴリ</h3>
+              {categoryEditMode ? (
+                <button
+                  onClick={() => setCategoryEditMode(false)}
+                  className="text-sm font-medium text-rose hover:underline"
+                >
+                  完了
+                </button>
+              ) : (
+                <button
+                  onClick={() => setCategoryEditMode(true)}
+                  className="text-sm font-medium text-text-sub hover:text-rose"
+                >
+                  カテゴリを編集
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2 mb-3">
               {categoriesForFilter.map(cat => (
                 <div key={cat} className="flex items-center gap-1 px-3 py-1.5 bg-light-lav rounded-lg">
@@ -498,9 +513,11 @@ export default function MenuSettingsPage() {
                   >
                     {cat}
                   </button>
-                  <button onClick={() => removeCategory(cat)} className="text-text-sub hover:text-red-500">
-                    <X className="w-3 h-3" />
-                  </button>
+                  {categoryEditMode && (
+                    <button onClick={() => removeCategory(cat)} className="text-text-sub hover:text-red-500">
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -521,7 +538,7 @@ export default function MenuSettingsPage() {
             </div>
           </div>
 
-          {/* メニュー・回数券・サブスクをまとめて表示 */}
+          {/* 通常メニューのみ表示 */}
           <div>
             <h3 className="text-sm font-bold text-text-main mb-3">
               メニュー {selectedCategory ? `（${selectedCategory}）` : '（全て）'}
@@ -567,75 +584,6 @@ export default function MenuSettingsPage() {
                   )}
                 </div>
               ))}
-            </div>
-
-            {/* 回数券（カテゴリで絞り込み） */}
-            <h3 className="text-sm font-bold text-text-main mb-3 mt-6">
-              回数券 {selectedCategory ? `（${selectedCategory}）` : '（全て）'}
-            </h3>
-            <div className="space-y-2 mb-4">
-              {filteredTicketPlans.length === 0 ? (
-                <p className="text-sm text-text-sub py-2">このカテゴリの回数券はありません</p>
-              ) : (
-                filteredTicketPlans.map(p => (
-                  <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
-                    <div>
-                      <p className="font-medium text-text-main">{p.name}</p>
-                      <p className="text-xs text-text-sub">
-                        {p.menuName} · {p.totalSessions}回 · ¥{p.price.toLocaleString()}
-                        {p.expiryDays ? ` · 有効${p.expiryDays}日` : ''}
-                      </p>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (!confirm('削除しますか？')) return
-                        try {
-                          await deleteTicketPlan(p.id)
-                          setTicketPlansState(prev => prev.filter(x => x.id !== p.id))
-                        } catch {
-                          alert('削除に失敗しました')
-                        }
-                      }}
-                      className="p-2 text-text-sub hover:text-red-600 rounded-lg"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* サブスク（カテゴリで絞り込み） */}
-            <h3 className="text-sm font-bold text-text-main mb-3 mt-6">
-              サブスク {selectedCategory ? `（${selectedCategory}）` : '（全て）'}
-            </h3>
-            <div className="space-y-2 mb-4">
-              {filteredSubPlans.length === 0 ? (
-                <p className="text-sm text-text-sub py-2">このカテゴリのサブスクはありません</p>
-              ) : (
-                filteredSubPlans.map(p => (
-                  <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
-                    <div>
-                      <p className="font-medium text-text-main">{p.name}</p>
-                      <p className="text-xs text-text-sub">¥{p.price.toLocaleString()}/月 · {p.menuName} {p.sessionsPerMonth}回 · 毎月{p.billingDay}日課金</p>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        if (!confirm('削除しますか？')) return
-                        try {
-                          await deleteSubscriptionPlan(p.id)
-                          setSubPlansState(prev => prev.filter(x => x.id !== p.id))
-                        } catch {
-                          alert('削除に失敗しました')
-                        }
-                      }}
-                      className="p-2 text-text-sub hover:text-red-600 rounded-lg"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))
-              )}
             </div>
 
             {/* メニュー追加フォーム */}
@@ -863,10 +811,38 @@ export default function MenuSettingsPage() {
                 <span className="text-text-main font-bold">%</span>
               </div>
             </div>
-            <button onClick={saveTax}
+            <button onClick={() => setShowTaxConfirm(true)}
               className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold">
               保存する
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 消費税設定 確認モーダル */}
+      {showTaxConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm card-shadow">
+            <h3 className="font-bold text-text-main text-lg mb-4">消費税設定の変更</h3>
+            <p className="text-sm text-text-main mb-6 whitespace-pre-line">
+              消費税設定を変更しますか？
+              変更すると全メニューの税計算に影響します。
+              本当に変更してよいですか？
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowTaxConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-text-main font-medium"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={saveTax}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium"
+              >
+                変更する
+              </button>
+            </div>
           </div>
         </div>
       )}
