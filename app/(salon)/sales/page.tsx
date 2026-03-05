@@ -114,12 +114,23 @@ export default function SalesPage() {
   useEffect(() => { setLoading(true); fetchSales() }, [fetchSales])
 
   const filteredMenus = selectedCategory ? menus.filter(m => m.category === selectedCategory) : menus
+  // categoryが空('')の回数券は全カテゴリに表示、一致するカテゴリも表示
   const filteredTicketPlans = selectedCategory
-    ? ticketPlans.filter(p => (p.category || '') === selectedCategory)
+    ? ticketPlans.filter(p => {
+        const cat = (p.category || '').trim()
+        return cat === '' || cat === selectedCategory.trim()
+      })
     : ticketPlans
   const filteredSubPlans = selectedCategory
-    ? subPlans.filter(p => (p.category || '') === selectedCategory)
+    ? subPlans.filter(p => {
+        const cat = (p.category || '').trim()
+        return cat === '' || cat === selectedCategory.trim()
+      })
     : subPlans
+
+  if (typeof window !== 'undefined') {
+    console.log('[sales] selectedCategory:', selectedCategory, 'ticketPlans:', ticketPlans.map(p => ({ name: p.name, category: p.category })), 'filteredTicketPlans:', filteredTicketPlans.length)
+  }
 
   const handleTicketPurchase = async (plan: TicketPlan) => {
     if (!selectedCustomer) {
@@ -202,6 +213,10 @@ export default function SalesPage() {
 
   const handleRegister = async () => {
     if (cart.length === 0) { setError('メニューを追加してください'); return }
+    if (!selectedCustomer) {
+      setError('顧客を選択してください')
+      return
+    }
     if ((paymentMethod === 'card' || paymentMethod === 'online' || paymentMethod === 'loan') && !paymentConfirmed) {
       setError('決済確認が必要です'); return
     }
@@ -298,9 +313,6 @@ export default function SalesPage() {
                 ))}
               </div>
               <h3 className="text-sm font-bold text-text-main mb-2 mt-4">回数券</h3>
-              {!selectedCustomer && filteredTicketPlans.length > 0 && (
-                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">先に顧客を選択してください</p>
-              )}
               <div className="grid grid-cols-2 gap-2 max-h-28 overflow-y-auto">
                 {filteredTicketPlans.map(p => (
                   <button
@@ -319,9 +331,6 @@ export default function SalesPage() {
                 )}
               </div>
               <h3 className="text-sm font-bold text-text-main mb-2 mt-4">サブスク</h3>
-              {!selectedCustomer && filteredSubPlans.length > 0 && (
-                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">先に顧客を選択してください</p>
-              )}
               <div className="grid grid-cols-2 gap-2 max-h-28 overflow-y-auto">
                 {filteredSubPlans.map(p => (
                   <button
@@ -482,7 +491,11 @@ export default function SalesPage() {
                 )}
               </div>
 
-              {error && <p className="text-sm text-red-400 mb-2">{error}</p>}
+              {error && (
+                <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200">
+                  <p className="text-sm font-medium text-red-600">{error}</p>
+                </div>
+              )}
               <button onClick={handleRegister} disabled={saving || cart.length === 0}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                 {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
