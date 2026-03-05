@@ -1,19 +1,14 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import {
-  Calendar, ChevronLeft, ChevronRight, Plus, Clock,
-  User, Check, X, AlertCircle, Loader2, Phone
+  Calendar, ChevronLeft, ChevronRight, Plus, X, Loader2
 } from 'lucide-react'
 import { Reservation, Customer } from '@/types'
-import { fetchCustomerTickets, consumeTicket, isTicketExpired } from '@/lib/tickets'
-import {
-  fetchCustomerSubscriptions,
-  useSubscriptionSession,
-  ensureBillingPeriodCurrent,
-  getRemainingSessions,
-} from '@/lib/subscriptions'
+import ReservationActionCard from '@/components/ReservationActionCard'
+import { RescheduleModal, EditReservationModal } from '@/components/ReservationModals'
+import { useReservations } from '@/hooks/useReservations'
 
 // 週の日付配列を生成
 function getWeekDates(baseDate: Date): Date[] {
@@ -33,92 +28,6 @@ function toDateStr(d: Date) {
 }
 
 const DAYS_JP = ['月', '火', '水', '木', '金', '土', '日']
-const STATUS_MAP = {
-  confirmed: { label: '確定', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  completed: { label: '来店済み', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  cancelled: { label: 'キャンセル', color: 'bg-slate-500/20 text-[#4A5568] border-slate-500/30' },
-  no_show: { label: '無断キャンセル', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
-}
-
-// 予約カード
-function ReservationCard({
-  reservation,
-  onStatusChange,
-}: {
-  reservation: Reservation
-  onStatusChange: (id: string, status: Reservation['status']) => void
-}) {
-  const { label, color } = STATUS_MAP[reservation.status]
-  return (
-    <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-xl p-3 space-y-2">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-1.5">
-            <User className="w-3.5 h-3.5 text-[#4A5568]" />
-            {reservation.customer_id ? (
-              <Link
-                href={`/chart/${reservation.customer_id}`}
-                className="text-sm font-bold text-[#1A202C] hover:text-[#0891B2] hover:underline"
-              >
-                {reservation.customer_name}
-              </Link>
-            ) : (
-              <Link
-                href={`/chart?name=${encodeURIComponent(reservation.customer_name)}`}
-                className="text-sm font-bold text-[#1A202C] hover:text-[#0891B2] hover:underline"
-              >
-                {reservation.customer_name}
-              </Link>
-            )}
-          </div>
-          {reservation.customer_phone && (
-            <div className="flex items-center gap-1 mt-0.5">
-              <Phone className="w-3 h-3 text-[#4A5568]" />
-              <span className="text-xs text-[#4A5568]">{reservation.customer_phone}</span>
-            </div>
-          )}
-        </div>
-        <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${color}`}>{label}</span>
-      </div>
-
-      <div className="flex items-center gap-3 text-xs text-[#4A5568]">
-        <div className="flex items-center gap-1">
-          <Clock className="w-3 h-3" />
-          <span>{reservation.start_time.slice(0, 5)}{reservation.end_time ? `〜${reservation.end_time.slice(0, 5)}` : ''}</span>
-        </div>
-        {reservation.menu && <span className="text-[#1A202C]">｜ {reservation.menu}</span>}
-        {reservation.staff_name && <span>担当: {reservation.staff_name}</span>}
-      </div>
-
-      {reservation.price > 0 && (
-        <p className="text-xs text-amber-400 font-semibold">¥{reservation.price.toLocaleString()}</p>
-      )}
-
-      {reservation.status === 'confirmed' && (
-        <div className="flex gap-2 pt-1">
-          <button
-            onClick={() => onStatusChange(reservation.id, 'completed')}
-            className="flex-1 flex items-center justify-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg py-1.5 text-xs transition-colors"
-          >
-            <Check className="w-3 h-3" /> 来店済み
-          </button>
-          <button
-            onClick={() => onStatusChange(reservation.id, 'no_show')}
-            className="flex-1 flex items-center justify-center gap-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg py-1.5 text-xs transition-colors"
-          >
-            <AlertCircle className="w-3 h-3" /> 無断キャンセル
-          </button>
-          <button
-            onClick={() => onStatusChange(reservation.id, 'cancelled')}
-            className="flex items-center justify-center bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-[#4A5568] rounded-lg px-2 py-1.5 text-xs transition-colors"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
 
 // 新規予約モーダル
 function NewReservationModal({
@@ -362,76 +271,20 @@ export default function ReservationsPage() {
   const [today] = useState(new Date())
   const [currentWeek, setCurrentWeek] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(toDateStr(new Date()))
-  const [reservations, setReservations] = useState<Reservation[]>([])
-  const [loading, setLoading] = useState(true)
   const [showNewModal, setShowNewModal] = useState(false)
+  const [rescheduleTarget, setRescheduleTarget] = useState<Reservation | null>(null)
+  const [editTarget, setEditTarget] = useState<Reservation | null>(null)
 
   const weekDates = getWeekDates(currentWeek)
-
-  const fetchReservations = useCallback(async () => {
-    setLoading(true)
-    try {
-      const weekStart = toDateStr(weekDates[0])
-      const res = await fetch(`/api/reservations/list?week=${weekStart}`)
-      const data = await res.json()
-      setReservations(data.reservations || [])
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoading(false)
-    }
-  }, [currentWeek])
-
-  useEffect(() => { fetchReservations() }, [fetchReservations])
-
-  async function handleStatusChange(id: string, status: Reservation['status']) {
-    const reservation = reservations.find(r => r.id === id)
-    try {
-      await fetch('/api/reservations/update', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status }),
-      })
-      // 来店済み（完了）にしたタイミングで回数券・サブスクを自動消化
-      if (status === 'completed' && reservation?.customer_name && reservation?.menu) {
-        const customerId = reservation.customer_id ?? ''
-        const customerName = reservation.customer_name
-        const menu = reservation.menu
-
-        const [allTickets, allSubsRaw] = await Promise.all([
-          fetchCustomerTickets(customerId || undefined),
-          fetchCustomerSubscriptions(customerId || undefined),
-        ])
-        const allSubs = allSubsRaw
-          .filter(s => s.status === 'active')
-          .map(s => ensureBillingPeriodCurrent(s))
-
-        const matchingTicket = allTickets.find(
-          c =>
-            (c.customerId === customerId || c.customerName === customerName) &&
-            c.menuName === menu &&
-            c.remainingSessions > 0 &&
-            !isTicketExpired(c)
-        )
-        if (matchingTicket) {
-          await consumeTicket(matchingTicket.id)
-        } else {
-          const matchingSub = allSubs.find(
-            s =>
-              (s.customerId === customerId || s.customerName === customerName) &&
-              s.menuName === menu &&
-              getRemainingSessions(s) > 0
-          )
-          if (matchingSub) {
-            await useSubscriptionSession(matchingSub.id)
-          }
-        }
-      }
-      fetchReservations()
-    } catch (err) {
-      console.error(err)
-    }
-  }
+  const weekStart = toDateStr(weekDates[0])
+  const {
+    reservations,
+    loading,
+    refresh,
+    handleVisit,
+    handleNoShow,
+    handleStatusChange,
+  } = useReservations({ week: weekStart })
 
   const selectedDateReservations = reservations.filter(r => r.reservation_date === selectedDate)
   const todayStr = toDateStr(today)
@@ -549,7 +402,15 @@ export default function ReservationsPage() {
           ) : (
             <div className="space-y-3">
               {selectedDateReservations.map(r => (
-                <ReservationCard key={r.id} reservation={r} onStatusChange={handleStatusChange} />
+                <ReservationActionCard
+                  key={r.id}
+                  reservation={r}
+                  onVisit={handleVisit}
+                  onReschedule={r => setRescheduleTarget(r)}
+                  onNoShow={handleNoShow}
+                  onEdit={r => setEditTarget(r)}
+                  onCancel={id => handleStatusChange(id, 'cancelled')}
+                />
               ))}
             </div>
           )}
@@ -559,7 +420,21 @@ export default function ReservationsPage() {
         <NewReservationModal
           defaultDate={selectedDate}
           onClose={() => setShowNewModal(false)}
-          onSaved={fetchReservations}
+          onSaved={refresh}
+        />
+      )}
+      {rescheduleTarget && (
+        <RescheduleModal
+          reservation={rescheduleTarget}
+          onClose={() => setRescheduleTarget(null)}
+          onSaved={() => { refresh(); setRescheduleTarget(null) }}
+        />
+      )}
+      {editTarget && (
+        <EditReservationModal
+          reservation={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { refresh(); setEditTarget(null) }}
         />
       )}
     </div>

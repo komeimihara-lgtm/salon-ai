@@ -88,7 +88,7 @@ export interface Reservation {
   menu?: string
   staff_name?: string
   price: number
-  status: 'confirmed' | 'completed' | 'cancelled' | 'no_show'
+  status: 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'visited' | 'rescheduled'
   memo?: string
   reminder_sent_at?: string
   created_at: string

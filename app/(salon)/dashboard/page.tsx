@@ -12,7 +12,12 @@ import {
   ShoppingCart,
   Receipt,
   Heart,
+  Loader2,
 } from 'lucide-react'
+import type { Reservation } from '@/types'
+import ReservationActionCard from '@/components/ReservationActionCard'
+import { RescheduleModal, EditReservationModal } from '@/components/ReservationModals'
+import { useReservations } from '@/hooks/useReservations'
 import { useTodayShifts } from '@/lib/staff-shifts'
 import { getManualTasks, setManualTasks, type ManualTask } from '@/lib/dashboard-tasks'
 import {
@@ -21,7 +26,7 @@ import {
   type DashboardReservation,
 } from '@/lib/dashboard-reservations'
 import { getSalonSettings } from '@/lib/salon-settings'
-import { getAchievementRate, getAchievementColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
+import { getAchievementRate, getAchievementColor, getAchievementBgColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
 import {
   fetchExpiringSoonTickets,
   fetchExpiredTickets,
@@ -72,6 +77,16 @@ type KpiItem = { label: string; value: string; sub: string; rate: number; diff: 
 
 export default function DashboardPage() {
   const todayShifts = useTodayShifts()
+  const today = new Date().toISOString().slice(0, 10)
+  const {
+    reservations: todayReservations,
+    loading: reservationsLoading,
+    refresh,
+    handleVisit,
+    handleNoShow,
+    handleStatusChange,
+  } = useReservations({ date: today })
+
   const [kpiData, setKpiData] = useState<KpiItem[]>([
     { label: '今月売上', value: '¥-', sub: '目標 ¥-', rate: 0, diff: 0, diffUp: true },
     { label: '来店数', value: '-名', sub: '目標 -名', rate: 0, diff: 0, diffUp: true },
@@ -91,6 +106,8 @@ export default function DashboardPage() {
   const [courseAlerts, setCourseAlerts] = useState<{ id: string; type: string; text: string; action: string }[]>([])
   const [salesSummary, setSalesSummary] = useState<{ cashSales: number; consumeSales: number; serviceLiability: number } | null>(null)
   const [todaySales, setTodaySales] = useState(0)
+  const [rescheduleTarget, setRescheduleTarget] = useState<Reservation | null>(null)
+  const [editTarget, setEditTarget] = useState<Reservation | null>(null)
 
   useEffect(() => {
     const s = getSalonSettings()
@@ -210,6 +227,7 @@ export default function DashboardPage() {
     setReservationModalOpen(false)
     setReservationDetail(null)
   }
+
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth() + 1
@@ -262,7 +280,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {kpiData.map((k) => {
             const rateColor = getAchievementColor(k.rate)
-            const barColor = k.rate >= 100 ? 'bg-emerald-500' : k.rate >= 80 ? 'bg-blue-500' : k.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+            const barColor = getAchievementBgColor(k.rate)
             return (
             <div
               key={k.label}
@@ -270,7 +288,7 @@ export default function DashboardPage() {
             >
               <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-5 -mt-5 mb-4" />
               <p className="text-xs text-text-sub font-dm-sans mb-1">{k.label}</p>
-              <p className={`text-3xl font-bold font-dm-sans mb-2 ${rateColor}`}>{k.value}</p>
+              <p className="text-3xl font-bold font-dm-sans mb-2 text-rose-500">{k.value}</p>
               <p className="text-xs text-text-sub mb-2">{k.sub} / 達成率 <span className={rateColor}>{k.rate}%</span></p>
               <div className="h-1.5 bg-light-lav rounded-full overflow-hidden">
                 <div
@@ -280,11 +298,11 @@ export default function DashboardPage() {
               </div>
               <div className="mt-2 flex items-center gap-1">
                 {k.diffUp ? (
-                  <span className="text-xs text-emerald-600 flex items-center gap-0.5">
+                  <span className="text-xs text-emerald-400 flex items-center gap-0.5">
                     <TrendingUp className="w-3 h-3" /> 前月比 +{k.diff}%
                   </span>
                 ) : (
-                  <span className="text-xs text-red-600 flex items-center gap-0.5">
+                  <span className="text-xs text-rose-400 flex items-center gap-0.5">
                     <TrendingDown className="w-3 h-3" /> 前月比 -{k.diff}%
                   </span>
                 )}
@@ -298,7 +316,7 @@ export default function DashboardPage() {
             <div className="flex items-center gap-3">
               <div className="flex-1 h-3 bg-light-lav rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${kpiData[0].rate >= 100 ? 'bg-emerald-500' : kpiData[0].rate >= 80 ? 'bg-blue-500' : kpiData[0].rate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                  className={`h-full rounded-full transition-all ${getAchievementBgColor(kpiData[0].rate)}`}
                   style={{ width: `${Math.min(kpiData[0].rate, 100)}%` }}
                 />
               </div>
@@ -348,7 +366,7 @@ export default function DashboardPage() {
                   <path
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     fill="none"
-                    stroke={dailyRate >= 100 ? '#10B981' : dailyRate >= 80 ? '#3B82F6' : dailyRate >= 50 ? '#F59E0B' : '#DC2626'}
+                    stroke={dailyRate >= 100 ? '#34D399' : dailyRate >= 80 ? '#A78BFA' : dailyRate >= 50 ? '#FBBF24' : '#F472B6'}
                     strokeWidth="3"
                     strokeDasharray={`${Math.min(dailyRate, 100)}, 100`}
                     strokeLinecap="round"
@@ -518,6 +536,33 @@ export default function DashboardPage() {
             ))}
           </div>
         </div>
+
+        {/* 今日の予約一覧（API・4アクション付き） */}
+        {reservationsLoading ? (
+          <div className="mt-4 pt-4 border-t border-gray-200 flex justify-center py-6">
+            <Loader2 className="w-6 h-6 text-rose animate-spin" />
+          </div>
+        ) : todayReservations.length > 0 ? (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-text-main">今日の予約（{todayReservations.length}件）</h3>
+              <Link href="/reservations" className="text-xs text-rose hover:underline">予約管理へ →</Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {todayReservations.map(r => (
+                <ReservationActionCard
+                  key={r.id}
+                  reservation={r}
+                  onVisit={handleVisit}
+                  onReschedule={r => setRescheduleTarget(r)}
+                  onNoShow={handleNoShow}
+                  onEdit={r => setEditTarget(r)}
+                  onCancel={id => handleStatusChange(id, 'cancelled')}
+                />
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       {/* ⑤ 今日の来店客一覧 + ⑥ 出勤スタッフ */}
@@ -656,6 +701,20 @@ export default function DashboardPage() {
       )}
 
       {/* 予約追加・詳細モーダル */}
+      {rescheduleTarget && (
+        <RescheduleModal
+          reservation={rescheduleTarget}
+          onClose={() => setRescheduleTarget(null)}
+          onSaved={() => { refresh(); setRescheduleTarget(null) }}
+        />
+      )}
+      {editTarget && (
+        <EditReservationModal
+          reservation={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => { refresh(); setEditTarget(null) }}
+        />
+      )}
       {reservationModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md card-shadow">

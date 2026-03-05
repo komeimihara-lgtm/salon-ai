@@ -14,20 +14,20 @@ export function getAchievementRate(actual: number, target: number): number {
   return Math.round((actual / target) * 100)
 }
 
-/** 達成率に応じた色を返す */
+/** 達成率に応じた色（バッジ用・pastelトーン） */
 export function getAchievementColor(rate: number): string {
-  if (rate >= 100) return 'text-emerald-600'  // green
-  if (rate >= 80) return 'text-blue-600'      // blue
-  if (rate >= 50) return 'text-amber-600'     // yellow
-  return 'text-red-600'                        // red
+  if (rate >= 100) return 'text-emerald-400'  // 100%超: 薄いエメラルド
+  if (rate >= 80) return 'text-violet-400'    // 80〜99%: 薄いラベンダー
+  if (rate >= 50) return 'text-amber-400'     // 50〜80%: 薄いアンバー
+  return 'text-rose-400'                      // 〜50%: 薄いローズ
 }
 
-/** 達成率に応じた背景色（プログレスバー用） */
+/** 達成率に応じた背景色（プログレスバー用・pastelトーン） */
 export function getAchievementBgColor(rate: number): string {
-  if (rate >= 100) return 'bg-emerald-500'
-  if (rate >= 80) return 'bg-blue-500'
-  if (rate >= 50) return 'bg-amber-500'
-  return 'bg-red-500'
+  if (rate >= 100) return 'bg-emerald-400'
+  if (rate >= 80) return 'bg-violet-400'
+  if (rate >= 50) return 'bg-amber-400'
+  return 'bg-rose-400'
 }
 
 /** 今月の営業日数を取得（土日除く、月末まで） */
