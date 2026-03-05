@@ -208,7 +208,7 @@ export default function CoursesPage() {
       </div>
 
       <p className="text-xs text-text-sub">
-        <Link href="/menu-settings" className="text-rose hover:underline">
+        <Link href="/menu" className="text-rose hover:underline">
           メニュー設定
         </Link>
         でコース（回数券）の種類を登録できます

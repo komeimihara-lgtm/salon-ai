@@ -178,7 +178,7 @@ export default function SubscriptionsPage() {
       </div>
 
       <p className="text-xs text-text-sub">
-        <Link href="/menu-settings" className="text-rose hover:underline">
+        <Link href="/menu" className="text-rose hover:underline">
           メニュー設定
         </Link>
         でサブスクプランを登録できます

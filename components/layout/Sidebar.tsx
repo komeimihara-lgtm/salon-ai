@@ -28,7 +28,7 @@ const NAV_ITEMS = [
   { href: '/kpi', icon: TrendingUp, label: '売上分析' },
   { href: '/marketing', icon: Megaphone, label: 'AI集客' },
   { href: '/counseling', icon: MessageCircle, label: 'AIカウンセリング' },
-  { href: '/menu-settings', icon: UtensilsCrossed, label: 'メニュー設定' },
+  { href: '/menu', icon: UtensilsCrossed, label: 'メニュー設定' },
   { href: '/staff', icon: UserCog, label: 'スタッフ管理' },
   { href: '/settings', icon: Settings, label: 'サロン設定' },
   { href: '/line', icon: Smartphone, label: 'LINE連携' },

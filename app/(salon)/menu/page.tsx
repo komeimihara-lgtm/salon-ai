@@ -226,7 +226,7 @@ export default function MenuSettingsPage() {
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden space-y-6">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
 
-          {/* 大分類管理 */}
+          {/* 大分類 */}
           <div>
             <h3 className="text-sm font-bold text-text-main mb-3">大分類</h3>
             <div className="flex flex-wrap gap-2 mb-3">
