@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('search') || ''
     const status = searchParams.get('status') || ''
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = 20
+    const limit = Math.min(Math.max(parseInt(searchParams.get('limit') || '20') || 20, 1), 100)
     const offset = (page - 1) * limit
 
     let query = getSupabaseAdmin()

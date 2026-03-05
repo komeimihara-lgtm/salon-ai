@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   ShoppingCart, Receipt, Plus, Trash2, Pencil, X,
   ChevronLeft, ChevronRight, Loader2, Tag, AlertCircle, ArrowLeft,
+  UserPlus, Search,
 } from 'lucide-react'
 import { getMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, isCampaignActive, type MenuItem, type Campaign } from '@/lib/menus'
 import { DEMO_SALON_ID } from '@/lib/supabase'
@@ -65,7 +66,7 @@ export default function SalesPage() {
 
   const today = new Date().toISOString().slice(0, 10)
   const [cart, setCart] = useState<CartItem[]>([])
-  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string | null; name: string; visit_count?: number; last_visit_date?: string } | null>(null)
   const [selectedStaff, setSelectedStaff] = useState<{ id: string; name: string } | null>(null)
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [saleDate, setSaleDate] = useState(today)
@@ -82,6 +83,9 @@ export default function SalesPage() {
   const [subPlans, setSubPlans] = useState<SubscriptionPlan[]>([])
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null)
+  const [showCustomerModal, setShowCustomerModal] = useState(false)
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; name: string; phone?: string; visit_count?: number; last_visit_date?: string }>>([])
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type })
@@ -104,6 +108,21 @@ export default function SalesPage() {
     } catch (e) { console.error(e) }
   }, [])
 
+  const fetchCustomerSearch = useCallback(async (q: string) => {
+    try {
+      const res = await fetch(`/api/customers/list?search=${encodeURIComponent(q)}&limit=50&page=1`)
+      const json = await res.json()
+      const list = (json.customers || []).map((c: { id: string; name: string; phone?: string; visit_count?: number; last_visit_date?: string }) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        visit_count: c.visit_count ?? 0,
+        last_visit_date: c.last_visit_date,
+      }))
+      setSearchResults(list)
+    } catch (e) { console.error(e); setSearchResults([]) }
+  }, [])
+
   useEffect(() => {
     const m = getMenus()
     const c = getCategories()
@@ -124,6 +143,15 @@ export default function SalesPage() {
 
   useEffect(() => { setLoading(true); fetchSales() }, [fetchSales])
 
+  useEffect(() => {
+    if (showCustomerModal) {
+      fetchCustomerSearch(customerSearch)
+    } else {
+      setCustomerSearch('')
+      setSearchResults([])
+    }
+  }, [showCustomerModal, customerSearch, fetchCustomerSearch])
+
   const activeCampaigns = campaigns.filter(c => isCampaignActive(c))
   const discountCampaigns = activeCampaigns.filter(c => c.campaignType === 'discount')
   const limitedCampaigns = activeCampaigns.filter(c => c.campaignType === 'limited_menu')
@@ -142,8 +170,12 @@ export default function SalesPage() {
       })
     : subPlans
 
+  const isUnknownCustomer = selectedCustomer?.id === null || selectedCustomer?.id === ''
+  const canAddTicketOrSub = selectedCustomer && !isUnknownCustomer
+
   const addTicketToCart = (plan: TicketPlan) => {
     if (!selectedCustomer) { setError('先に顧客を選択してください'); return }
+    if (isUnknownCustomer) { setError('不明のお客様では回数券は登録できません'); return }
     setError('')
     setCart(prev => {
       const found = prev.find(c => c.type === 'ticket' && c.menuId === plan.id)
@@ -154,6 +186,7 @@ export default function SalesPage() {
 
   const addSubToCart = (plan: SubscriptionPlan) => {
     if (!selectedCustomer) { setError('先に顧客を選択してください'); return }
+    if (isUnknownCustomer) { setError('不明のお客様ではサブスクは登録できません'); return }
     setError('')
     setCart(prev => {
       const found = prev.find(c => c.type === 'subscription' && c.menuId === plan.id)
@@ -174,6 +207,10 @@ export default function SalesPage() {
     if (!camp.menuName || camp.price == null) return
     if ((camp.targetType === 'ticket' || camp.targetType === 'subscription') && !selectedCustomer) {
       setError('先に顧客を選択してください')
+      return
+    }
+    if ((camp.targetType === 'ticket' || camp.targetType === 'subscription') && isUnknownCustomer) {
+      setError('不明のお客様では回数券・サブスクは登録できません')
       return
     }
     setError('')
@@ -251,6 +288,8 @@ export default function SalesPage() {
   const handleRegister = async () => {
     if (cart.length === 0) { setError('メニュー・回数券・サブスクを追加してください'); return }
     if (!selectedCustomer) { setError('顧客を選択してください'); return }
+    const hasTicketOrSub = cart.some(c => c.type === 'ticket' || c.type === 'subscription')
+    if (hasTicketOrSub && isUnknownCustomer) { setError('不明のお客様では回数券・サブスクの登録はできません。顧客を選択し直してください。'); return }
     if ((paymentMethod === 'card' || paymentMethod === 'online' || paymentMethod === 'loan') && !paymentConfirmed) { setError('決済確認が必要です'); return }
     setSaving(true); setError('')
     try {
@@ -263,24 +302,28 @@ export default function SalesPage() {
           salon_id: process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID,
           sale_date: saleDate,
           amount: amt,
-          customer_id: selectedCustomer?.id || null,
-          customer_name: selectedCustomer?.name || null,
+          customer_id: isUnknownCustomer ? null : (selectedCustomer?.id || null),
+          customer_name: isUnknownCustomer ? '不明' : (selectedCustomer?.name || null),
           menu: c.name,
           staff_name: selectedStaff?.name || null,
           payment_method: paymentMethod,
           sale_type: hasProduct || c.category === '物販' ? 'product' : paymentMethod,
         }
         if (c.type === 'ticket' && c.ticketPlan) {
+          const custId = selectedCustomer!.id
+          if (!custId) continue
           for (let i = 0; i < c.qty; i++) {
-            await addCustomerTicket(selectedCustomer!.id, selectedCustomer!.name, c.ticketPlan, {
+            await addCustomerTicket(custId, selectedCustomer!.name, c.ticketPlan, {
               paymentMethod: paymentMethod as 'cash' | 'card' | 'online' | 'loan',
               campaignId: c.campaign?.id,
             })
             salesToCreate.push({ ...saleBase })
           }
         } else if (c.type === 'subscription' && c.subPlan) {
+          const custId = selectedCustomer!.id
+          if (!custId) continue
           for (let i = 0; i < c.qty; i++) {
-            await addCustomerSubscription(selectedCustomer!.id, selectedCustomer!.name, c.subPlan, {
+            await addCustomerSubscription(custId, selectedCustomer!.name, c.subPlan, {
               paymentMethod: paymentMethod as 'cash' | 'card' | 'online' | 'loan',
               campaignId: c.campaign?.id,
             })
@@ -330,26 +373,46 @@ export default function SalesPage() {
       {/* 上部: 顧客選択バー + タブ */}
       <div className="shrink-0 flex flex-col border-b border-gray-200 bg-white">
         <div className="flex items-center gap-3 px-4 py-3">
-          <Link href="/dashboard" className="p-2 -ml-2 rounded-xl text-text-sub hover:text-rose hover:bg-light-lav transition-colors" title="ダッシュボードへ">
+          <Link href="/dashboard" className="p-2 -ml-2 rounded-xl text-text-sub hover:text-rose hover:bg-light-lav transition-colors shrink-0" title="ダッシュボードへ">
             <ArrowLeft className="w-6 h-6" />
           </Link>
-          <div className="flex-1 min-w-0">
-            <label className="text-xs text-text-sub block mb-0.5">顧客</label>
-            <select
-              value={selectedCustomer?.id ?? ''}
-              onChange={e => { const c = customers.find(x => x.id === e.target.value); setSelectedCustomer(c || null) }}
-              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-base font-medium text-text-main bg-white"
-            >
-              <option value="">顧客を選択</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}様</option>)}
-            </select>
-          </div>
-          <div className="w-32">
+          <button
+            type="button"
+            onClick={() => setShowCustomerModal(true)}
+            className={`flex-1 min-w-0 min-h-[80px] flex items-center gap-4 px-5 rounded-2xl transition-all text-left ${
+              selectedCustomer
+                ? 'bg-rose-100 border-2 border-rose-400'
+                : 'bg-rose-50 border-2 border-rose-300 border-dashed hover:bg-rose-100/80'
+            }`}
+          >
+            {selectedCustomer ? (
+              <>
+                <div className="flex-1 min-w-0">
+                  <p className="text-2xl font-bold text-rose-700 truncate">{selectedCustomer.name}様</p>
+                  <p className="text-sm text-text-sub mt-0.5">
+                    {isUnknownCustomer ? '不明のお客様' : (
+                      `${selectedCustomer.visit_count ?? 0}回来店 · 最終来店: ${selectedCustomer.last_visit_date ? new Date(selectedCustomer.last_visit_date).toLocaleDateString('ja-JP') : '—'}`
+                    )}
+                  </p>
+                </div>
+                <span className="px-4 py-2 rounded-xl bg-rose-200 text-rose-800 font-bold text-sm shrink-0">変更</span>
+              </>
+            ) : (
+              <>
+                <UserPlus className="w-14 h-14 text-rose-400 shrink-0" />
+                <div>
+                  <p className="text-xl font-bold text-rose-700">👤 顧客を選択してください</p>
+                  <p className="text-sm text-text-sub mt-0.5">顧客を選択してから施術メニューを選んでください</p>
+                </div>
+              </>
+            )}
+          </button>
+          <div className="w-32 shrink-0">
             <label className="text-xs text-text-sub block mb-0.5">日付</label>
             <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base" />
           </div>
-          <div className="flex gap-2 p-1 bg-light-lav/50 rounded-xl">
+          <div className="flex gap-2 p-1 bg-light-lav/50 rounded-xl shrink-0">
             <button onClick={() => setTab('register')} className={`px-4 py-2.5 rounded-lg text-base font-bold transition-all ${tab === 'register' ? 'bg-white shadow text-rose' : 'text-text-sub'}`}>
               <ShoppingCart className="w-5 h-5 inline-block mr-1.5 align-middle" />レジ
             </button>
@@ -387,7 +450,7 @@ export default function SalesPage() {
                 </button>
               ))}
               {selectedCategory === 'キャンペーン' && limitedCampaigns.map(camp => (
-                <button key={camp.id} onClick={() => addCampaignLimitedToCart(camp)} disabled={(camp.targetType === 'ticket' || camp.targetType === 'subscription') && !selectedCustomer}
+                <button key={camp.id} onClick={() => addCampaignLimitedToCart(camp)} disabled={(camp.targetType === 'ticket' || camp.targetType === 'subscription') && !canAddTicketOrSub}
                   className="min-h-[100px] p-4 rounded-2xl border-2 border-amber-200 hover:border-rose hover:bg-rose/5 text-left transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
                   <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">期間限定</span>
                   <p className="font-bold text-text-main text-base leading-tight mt-1">{camp.menuName ?? camp.name}</p>
@@ -398,7 +461,7 @@ export default function SalesPage() {
                 </button>
               ))}
               {filteredTicketPlans.map(p => (
-                <button key={p.id} onClick={() => addTicketToCart(p)} disabled={!selectedCustomer}
+                <button key={p.id} onClick={() => addTicketToCart(p)} disabled={!canAddTicketOrSub}
                   className="min-h-[100px] p-4 rounded-2xl border-2 border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
                   <p className="font-bold text-text-main text-base leading-tight">{p.name}</p>
                   <p className="text-xl font-bold text-rose mt-1">¥{p.price.toLocaleString()}</p>
@@ -406,7 +469,7 @@ export default function SalesPage() {
                 </button>
               ))}
               {filteredSubPlans.map(p => (
-                <button key={p.id} onClick={() => addSubToCart(p)} disabled={!selectedCustomer}
+                <button key={p.id} onClick={() => addSubToCart(p)} disabled={!canAddTicketOrSub}
                   className="min-h-[100px] p-4 rounded-2xl border-2 border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
                   <p className="font-bold text-text-main text-base leading-tight">{p.name}</p>
                   <p className="text-xl font-bold text-rose mt-1">¥{p.price.toLocaleString()}/月</p>
@@ -593,6 +656,72 @@ export default function SalesPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 顧客選択モーダル */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col card-shadow overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-text-main">顧客を選択</h3>
+              <button onClick={() => setShowCustomerModal(false)} className="p-2 text-text-sub hover:text-rose rounded-xl">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 border-b border-gray-100">
+              <button
+                onClick={() => {
+                  setSelectedCustomer({ id: null, name: '不明のお客様' })
+                  setShowCustomerModal(false)
+                }}
+                className="w-full flex items-center justify-center gap-3 py-4 px-4 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-800 font-bold text-lg hover:bg-amber-100 transition-colors"
+              >
+                <UserPlus className="w-6 h-6" />
+                👤 不明のお客様として登録
+              </button>
+            </div>
+            <div className="p-4 border-b border-gray-100">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-sub" />
+                <input
+                  type="text"
+                  value={customerSearch}
+                  onChange={e => setCustomerSearch(e.target.value)}
+                  placeholder="名前・電話番号で検索"
+                  className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 text-lg focus:border-rose outline-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {searchResults.length === 0 ? (
+                <p className="text-center text-text-sub py-8">検索結果がありません</p>
+              ) : (
+                searchResults.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => {
+                      setSelectedCustomer({
+                        id: c.id,
+                        name: c.name,
+                        visit_count: c.visit_count,
+                        last_visit_date: c.last_visit_date,
+                      })
+                      setShowCustomerModal(false)
+                    }}
+                    className="w-full px-4 py-4 rounded-xl border-2 border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all active:scale-[0.99]"
+                  >
+                    <p className="font-bold text-lg text-text-main">{c.name}様</p>
+                    <p className="text-sm text-text-sub mt-1">
+                      {c.phone && <span className="mr-3">{c.phone}</span>}
+                      <span>{c.visit_count ?? 0}回来店</span>
+                    </p>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
