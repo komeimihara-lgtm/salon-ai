@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Pencil, X, Ticket, Repeat, Tag, Settings2 } from 'lucide-react'
+import { Plus, Trash2, Pencil, X, Ticket, Repeat, Tag, Settings2, Loader2 } from 'lucide-react'
 import { getCoursePacks, setCoursePacks, type CoursePack } from '@/lib/courses'
 import { getSubscriptionPlans, setSubscriptionPlans, type SubscriptionPlan } from '@/lib/subscriptions'
 import {
@@ -9,6 +9,113 @@ import {
   getTaxSettings, setTaxSettings, getCampaigns, setCampaigns,
   type MenuItem, type TaxSettings, type Campaign
 } from '@/lib/menus'
+
+// インポートモーダルは別コンポーネント
+function ImportModal({ onClose, onImport }: {
+  onClose: () => void
+  onImport: (menus: MenuItem[], categories: string[]) => void
+}) {
+  const [mode, setMode] = useState<'image' | 'pdf' | 'url'>('image')
+  const [url, setUrl] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [preview, setPreview] = useState<{ menus: MenuItem[], categories: string[] } | null>(null)
+  const [error, setError] = useState('')
+
+  const handleExtract = async () => {
+    setLoading(true); setError(''); setPreview(null)
+    try {
+      const formData = new FormData()
+      formData.append('type', mode)
+      if (mode === 'url') {
+        formData.append('url', url)
+      } else if (file) {
+        formData.append('file', file)
+      }
+      const res = await fetch('/api/menu/import', { method: 'POST', body: formData })
+      const json = await res.json()
+      if (json.error) throw new Error(json.error)
+      const menus = (json.menus || []).map((m: MenuItem) => ({ ...m, id: Date.now().toString() + Math.random() }))
+      setPreview({ menus, categories: json.categories || [] })
+    } catch (e) {
+      setError('読み取りに失敗しました。別の画像やURLをお試しください。')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold text-text-main text-lg">メニューを自動インポート</h3>
+          <button onClick={onClose} className="p-2 text-text-sub hover:text-text-main"><X className="w-5 h-5" /></button>
+        </div>
+
+        {/* モード選択 */}
+        <div className="flex gap-2 mb-4">
+          {[{ id: 'image', label: '📷 画像' }, { id: 'pdf', label: '📄 PDF' }, { id: 'url', label: '🌐 URL' }].map(m => (
+            <button key={m.id} onClick={() => setMode(m.id as typeof mode)}
+              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${mode === m.id ? 'bg-gradient-to-r from-rose to-lavender text-white' : 'bg-light-lav text-text-sub'}`}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'url' ? (
+          <input type="text" value={url} onChange={e => setUrl(e.target.value)}
+            placeholder="https://beauty.hotpepper.jp/..."
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-rose outline-none text-sm mb-4" />
+        ) : (
+          <div className="mb-4">
+            <label className="block w-full border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-rose transition-all">
+              <input type="file" accept={mode === 'pdf' ? '.pdf' : 'image/*'} className="hidden"
+                onChange={e => setFile(e.target.files?.[0] || null)} />
+              {file ? (
+                <p className="text-sm text-text-main font-medium">{file.name}</p>
+              ) : (
+                <>
+                  <p className="text-2xl mb-2">{mode === 'pdf' ? '📄' : '📷'}</p>
+                  <p className="text-sm text-text-sub">{mode === 'pdf' ? 'PDFファイルをアップロード' : 'メニュー表の画像をアップロード'}</p>
+                </>
+              )}
+            </label>
+          </div>
+        )}
+
+        {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
+
+        {!preview ? (
+          <button onClick={handleExtract} disabled={loading || (mode === 'url' ? !url : !file)}
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+            {loading ? <><Loader2 className="w-5 h-5 animate-spin" />読み取り中...</> : '✨ AIで読み取る'}
+          </button>
+        ) : (
+          <div>
+            <h4 className="font-bold text-text-main mb-3">読み取り結果（{preview.menus.length}件）</h4>
+            <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
+              {preview.menus.map((m, i) => (
+                <div key={i} className="flex items-center justify-between py-2 px-3 bg-light-lav/50 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-text-main">{m.name}</p>
+                    <p className="text-xs text-text-sub">{m.category} · {m.duration}分 · ¥{m.price.toLocaleString()}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setPreview(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm">やり直す</button>
+              <button onClick={() => onImport(preview.menus, preview.categories)}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold text-sm">
+                追加する
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function MenuSettingsPage() {
   const [activeTab, setActiveTab] = useState<'menus' | 'courses' | 'subscriptions' | 'campaigns' | 'tax'>('menus')
@@ -52,6 +159,7 @@ export default function MenuSettingsPage() {
   const [subPrice, setSubPrice] = useState(8000)
   const [subSessions, setSubSessions] = useState(2)
   const [subBillingDay, setSubBillingDay] = useState(1)
+  const [showImport, setShowImport] = useState(false)
 
   useEffect(() => {
     const m = getMenus()
@@ -204,6 +312,10 @@ export default function MenuSettingsPage() {
       <div className="flex items-center gap-3 mb-4">
         <div className="gradient-line rounded-full" />
         <span className="section-label font-dm-sans text-base font-bold text-text-main">メニュー設定</span>
+        <button onClick={() => setShowImport(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl text-sm font-bold">
+          ✨ 自動インポート
+        </button>
       </div>
 
       {/* タブ */}
@@ -272,7 +384,7 @@ export default function MenuSettingsPage() {
                   {editingId === m.id ? (
                     <div className="flex-1 flex gap-2 flex-wrap items-center">
                       <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
-                        className="px-3 py-1.5 rounded-lg border border-gray-200 w-28" />
+                        className="px-3 py-1.5 rounded-lg border border-gray-200 min-w-48 flex-1" />
                       <input type="number" value={editDuration} onChange={e => setEditDuration(Number(e.target.value))}
                         className="px-3 py-1.5 rounded-lg border border-gray-200 w-20" />
                       <span className="text-text-sub text-sm">分</span>
@@ -312,7 +424,7 @@ export default function MenuSettingsPage() {
             {/* メニュー追加フォーム */}
             <div className="flex gap-2 flex-wrap pt-4 border-t border-gray-100 mt-4">
               <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
-                placeholder="メニュー名" className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-32" />
+                placeholder="メニュー名" className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none min-w-48 flex-1" />
               <input type="number" value={newDuration} onChange={e => setNewDuration(Number(e.target.value))}
                 className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-20" />
               <span className="self-center text-text-sub text-sm">分</span>
@@ -355,7 +467,7 @@ export default function MenuSettingsPage() {
           </div>
           <div className="flex gap-2 flex-wrap border-t border-gray-100 pt-4">
             <input type="text" value={campName} onChange={e => setCampName(e.target.value)}
-              placeholder="キャンペーン名" className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-40" />
+              placeholder="キャンペーン名" className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none min-w-48 flex-1" />
             <select value={campDiscountType} onChange={e => setCampDiscountType(e.target.value as 'percent' | 'amount')}
               className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
               <option value="percent">%OFF</option>
@@ -394,7 +506,7 @@ export default function MenuSettingsPage() {
           </div>
           <div className="flex gap-2 flex-wrap border-t border-gray-100 pt-4">
             <input type="text" value={courseName} onChange={e => setCourseName(e.target.value)}
-              placeholder="例: フェイシャル5回券" className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-40" />
+              placeholder="例: フェイシャル5回券" className="px-4 py-2 rounded-xl border border-gray-200 outline-none min-w-48 flex-1" />
             <select value={courseMenuName} onChange={e => setCourseMenuName(e.target.value)}
               className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
               {menus.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
@@ -434,7 +546,7 @@ export default function MenuSettingsPage() {
           </div>
           <div className="flex gap-2 flex-wrap border-t border-gray-100 pt-4">
             <input type="text" value={subName} onChange={e => setSubName(e.target.value)}
-              placeholder="例: 月額プレミアム" className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-36" />
+              placeholder="例: 月額プレミアム" className="px-4 py-2 rounded-xl border border-gray-200 outline-none min-w-48 flex-1" />
             <select value={subMenuName} onChange={e => setSubMenuName(e.target.value)}
               className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
               {menus.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
@@ -493,6 +605,21 @@ export default function MenuSettingsPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {showImport && (
+        <ImportModal
+          onClose={() => setShowImport(false)}
+          onImport={(newMenus, newCategories) => {
+            const merged = [...menus, ...newMenus]
+            setMenusState(merged)
+            setMenus(merged)
+            const mergedCats = [...new Set([...categories, ...newCategories])]
+            setCategoriesState(mergedCats)
+            setCategories(mergedCats)
+            setShowImport(false)
+          }}
+        />
       )}
     </div>
   )
