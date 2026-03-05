@@ -614,7 +614,7 @@ export default function MenuSettingsPage() {
             const merged = [...menus, ...newMenus]
             setMenusState(merged)
             setMenus(merged)
-            const mergedCats = [...new Set([...categories, ...newCategories])]
+            const mergedCats = Array.from(new Set([...categories, ...newCategories]))
             setCategoriesState(mergedCats)
             setCategories(mergedCats)
             setShowImport(false)
