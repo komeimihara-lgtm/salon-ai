@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
       next_billing_date,
       payment_method,
       record_sale,
+      campaign_id,
     } = body
 
     const salonId = getSalonId()
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
     }
 
-    const insertData = {
+    const insertData: Record<string, unknown> = {
       salon_id: salonId,
       customer_id,
       customer_name: customer_name || '',
@@ -81,6 +82,7 @@ export async function POST(req: NextRequest) {
       sessions_used_in_period: 0,
       status: 'active',
     }
+    if (campaign_id) insertData.campaign_id = campaign_id
 
     const { data, error } = await getSupabaseAdmin()
       .from('customer_subscriptions')

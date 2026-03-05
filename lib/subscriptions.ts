@@ -151,7 +151,11 @@ export async function addCustomerSubscription(
   customerId: string,
   customerName: string,
   plan: SubscriptionPlan,
-  options?: { startedAt?: string; paymentMethod?: 'cash' | 'card' | 'online' | 'loan' }
+  options?: {
+    startedAt?: string
+    paymentMethod?: 'cash' | 'card' | 'online' | 'loan'
+    campaignId?: string
+  }
 ): Promise<CustomerSubscription> {
   const startedAt = options?.startedAt ?? new Date().toISOString().slice(0, 10)
   const d = new Date(startedAt)
@@ -159,22 +163,26 @@ export async function addCustomerSubscription(
   if (d < new Date(startedAt)) d.setMonth(d.getMonth() + 1)
   const nextBillingDate = d.toISOString().slice(0, 10)
 
+  const planId = options?.campaignId ? `campaign:${options.campaignId}` : plan.id
+  const body: Record<string, unknown> = {
+    customer_id: customerId,
+    customer_name: customerName,
+    plan_id: planId,
+    plan_name: plan.name,
+    menu_name: plan.menuName,
+    price: plan.price,
+    sessions_per_month: plan.sessionsPerMonth,
+    started_at: startedAt,
+    next_billing_date: nextBillingDate,
+    payment_method: options?.paymentMethod ?? 'card',
+    record_sale: true,
+  }
+  if (options?.campaignId) body.campaign_id = options.campaignId
+
   const res = await fetch('/api/customer-subscriptions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      customer_id: customerId,
-      customer_name: customerName,
-      plan_id: plan.id,
-      plan_name: plan.name,
-      menu_name: plan.menuName,
-      price: plan.price,
-      sessions_per_month: plan.sessionsPerMonth,
-      started_at: startedAt,
-      next_billing_date: nextBillingDate,
-      payment_method: options?.paymentMethod ?? 'card',
-      record_sale: true,
-    }),
+    body: JSON.stringify(body),
   })
   const json = await res.json()
   if (!res.ok) throw new Error(json.details || json.error || '登録に失敗しました')

@@ -158,7 +158,11 @@ export async function addCustomerTicket(
   customerId: string,
   customerName: string,
   plan: TicketPlan,
-  options?: { purchasedAt?: string; paymentMethod?: 'cash' | 'card' | 'online' | 'loan' }
+  options?: {
+    purchasedAt?: string
+    paymentMethod?: 'cash' | 'card' | 'online' | 'loan'
+    campaignId?: string
+  }
 ): Promise<CustomerTicket> {
   const purchasedAt = options?.purchasedAt ?? new Date().toISOString().slice(0, 10)
   const expiryDays = plan.expiryDays ?? 180
@@ -167,23 +171,28 @@ export async function addCustomerTicket(
   const expiryDate = expiry.toISOString().slice(0, 10)
 
   const unitPrice = plan.unitPrice ?? (plan.totalSessions > 0 ? Math.round(plan.price / plan.totalSessions) : 0)
+  const isCampaign = !!options?.campaignId
+  const body: Record<string, unknown> = {
+    customer_id: customerId,
+    customer_name: customerName,
+    ticket_plan_id: isCampaign ? null : plan.id,
+    plan_name: plan.name,
+    menu_name: plan.menuName,
+    total_sessions: plan.totalSessions,
+    remaining_sessions: plan.totalSessions,
+    unit_price: unitPrice,
+    purchased_at: purchasedAt,
+    expiry_date: expiryDate,
+    payment_method: options?.paymentMethod ?? 'card',
+    record_sale: true,
+  }
+  if (options?.campaignId) body.campaign_id = options.campaignId
+  if (isCampaign) body.amount = plan.price
+
   const res = await fetch('/api/customer-tickets', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      customer_id: customerId,
-      customer_name: customerName,
-      ticket_plan_id: plan.id,
-      plan_name: plan.name,
-      menu_name: plan.menuName,
-      total_sessions: plan.totalSessions,
-      remaining_sessions: plan.totalSessions,
-      unit_price: unitPrice,
-      purchased_at: purchasedAt,
-      expiry_date: expiryDate,
-      payment_method: options?.paymentMethod ?? 'card',
-      record_sale: true,
-    }),
+    body: JSON.stringify(body),
   })
   const json = await res.json()
   if (!res.ok) throw new Error(json.details || json.error || '登録に失敗しました')

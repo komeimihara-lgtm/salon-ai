@@ -117,6 +117,8 @@ export async function POST(req: NextRequest) {
       expiry_date,
       payment_method,
       record_sale,
+      campaign_id,
+      amount: bodyAmount,
     } = body
 
     const salonId = getSalonId()
@@ -128,7 +130,7 @@ export async function POST(req: NextRequest) {
     const expiryDate = expiry_date || null
     const unitPrice = unit_price != null ? Number(unit_price) : null
 
-    const insertDataWithUnitPrice = {
+    const insertPayload: Record<string, unknown> = {
       salon_id: salonId,
       customer_id,
       ticket_plan_id: ticket_plan_id || null,
@@ -140,17 +142,11 @@ export async function POST(req: NextRequest) {
       purchased_at: purchasedAt,
       expiry_date: expiryDate,
     }
-    const insertDataWithoutUnitPrice = {
-      salon_id: salonId,
-      customer_id,
-      ticket_plan_id: ticket_plan_id || null,
-      plan_name,
-      menu_name,
-      total_sessions: Number(total_sessions),
-      remaining_sessions: Number(remaining_sessions),
-      purchased_at: purchasedAt,
-      expiry_date: expiryDate,
-    }
+    if (campaign_id) insertPayload.campaign_id = campaign_id
+
+    const insertDataWithUnitPrice = { ...insertPayload }
+    const insertDataWithoutUnitPrice = { ...insertPayload }
+    delete (insertDataWithoutUnitPrice as Record<string, unknown>).unit_price
 
     const selectCols = 'id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date'
     const selectColsNoUnitPrice = 'id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, purchased_at, expiry_date'
@@ -188,7 +184,9 @@ export async function POST(req: NextRequest) {
     // 売上計上（record_sale が true の場合）
     if (record_sale !== false) {
       let saleAmount = 0
-      if (ticket_plan_id) {
+      if (bodyAmount != null && Number(bodyAmount) > 0) {
+        saleAmount = Number(bodyAmount)
+      } else if (ticket_plan_id) {
         const { data: planRow } = await getSupabaseAdmin()
           .from('ticket_plans')
           .select('price')

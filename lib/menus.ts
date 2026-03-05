@@ -16,14 +16,43 @@ export interface TaxSettings {
   taxRate: number
 }
 
+export type CampaignType = 'discount' | 'limited_menu'
+export type CampaignTargetType = 'menu' | 'ticket' | 'subscription'
+
 export interface Campaign {
   id: string
   name: string
-  discountType: 'percent' | 'amount'
-  discountValue: number
+  campaignType: CampaignType
+  /** 割引キャンペーン用 */
+  discountType?: 'percent' | 'amount'
+  discountValue?: number
   targetCategory?: string
+  /** 対象（割引: メニューID/チケットID/サブスクID、期間限定: 'new' で新規入力） */
+  targetType?: CampaignTargetType
+  targetId?: string
+  targetName?: string
+  /** 期間限定メニュー用 */
+  menuName?: string
+  menuDescription?: string
+  price?: number
+  durationMinutes?: number
+  totalSessions?: number
+  sessionsPerMonth?: number
+  /** 共通 */
   startDate?: string
   endDate?: string
+}
+
+export function isCampaignActive(c: Campaign, date?: string): boolean {
+  const d = date ?? new Date().toISOString().slice(0, 10)
+  if (c.startDate && d < c.startDate) return false
+  if (c.endDate && d > c.endDate) return false
+  return true
+}
+
+export function isCampaignExpired(c: Campaign, date?: string): boolean {
+  const d = date ?? new Date().toISOString().slice(0, 10)
+  return !!(c.endDate && d > c.endDate)
 }
 
 export interface Coupon {
@@ -108,11 +137,37 @@ export function setTaxSettings(tax: TaxSettings) {
   localStorage.setItem(STORAGE_TAX, JSON.stringify(tax))
 }
 
+function normalizeCampaign(c: Record<string, unknown>): Campaign {
+  const hasType = c.campaignType === 'discount' || c.campaignType === 'limited_menu'
+  return {
+    id: String(c.id ?? ''),
+    name: String(c.name ?? ''),
+    campaignType: hasType ? (c.campaignType as CampaignType) : 'discount',
+    discountType: (c.discountType as 'percent' | 'amount') || 'percent',
+    discountValue: Number(c.discountValue ?? 0),
+    targetCategory: c.targetCategory as string | undefined,
+    targetType: (c.targetType as CampaignTargetType) || 'menu',
+    targetId: c.targetId as string | undefined,
+    targetName: c.targetName as string | undefined,
+    menuName: c.menuName as string | undefined,
+    menuDescription: c.menuDescription as string | undefined,
+    price: c.price != null ? Number(c.price) : undefined,
+    durationMinutes: c.durationMinutes != null ? Number(c.durationMinutes) : undefined,
+    totalSessions: c.totalSessions != null ? Number(c.totalSessions) : undefined,
+    sessionsPerMonth: c.sessionsPerMonth != null ? Number(c.sessionsPerMonth) : undefined,
+    startDate: c.startDate as string | undefined,
+    endDate: c.endDate as string | undefined,
+  }
+}
+
 export function getCampaigns(): Campaign[] {
   if (typeof window === 'undefined') return []
   try {
     const raw = localStorage.getItem(STORAGE_CAMPAIGNS)
-    if (raw) return JSON.parse(raw)
+    if (raw) {
+      const arr = JSON.parse(raw)
+      return Array.isArray(arr) ? arr.map((c: Record<string, unknown>) => normalizeCampaign(c)) : []
+    }
   } catch (_) {}
   return []
 }

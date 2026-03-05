@@ -6,7 +6,7 @@ import {
   ShoppingCart, Receipt, Plus, Trash2, Pencil, X,
   ChevronLeft, ChevronRight, Loader2, Tag, AlertCircle, ArrowLeft,
 } from 'lucide-react'
-import { getMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, type MenuItem, type Campaign } from '@/lib/menus'
+import { getMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, isCampaignActive, type MenuItem, type Campaign } from '@/lib/menus'
 import { DEMO_SALON_ID } from '@/lib/supabase'
 import { getStaffList } from '@/lib/staff-management'
 import { fetchTicketPlans, addCustomerTicket, type TicketPlan } from '@/lib/tickets'
@@ -42,6 +42,7 @@ interface CartItem {
   category: string
   ticketPlan?: TicketPlan
   subPlan?: SubscriptionPlan
+  campaign?: Campaign
 }
 
 export default function SalesPage() {
@@ -123,6 +124,10 @@ export default function SalesPage() {
 
   useEffect(() => { setLoading(true); fetchSales() }, [fetchSales])
 
+  const activeCampaigns = campaigns.filter(c => isCampaignActive(c))
+  const discountCampaigns = activeCampaigns.filter(c => c.campaignType === 'discount')
+  const limitedCampaigns = activeCampaigns.filter(c => c.campaignType === 'limited_menu')
+
   const filteredMenus = selectedCategory ? menus.filter(m => m.category === selectedCategory) : menus
   const filteredTicketPlans = selectedCategory
     ? ticketPlans.filter(p => {
@@ -165,6 +170,58 @@ export default function SalesPage() {
     })
   }
 
+  const addCampaignLimitedToCart = (camp: Campaign) => {
+    if (!camp.menuName || camp.price == null) return
+    if ((camp.targetType === 'ticket' || camp.targetType === 'subscription') && !selectedCustomer) {
+      setError('先に顧客を選択してください')
+      return
+    }
+    setError('')
+    const key = `campaign-${camp.id}`
+    const name = camp.menuName
+    const price = camp.price
+    const category = 'キャンペーン'
+    if (camp.targetType === 'menu') {
+      setCart(prev => {
+        const found = prev.find(c => c.menuId === key)
+        if (found) return prev.map(c => c.menuId === key ? { ...c, qty: c.qty + 1 } : c)
+        return [...prev, { type: 'menu' as const, menuId: key, name, price, qty: 1, category, campaign: camp }]
+      })
+    } else if (camp.targetType === 'ticket') {
+      setCart(prev => {
+        const found = prev.find(c => c.type === 'ticket' && c.menuId === key)
+        if (found) return prev.map(c => c.type === 'ticket' && c.menuId === key ? { ...c, qty: c.qty + 1 } : c)
+        const virtualPlan: TicketPlan = {
+          id: key,
+          name,
+          menuName: camp.menuDescription ?? name,
+          totalSessions: camp.totalSessions ?? 5,
+          price,
+          unitPrice: Math.round(price / (camp.totalSessions ?? 5)),
+          expiryDays: 180,
+          category,
+        }
+        return [...prev, { type: 'ticket' as const, menuId: key, name, price, qty: 1, category, ticketPlan: virtualPlan, campaign: camp }]
+      })
+    } else {
+      setCart(prev => {
+        const found = prev.find(c => c.type === 'subscription' && c.menuId === key)
+        if (found) return prev.map(c => c.type === 'subscription' && c.menuId === key ? { ...c, qty: c.qty + 1 } : c)
+        const virtualPlan: SubscriptionPlan = {
+          id: key,
+          name,
+          price,
+          sessionsPerMonth: camp.sessionsPerMonth ?? 2,
+          menuName: camp.menuDescription ?? name,
+          billingDay: 1,
+          category,
+        }
+        return [...prev, { type: 'subscription' as const, menuId: key, name, price, qty: 1, category, subPlan: virtualPlan, campaign: camp }]
+      })
+    }
+    setShowCampaignPanel(false)
+  }
+
   const removeFromCart = (menuId: string) => setCart(prev => prev.filter(c => c.menuId !== menuId))
   const updateCartQty = (menuId: string, qty: number) => {
     if (qty < 1) return removeFromCart(menuId)
@@ -185,8 +242,9 @@ export default function SalesPage() {
   }
 
   const applyCampaign = (camp: Campaign) => {
-    setDiscountType(camp.discountType)
-    setDiscountValue(camp.discountValue)
+    if (camp.campaignType !== 'discount') return
+    setDiscountType(camp.discountType ?? 'percent')
+    setDiscountValue(camp.discountValue ?? 0)
     setShowCampaignPanel(false)
   }
 
@@ -198,8 +256,9 @@ export default function SalesPage() {
     try {
       const hasProduct = cart.some(c => c.category === '物販')
       const salesToCreate: Array<Record<string, unknown>> = []
+      const discountRatio = subtotal > 0 ? discountedSubtotal / subtotal : 1
       for (const c of cart) {
-        const amt = Math.round(c.price * (1 - (discountType === 'percent' ? discountValue / 100 : 0)))
+        const amt = Math.round(c.price * discountRatio)
         const saleBase = {
           salon_id: process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID,
           sale_date: saleDate,
@@ -213,12 +272,18 @@ export default function SalesPage() {
         }
         if (c.type === 'ticket' && c.ticketPlan) {
           for (let i = 0; i < c.qty; i++) {
-            await addCustomerTicket(selectedCustomer!.id, selectedCustomer!.name, c.ticketPlan)
+            await addCustomerTicket(selectedCustomer!.id, selectedCustomer!.name, c.ticketPlan, {
+              paymentMethod: paymentMethod as 'cash' | 'card' | 'online' | 'loan',
+              campaignId: c.campaign?.id,
+            })
             salesToCreate.push({ ...saleBase })
           }
         } else if (c.type === 'subscription' && c.subPlan) {
           for (let i = 0; i < c.qty; i++) {
-            await addCustomerSubscription(selectedCustomer!.id, selectedCustomer!.name, c.subPlan)
+            await addCustomerSubscription(selectedCustomer!.id, selectedCustomer!.name, c.subPlan, {
+              paymentMethod: paymentMethod as 'cash' | 'card' | 'online' | 'loan',
+              campaignId: c.campaign?.id,
+            })
             salesToCreate.push({ ...saleBase })
           }
         } else {
@@ -321,6 +386,17 @@ export default function SalesPage() {
                   <p className="text-sm text-text-sub mt-0.5">{m.duration}分</p>
                 </button>
               ))}
+              {selectedCategory === 'キャンペーン' && limitedCampaigns.map(camp => (
+                <button key={camp.id} onClick={() => addCampaignLimitedToCart(camp)} disabled={(camp.targetType === 'ticket' || camp.targetType === 'subscription') && !selectedCustomer}
+                  className="min-h-[100px] p-4 rounded-2xl border-2 border-amber-200 hover:border-rose hover:bg-rose/5 text-left transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
+                  <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">期間限定</span>
+                  <p className="font-bold text-text-main text-base leading-tight mt-1">{camp.menuName ?? camp.name}</p>
+                  <p className="text-xl font-bold text-rose mt-1">¥{(camp.price ?? 0).toLocaleString()}</p>
+                  <p className="text-sm text-text-sub mt-0.5">
+                    {camp.targetType === 'menu' ? `${camp.durationMinutes ?? 0}分` : camp.targetType === 'ticket' ? `回数券 ${camp.totalSessions ?? 0}回` : `サブスク ${camp.sessionsPerMonth ?? 0}回/月`}
+                  </p>
+                </button>
+              ))}
               {filteredTicketPlans.map(p => (
                 <button key={p.id} onClick={() => addTicketToCart(p)} disabled={!selectedCustomer}
                   className="min-h-[100px] p-4 rounded-2xl border-2 border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
@@ -403,14 +479,32 @@ export default function SalesPage() {
               )}
               {showCampaignPanel && (
                 <div className="bg-light-lav/50 rounded-xl p-3 mb-3 space-y-2">
-                  {campaigns.length === 0 ? <p className="text-sm text-text-sub">キャンペーンなし</p> :
-                    campaigns.map(camp => (
-                      <button key={camp.id} onClick={() => applyCampaign(camp)}
-                        className="w-full text-left px-4 py-3 rounded-xl hover:bg-white text-base font-medium">
-                        {camp.name} <span className="text-rose">{camp.discountType === 'percent' ? `${camp.discountValue}%OFF` : `¥${camp.discountValue}引き`}</span>
-                      </button>
-                    ))
-                  }
+                  {activeCampaigns.length === 0 ? <p className="text-sm text-text-sub">期間中のキャンペーンなし</p> : (
+                    <>
+                      {discountCampaigns.length > 0 && (
+                        <div>
+                          <p className="text-xs text-text-sub mb-1">割引キャンペーン</p>
+                          {discountCampaigns.map(camp => (
+                            <button key={camp.id} onClick={() => applyCampaign(camp)}
+                              className="w-full text-left px-4 py-3 rounded-xl hover:bg-white text-base font-medium mb-1">
+                              {camp.name} <span className="text-rose">{camp.discountType === 'percent' ? `${camp.discountValue ?? 0}%OFF` : `¥${(camp.discountValue ?? 0).toLocaleString()}引き`}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {limitedCampaigns.length > 0 && (
+                        <div>
+                          <p className="text-xs text-text-sub mb-1">期間限定メニュー</p>
+                          {limitedCampaigns.map(camp => (
+                            <button key={camp.id} onClick={() => addCampaignLimitedToCart(camp)}
+                              className="w-full text-left px-4 py-3 rounded-xl hover:bg-white text-base font-medium mb-1">
+                              {camp.menuName ?? camp.name} <span className="text-rose">¥{(camp.price ?? 0).toLocaleString()}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 

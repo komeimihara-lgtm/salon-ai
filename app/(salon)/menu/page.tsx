@@ -7,8 +7,8 @@ import { fetchSubscriptionPlans, createSubscriptionPlan, deleteSubscriptionPlan,
 import {
   getMenus, setMenus, getCategories, setCategories,
   getTaxSettings, setTaxSettings, getCampaigns, setCampaigns,
-  DEFAULT_CATEGORIES,
-  type MenuItem, type TaxSettings, type Campaign
+  DEFAULT_CATEGORIES, isCampaignActive, isCampaignExpired,
+  type MenuItem, type TaxSettings, type Campaign, type CampaignType, type CampaignTargetType
 } from '@/lib/menus'
 
 // インポート用メニュー型（要確認フラグ付き）
@@ -273,9 +273,19 @@ export default function MenuSettingsPage() {
   const [newCategoryName, setNewCategoryName] = useState('')
 
   // キャンペーン追加フォーム
+  const [campType, setCampType] = useState<CampaignType>('discount')
   const [campName, setCampName] = useState('')
   const [campDiscountType, setCampDiscountType] = useState<'percent' | 'amount'>('percent')
   const [campDiscountValue, setCampDiscountValue] = useState(10)
+  const [campTargetType, setCampTargetType] = useState<CampaignTargetType>('menu')
+  const [campTargetId, setCampTargetId] = useState('')
+  const [campTargetName, setCampTargetName] = useState('')
+  const [campMenuName, setCampMenuName] = useState('')
+  const [campMenuDesc, setCampMenuDesc] = useState('')
+  const [campPrice, setCampPrice] = useState(5000)
+  const [campDuration, setCampDuration] = useState(60)
+  const [campSessions, setCampSessions] = useState(5)
+  const [campSubSessions, setCampSubSessions] = useState(2)
   const [campStartDate, setCampStartDate] = useState('')
   const [campEndDate, setCampEndDate] = useState('')
 
@@ -386,19 +396,42 @@ export default function MenuSettingsPage() {
 
   const addCampaign = () => {
     if (!campName.trim()) return
+    if (campType === 'limited_menu' && !campMenuName.trim()) return
     const camp: Campaign = {
       id: Date.now().toString(),
       name: campName.trim(),
-      discountType: campDiscountType,
-      discountValue: campDiscountValue,
+      campaignType: campType,
       startDate: campStartDate || undefined,
       endDate: campEndDate || undefined,
+    }
+    if (campType === 'discount') {
+      camp.discountType = campDiscountType
+      camp.discountValue = campDiscountValue
+      camp.targetType = campTargetType
+      camp.targetId = campTargetId || undefined
+      camp.targetName = campTargetName || undefined
+    } else {
+      camp.menuName = campMenuName.trim()
+      camp.menuDescription = campMenuDesc.trim() || undefined
+      camp.targetType = campTargetType
+      camp.price = campPrice
+      if (campTargetType === 'menu') camp.durationMinutes = campDuration
+      else if (campTargetType === 'ticket') camp.totalSessions = campSessions
+      else if (campTargetType === 'subscription') camp.sessionsPerMonth = campSubSessions
     }
     const next = [...campaigns, camp]
     setCampaignsState(next)
     setCampaigns(next)
     setCampName('')
+    setCampMenuName('')
+    setCampMenuDesc('')
     setCampDiscountValue(10)
+    setCampPrice(5000)
+    setCampDuration(60)
+    setCampSessions(5)
+    setCampSubSessions(2)
+    setCampTargetId('')
+    setCampTargetName('')
     setCampStartDate('')
     setCampEndDate('')
   }
@@ -615,38 +648,170 @@ export default function MenuSettingsPage() {
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
           <div className="space-y-3 mb-6">
             {campaigns.length === 0 && <p className="text-sm text-text-sub">キャンペーンがありません</p>}
-            {campaigns.map(c => (
-              <div key={c.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
-                <div>
-                  <p className="font-medium text-text-main">{c.name}</p>
-                  <p className="text-xs text-text-sub">
-                    {c.discountType === 'percent' ? `${c.discountValue}%OFF` : `¥${c.discountValue.toLocaleString()}引き`}
-                    {c.startDate && ` · ${c.startDate}〜${c.endDate}`}
-                  </p>
+            {campaigns.map(c => {
+              const active = isCampaignActive(c)
+              const expired = isCampaignExpired(c)
+              return (
+                <div key={c.id} className={`flex items-center justify-between py-3 px-4 rounded-xl ${expired ? 'bg-gray-100 opacity-70' : active ? 'bg-rose/5 border border-rose/20' : 'bg-light-lav/50'}`}>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-xs px-2 py-0.5 rounded font-medium ${c.campaignType === 'discount' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {c.campaignType === 'discount' ? '割引' : '期間限定'}
+                      </span>
+                      <p className="font-medium text-text-main">{c.name}</p>
+                    </div>
+                    <p className="text-xs text-text-sub mt-0.5">
+                      {c.campaignType === 'discount'
+                        ? `${c.discountType === 'percent' ? `${c.discountValue ?? 0}%OFF` : `¥${(c.discountValue ?? 0).toLocaleString()}引き`}${c.targetName ? ` · ${c.targetName}` : ''}`
+                        : `${c.menuName ?? ''} · ¥${(c.price ?? 0).toLocaleString()}${c.targetType === 'ticket' ? ` · ${c.totalSessions ?? 0}回` : c.targetType === 'subscription' ? ` · ${c.sessionsPerMonth ?? 0}回/月` : ` · ${c.durationMinutes ?? 0}分`}`}
+                      {c.startDate && ` · ${c.startDate}〜${c.endDate}`}
+                    </p>
+                  </div>
+                  <button onClick={() => removeCampaign(c.id)} className="p-2 text-text-sub hover:text-red-600 rounded-lg">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-                <button onClick={() => removeCampaign(c.id)} className="p-2 text-text-sub hover:text-red-600 rounded-lg">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
-          <div className="flex gap-2 flex-wrap border-t border-gray-100 pt-4">
-            <input type="text" value={campName} onChange={e => setCampName(e.target.value)}
-              placeholder="キャンペーン名" className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none min-w-48 flex-1" />
-            <select value={campDiscountType} onChange={e => setCampDiscountType(e.target.value as 'percent' | 'amount')}
-              className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
-              <option value="percent">%OFF</option>
-              <option value="amount">円引き</option>
-            </select>
-            <input type="number" value={campDiscountValue} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampDiscountValue(val === '' ? 0 : Number(val)) }}
-              onFocus={e => e.target.select()} className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-24" />
-            <input type="date" value={campStartDate} onChange={e => setCampStartDate(e.target.value)}
-              className="px-4 py-2 rounded-xl border border-gray-200 outline-none" />
-            <span className="self-center text-text-sub text-sm">〜</span>
-            <input type="date" value={campEndDate} onChange={e => setCampEndDate(e.target.value)}
-              className="px-4 py-2 rounded-xl border border-gray-200 outline-none" />
-            <button onClick={addCampaign}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium">
+          <div className="border-t border-gray-100 pt-4 space-y-4">
+            <div className="flex gap-2">
+              {[
+                { value: 'discount' as const, label: '割引キャンペーン' },
+                { value: 'limited_menu' as const, label: '期間限定メニュー' },
+              ].map(opt => (
+                <button key={opt.value} type="button" onClick={() => setCampType(opt.value)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${campType === opt.value ? 'bg-gradient-to-r from-rose to-lavender text-white' : 'bg-light-lav text-text-sub'}`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="grid gap-3">
+              <div>
+                <label className="block text-xs text-text-sub mb-1">キャンペーン名 *</label>
+                <input type="text" value={campName} onChange={e => setCampName(e.target.value)}
+                  placeholder="例: 初回限定50%OFF" className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none" />
+              </div>
+              {campType === 'discount' && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-text-sub mb-1">対象</label>
+                      <select value={campTargetType} onChange={e => setCampTargetType(e.target.value as CampaignTargetType)}
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none">
+                        <option value="menu">通常メニュー</option>
+                        <option value="ticket">回数券</option>
+                        <option value="subscription">サブスク</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-text-sub mb-1">対象選択</label>
+                      {campTargetType === 'menu' && (
+                        <select value={campTargetId} onChange={e => { const m = menus.find(x => x.id === e.target.value); setCampTargetId(e.target.value); setCampTargetName(m?.name ?? '') }}
+                          className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none">
+                          <option value="">選択</option>
+                          {menus.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                        </select>
+                      )}
+                      {campTargetType === 'ticket' && (
+                        <select value={campTargetId} onChange={e => { const p = ticketPlans.find(x => x.id === e.target.value); setCampTargetId(e.target.value); setCampTargetName(p?.name ?? '') }}
+                          className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none">
+                          <option value="">選択</option>
+                          {ticketPlans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      )}
+                      {campTargetType === 'subscription' && (
+                        <select value={campTargetId} onChange={e => { const p = subPlans.find(x => x.id === e.target.value); setCampTargetId(e.target.value); setCampTargetName(p?.name ?? '') }}
+                          className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none">
+                          <option value="">選択</option>
+                          {subPlans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-text-sub mb-1">割引種別</label>
+                      <select value={campDiscountType} onChange={e => setCampDiscountType(e.target.value as 'percent' | 'amount')}
+                        className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none">
+                        <option value="percent">%OFF</option>
+                        <option value="amount">円引き</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-text-sub mb-1">割引額</label>
+                      <input type="number" value={campDiscountValue} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampDiscountValue(val === '' ? 0 : Number(val)) }}
+                        onFocus={e => e.target.select()} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
+                    </div>
+                  </div>
+                </>
+              )}
+              {campType === 'limited_menu' && (
+                <>
+                  <div>
+                    <label className="block text-xs text-text-sub mb-1">メニュー名 *</label>
+                    <input type="text" value={campMenuName} onChange={e => setCampMenuName(e.target.value)}
+                      placeholder="例: 夏の特別フェイシャル" className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-sub mb-1">説明（任意）</label>
+                    <input type="text" value={campMenuDesc} onChange={e => setCampMenuDesc(e.target.value)}
+                      placeholder="施術内容の説明" className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-text-sub mb-1">種別</label>
+                    <select value={campTargetType} onChange={e => setCampTargetType(e.target.value as CampaignTargetType)}
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none">
+                      <option value="menu">通常メニュー</option>
+                      <option value="ticket">回数券</option>
+                      <option value="subscription">サブスク</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-text-sub mb-1">価格（円）</label>
+                      <input type="number" value={campPrice} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampPrice(val === '' ? 0 : Number(val)) }}
+                        onFocus={e => e.target.select()} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
+                    </div>
+                    {campTargetType === 'menu' && (
+                      <div>
+                        <label className="block text-xs text-text-sub mb-1">施術時間（分）</label>
+                        <input type="number" value={campDuration} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampDuration(val === '' ? 0 : Number(val)) }}
+                          onFocus={e => e.target.select()} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
+                      </div>
+                    )}
+                    {campTargetType === 'ticket' && (
+                      <div>
+                        <label className="block text-xs text-text-sub mb-1">回数</label>
+                        <input type="number" value={campSessions} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampSessions(val === '' ? 0 : Number(val)) }}
+                          onFocus={e => e.target.select()} min={2} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
+                      </div>
+                    )}
+                    {campTargetType === 'subscription' && (
+                      <div>
+                        <label className="block text-xs text-text-sub mb-1">回数/月</label>
+                        <input type="number" value={campSubSessions} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampSubSessions(val === '' ? 0 : Number(val)) }}
+                          onFocus={e => e.target.select()} min={1} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-text-sub mb-1">開始日</label>
+                  <input type="date" value={campStartDate} onChange={e => setCampStartDate(e.target.value)}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-sub mb-1">終了日</label>
+                  <input type="date" value={campEndDate} onChange={e => setCampEndDate(e.target.value)}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
+                </div>
+              </div>
+            </div>
+            <button onClick={addCampaign} disabled={!campName.trim() || (campType === 'limited_menu' && !campMenuName.trim())}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium disabled:opacity-50">
               <Plus className="w-4 h-4" />追加
             </button>
           </div>
