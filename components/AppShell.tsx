@@ -23,7 +23,6 @@ import {
   ShoppingCart,
   Heart,
   FileText,
-  Home,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -32,7 +31,7 @@ const NAV_ITEMS = [
   { href: '/customers', icon: Users, label: '顧客管理' },
   { href: '/chart', icon: FileText, label: 'カルテ' },
   { href: '/customer-delight', icon: Heart, label: '感動体験' },
-  { href: '/counseling', icon: MessageSquare, label: 'Solaカウンセリング' },
+  { href: '/counseling', icon: MessageSquare, label: 'SOLAカウンセリング' },
   { href: '/leo', icon: MessageCircle, label: '経営会議' },
   { href: '/reservations', icon: Calendar, label: '予約管理' },
   { href: '/follow', icon: Send, label: '自動フォロー' },
@@ -53,28 +52,9 @@ const BOTTOM_NAV_ITEMS = [
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const isCounselingPage = typeof pathname === 'string' && pathname.startsWith('/counseling')
 
   // ルートのリダイレクト時はシェルを表示しない
   if (pathname === '/') return <>{children}</>
-
-  // カウンセリングページ: サイドバー非表示・Homeボタンのみ（ダッシュボードへ）
-  if (isCounselingPage) {
-    return (
-      <div className="min-h-screen flex flex-col bg-white">
-        <header className="sticky top-0 z-20 flex items-center h-14 px-4 bg-white border-b border-gray-200 shadow-sm">
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-rose/10 text-rose hover:bg-rose/20 font-semibold transition-colors"
-          >
-            <Home className="w-5 h-5" />
-            Home
-          </Link>
-        </header>
-        <main className="flex-1 overflow-auto">{children}</main>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen flex">

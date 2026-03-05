@@ -37,7 +37,7 @@ export default function CounselingSessionsPage() {
         <Link href="/counseling" className="p-2 rounded-lg hover:bg-[#F8F5FF] text-text-main">
           <ChevronLeft className="w-5 h-5" />
         </Link>
-        <h1 className="text-lg font-bold text-text-main font-serif-jp">Sola カウンセリング履歴</h1>
+        <h1 className="text-lg font-bold text-text-main font-serif-jp">SOLA カウンセリング履歴</h1>
       </div>
 
       <div className="bg-white rounded-2xl overflow-hidden card-shadow">
