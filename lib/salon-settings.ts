@@ -17,6 +17,10 @@ export interface SalonSettings {
     visits: number
     avgPrice: number
   }
+  externalUrls: {
+    hotpepper?: string
+    salonHp?: string
+  }
 }
 
 const DEFAULT: SalonSettings = {
@@ -33,6 +37,10 @@ const DEFAULT: SalonSettings = {
     sales: 600000,
     visits: 60,
     avgPrice: 10000,
+  },
+  externalUrls: {
+    hotpepper: '',
+    salonHp: '',
   },
 }
 

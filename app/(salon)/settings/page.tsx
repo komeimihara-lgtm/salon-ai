@@ -14,6 +14,7 @@ export default function SettingsPage() {
     beds: [],
     staff: [],
     targets: { sales: 600000, visits: 60, avgPrice: 10000 },
+    externalUrls: { hotpepper: '', salonHp: '' },
   })
   const [newBed, setNewBed] = useState('')
   const [newStaffName, setNewStaffName] = useState('')
@@ -108,6 +109,32 @@ export default function SettingsPage() {
                 onChange={e => setSettings(s => ({ ...s, phone: e.target.value }))}
                 placeholder="03-1234-5678"
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-sub block mb-1">ホットペッパービューティーURL</label>
+              <input
+                type="url"
+                value={settings.externalUrls?.hotpepper ?? ''}
+                onChange={e => setSettings(prev => ({
+                  ...prev,
+                  externalUrls: { ...(prev.externalUrls || {}), hotpepper: e.target.value }
+                }))}
+                placeholder="https://beauty.hotpepper.jp/..."
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-sub block mb-1">サロン公式サイトURL</label>
+              <input
+                type="url"
+                value={settings.externalUrls?.salonHp ?? ''}
+                onChange={e => setSettings(prev => ({
+                  ...prev,
+                  externalUrls: { ...(prev.externalUrls || {}), salonHp: e.target.value }
+                }))}
+                placeholder="https://your-salon.com/..."
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
               />
             </div>
             <div>
