@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
 
 /**
  * KPIサマリー取得
@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
     const end = searchParams.get('end')
     const yearParam = searchParams.get('year')
     const monthParam = searchParams.get('month')
+    const salonIdParam = searchParams.get('salon_id')
+    const salonId = salonIdParam || getSalonId()
 
     const supabase = getSupabaseAdmin()
 
@@ -39,7 +41,7 @@ export async function GET(req: NextRequest) {
       const { data: sales, error } = await supabase
         .from('sales')
         .select('amount, sale_type')
-        .eq('salon_id', DEMO_SALON_ID)
+        .eq('salon_id', salonId)
         .gte('sale_date', rangeStart)
         .lte('sale_date', rangeEnd)
 
@@ -58,7 +60,7 @@ export async function GET(req: NextRequest) {
     const { data: tickets, error: ticketsError } = await supabase
       .from('customer_tickets')
       .select('remaining_sessions, unit_price')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', salonId)
 
     if (ticketsError) throw ticketsError
 
@@ -76,24 +78,24 @@ export async function GET(req: NextRequest) {
     if (yearParam && monthParam && rangeStart && rangeEnd) {
       const y = parseInt(yearParam, 10)
       const m = parseInt(monthParam, 10)
-      const { data: salon } = await supabase
+      const { data: salon, error: salonError } = await supabase
         .from('salons')
         .select('monthly_target')
-        .eq('id', DEMO_SALON_ID)
-        .single()
-      const monthlyTarget = Number(salon?.monthly_target ?? 0) || 3000000
+        .eq('id', salonId)
+        .maybeSingle()
+      const monthlyTarget = salonError ? 3000000 : (Number(salon?.monthly_target ?? 0) || 3000000)
 
-      const { data: customers } = await supabase
+      const { data: customers, error: customersError } = await supabase
         .from('customers')
         .select('id, status, last_visit_date')
-        .eq('salon_id', DEMO_SALON_ID)
-      const activeCount = (customers || []).filter((c: { status?: string }) => c.status === 'active').length
-      const lostCount = (customers || []).filter((c: { status?: string }) => c.status === 'lost').length
+        .eq('salon_id', salonId)
+      const activeCount = customersError ? 0 : (customers || []).filter((c: { status?: string }) => c.status === 'active').length
+      const lostCount = customersError ? 0 : (customers || []).filter((c: { status?: string }) => c.status === 'lost').length
 
       const { data: salesForMonth } = await supabase
         .from('sales')
         .select('customer_id')
-        .eq('salon_id', DEMO_SALON_ID)
+        .eq('salon_id', salonId)
         .gte('sale_date', rangeStart)
         .lte('sale_date', rangeEnd)
       const uniqueVisitorIds = new Set((salesForMonth || []).map((s: { customer_id?: string }) => s.customer_id).filter(Boolean))
@@ -102,7 +104,7 @@ export async function GET(req: NextRequest) {
       const { count: visitCount } = await supabase
         .from('sales')
         .select('*', { count: 'exact', head: true })
-        .eq('salon_id', DEMO_SALON_ID)
+        .eq('salon_id', salonId)
         .gte('sale_date', rangeStart)
         .lte('sale_date', rangeEnd)
       const avgUnitPrice = (visitCount ?? 0) > 0 ? Math.round(totalSales / (visitCount ?? 0)) : 0
@@ -142,7 +144,11 @@ export async function GET(req: NextRequest) {
       totalSales,
     })
   } catch (e) {
-    console.error(e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    const err = e instanceof Error ? e : new Error(String(e))
+    console.error('kpi/summary error:', err.message, err.stack)
+    return NextResponse.json(
+      { error: 'KPIサマリーの取得に失敗しました', details: err.message },
+      { status: 500 }
+    )
   }
 }

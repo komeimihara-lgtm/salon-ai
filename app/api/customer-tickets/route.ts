@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
 
 function toCustomerTicket(row: Record<string, unknown>) {
   return {
@@ -21,11 +21,14 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const customerId = searchParams.get('customer_id')
+    const salonIdParam = searchParams.get('salon_id')
+    const salonId = salonIdParam || getSalonId()
 
-    let query = getSupabaseAdmin()
+    const supabase = getSupabaseAdmin()
+    let query = supabase
       .from('customer_tickets')
       .select('id, customer_id, customer_name, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', salonId)
       .order('purchased_at', { ascending: false })
 
     if (customerId) query = query.eq('customer_id', customerId)
@@ -33,11 +36,26 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query
     if (error) throw error
 
-    const tickets = (data || []).map((r: Record<string, unknown>) => toCustomerTicket(r))
+    let tickets = (data || []).map((r: Record<string, unknown>) => toCustomerTicket(r))
+    if (tickets.length === 0 && !salonIdParam) {
+      const { data: fallback } = await supabase
+        .from('customer_tickets')
+        .select('id, customer_id, customer_name, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date')
+        .order('purchased_at', { ascending: false })
+      if (customerId) {
+        tickets = (fallback || []).filter((r: Record<string, unknown>) => r.customer_id === customerId).map((r: Record<string, unknown>) => toCustomerTicket(r))
+      } else {
+        tickets = (fallback || []).map((r: Record<string, unknown>) => toCustomerTicket(r))
+      }
+    }
     return NextResponse.json({ tickets })
   } catch (e) {
-    console.error(e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    const err = e instanceof Error ? e : new Error(String(e))
+    console.error('customer-tickets GET error:', err.message, err.stack)
+    return NextResponse.json(
+      { error: 'customer_ticketsの取得に失敗しました', details: err.message },
+      { status: 500 }
+    )
   }
 }
 
@@ -68,7 +86,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await getSupabaseAdmin()
       .from('customer_tickets')
       .insert({
-        salon_id: DEMO_SALON_ID,
+        salon_id: getSalonId(),
         customer_id,
         customer_name: customer_name || '',
         ticket_plan_id: ticket_plan_id || null,
@@ -86,7 +104,11 @@ export async function POST(req: NextRequest) {
     if (error) throw error
     return NextResponse.json({ ticket: toCustomerTicket({ ...data, customer_name: customer_name || '' }) })
   } catch (e) {
-    console.error(e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    const err = e instanceof Error ? e : new Error(String(e))
+    console.error('customer-tickets POST error:', err.message, err.stack)
+    return NextResponse.json(
+      { error: 'customer_ticketの登録に失敗しました', details: err.message },
+      { status: 500 }
+    )
   }
 }
