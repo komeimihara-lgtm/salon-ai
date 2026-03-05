@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
+import { getSupabaseAdmin, getSalonId, DEMO_SALON_ID } from '@/lib/supabase'
 
-function toCustomerTicket(row: Record<string, unknown>) {
+const SELECT_COLS = 'id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date, customers(name)'
+const SELECT_COLS_NO_UNIT_PRICE = 'id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, purchased_at, expiry_date, customers(name)'
+
+function toCustomerTicket(row: Record<string, unknown>, hasUnitPrice = true) {
   const cust = row.customers as { name?: string } | null | undefined
+  const totalSessions = Number(row.total_sessions ?? 0)
+  const unitPriceVal = hasUnitPrice && row.unit_price != null ? Number(row.unit_price) : null
   return {
     id: row.id,
     customerId: row.customer_id,
@@ -12,10 +17,29 @@ function toCustomerTicket(row: Record<string, unknown>) {
     menuName: row.menu_name,
     totalSessions: row.total_sessions,
     remainingSessions: row.remaining_sessions,
-    unitPrice: row.unit_price != null ? Number(row.unit_price) : null,
+    unitPrice: unitPriceVal,
     purchasedAt: row.purchased_at,
     expiryDate: row.expiry_date,
   }
+}
+
+async function fetchTickets(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  salonId: string,
+  customerId: string | null,
+  selectCols: string,
+  hasUnitPrice: boolean
+) {
+  let query = supabase
+    .from('customer_tickets')
+    .select(selectCols)
+    .eq('salon_id', salonId)
+    .order('purchased_at', { ascending: false })
+  if (customerId) query = query.eq('customer_id', customerId)
+  const { data, error } = await query
+  if (error) throw error
+  const rows = (data || []) as unknown as Record<string, unknown>[]
+  return rows.map((r) => toCustomerTicket(r, hasUnitPrice))
 }
 
 export async function GET(req: NextRequest) {
@@ -26,27 +50,42 @@ export async function GET(req: NextRequest) {
     const salonId = salonIdParam || getSalonId()
 
     const supabase = getSupabaseAdmin()
-    let query = supabase
-      .from('customer_tickets')
-      .select('id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date, customers(name)')
-      .eq('salon_id', salonId)
-      .order('purchased_at', { ascending: false })
-
-    if (customerId) query = query.eq('customer_id', customerId)
-
-    const { data, error } = await query
-    if (error) throw error
-
-    let tickets = (data || []).map((r: Record<string, unknown>) => toCustomerTicket(r))
-    if (tickets.length === 0 && !salonIdParam) {
-      const { data: fallback } = await supabase
-        .from('customer_tickets')
-        .select('id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date, customers(name)')
-        .order('purchased_at', { ascending: false })
-      if (customerId) {
-        tickets = (fallback || []).filter((r: Record<string, unknown>) => r.customer_id === customerId).map((r: Record<string, unknown>) => toCustomerTicket(r))
+    let tickets: ReturnType<typeof toCustomerTicket>[]
+    try {
+      tickets = await fetchTickets(supabase, salonId, customerId, SELECT_COLS, true)
+    } catch (e) {
+      const msg = String(e instanceof Error ? e.message : e)
+      if (msg.includes('unit_price') || msg.includes('column') || msg.includes('does not exist')) {
+        tickets = await fetchTickets(supabase, salonId, customerId, SELECT_COLS_NO_UNIT_PRICE, false)
       } else {
-        tickets = (fallback || []).map((r: Record<string, unknown>) => toCustomerTicket(r))
+        throw e
+      }
+    }
+
+    if (tickets.length === 0 && !salonIdParam && salonId !== DEMO_SALON_ID) {
+      try {
+        tickets = await fetchTickets(supabase, DEMO_SALON_ID, customerId, SELECT_COLS, true)
+      } catch {
+        tickets = await fetchTickets(supabase, DEMO_SALON_ID, customerId, SELECT_COLS_NO_UNIT_PRICE, false)
+      }
+    }
+    if (tickets.length === 0 && !salonIdParam) {
+      try {
+        const { data: fallback } = await supabase
+          .from('customer_tickets')
+          .select(SELECT_COLS)
+          .order('purchased_at', { ascending: false })
+        let rows = fallback || []
+        if (customerId) rows = rows.filter((r: Record<string, unknown>) => r.customer_id === customerId)
+        tickets = rows.map((r: Record<string, unknown>) => toCustomerTicket(r, true))
+      } catch {
+        const { data: fallback } = await supabase
+          .from('customer_tickets')
+          .select(SELECT_COLS_NO_UNIT_PRICE)
+          .order('purchased_at', { ascending: false })
+        let rows = fallback || []
+        if (customerId) rows = rows.filter((r: Record<string, unknown>) => r.customer_id === customerId)
+        tickets = rows.map((r: Record<string, unknown>) => toCustomerTicket(r, false))
       }
     }
     return NextResponse.json({ tickets })
@@ -85,7 +124,7 @@ export async function POST(req: NextRequest) {
     const expiryDate = expiry_date || null
     const unitPrice = unit_price != null ? Number(unit_price) : null
 
-    const insertData = {
+    const insertDataWithUnitPrice = {
       salon_id: salonId,
       customer_id,
       ticket_plan_id: ticket_plan_id || null,
@@ -97,18 +136,49 @@ export async function POST(req: NextRequest) {
       purchased_at: purchasedAt,
       expiry_date: expiryDate,
     }
+    const insertDataWithoutUnitPrice = {
+      salon_id: salonId,
+      customer_id,
+      ticket_plan_id: ticket_plan_id || null,
+      plan_name,
+      menu_name,
+      total_sessions: Number(total_sessions),
+      remaining_sessions: Number(remaining_sessions),
+      purchased_at: purchasedAt,
+      expiry_date: expiryDate,
+    }
 
-    const { data, error } = await getSupabaseAdmin()
+    const selectCols = 'id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date'
+    const selectColsNoUnitPrice = 'id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, purchased_at, expiry_date'
+
+    let result: { data: Record<string, unknown>; hasUnitPrice: boolean }
+    const { data: data1, error: err1 } = await getSupabaseAdmin()
       .from('customer_tickets')
-      .insert(insertData)
-      .select('id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date')
+      .insert(insertDataWithUnitPrice)
+      .select(selectCols)
       .single()
 
-    if (error) {
-      console.error('[customer-tickets] POST Supabase error:', error.message, error.details, error.hint)
-      throw error
+    if (!err1 && data1) {
+      result = { data: data1, hasUnitPrice: true }
+    } else {
+      const msg = String(err1?.message ?? '')
+      if (msg.includes('unit_price') || msg.includes('column') || msg.includes('does not exist')) {
+        const { data: data2, error: err2 } = await getSupabaseAdmin()
+          .from('customer_tickets')
+          .insert(insertDataWithoutUnitPrice)
+          .select(selectColsNoUnitPrice)
+          .single()
+        if (err2) {
+          console.error('[customer-tickets] POST Supabase error:', err2.message, err2.details, err2.hint)
+          throw err2
+        }
+        result = { data: data2 as Record<string, unknown>, hasUnitPrice: false }
+      } else {
+        console.error('[customer-tickets] POST Supabase error:', err1?.message, err1?.details, err1?.hint)
+        throw err1
+      }
     }
-    return NextResponse.json({ ticket: toCustomerTicket({ ...data, customer_name: customer_name || '' }) })
+    return NextResponse.json({ ticket: toCustomerTicket({ ...result.data, customer_name: customer_name || '' }, result.hasUnitPrice) })
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e))
     const supabaseErr = e as { message?: string; details?: string; hint?: string }

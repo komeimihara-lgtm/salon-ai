@@ -38,15 +38,26 @@ export async function GET(req: NextRequest) {
     let consumeSales = 0
 
     if (rangeStart && rangeEnd) {
-      const { data: sales, error } = await supabase
+      let sales: { amount?: number; sale_type?: string }[] | null = null
+      const { data: salesWithType, error: salesErr } = await supabase
         .from('sales')
         .select('amount, sale_type')
         .eq('salon_id', salonId)
         .gte('sale_date', rangeStart)
         .lte('sale_date', rangeEnd)
-
-      if (error) throw error
-
+      if (!salesErr) {
+        sales = salesWithType
+      } else if (String(salesErr.message ?? '').includes('sale_type') || String(salesErr.message ?? '').includes('column')) {
+        const { data: salesNoType } = await supabase
+          .from('sales')
+          .select('amount')
+          .eq('salon_id', salonId)
+          .gte('sale_date', rangeStart)
+          .lte('sale_date', rangeEnd)
+        sales = (salesNoType || []).map((s) => ({ ...s, sale_type: 'cash' }))
+      } else {
+        throw salesErr
+      }
       for (const s of sales || []) {
         const amt = Number(s.amount ?? 0)
         if (s.sale_type === 'ticket_consume' || s.sale_type === 'subscription_consume') {
@@ -57,11 +68,28 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const { data: tickets, error: ticketsError } = await supabase
+    let tickets: { remaining_sessions?: number; unit_price?: number }[] | null = null
+    let ticketsError: { message?: string } | null = null
+    const { data: ticketsWithUnit, error: errWith } = await supabase
       .from('customer_tickets')
       .select('remaining_sessions, unit_price')
       .eq('salon_id', salonId)
-
+    if (!errWith) {
+      tickets = ticketsWithUnit
+      ticketsError = null
+    } else {
+      const msg = String(errWith.message ?? '')
+      if (msg.includes('unit_price') || msg.includes('column') || msg.includes('does not exist')) {
+        const { data: ticketsNoUnit, error: errNo } = await supabase
+          .from('customer_tickets')
+          .select('remaining_sessions')
+          .eq('salon_id', salonId)
+        if (!errNo) tickets = ticketsNoUnit
+        else ticketsError = errNo
+      } else {
+        ticketsError = errWith
+      }
+    }
     if (ticketsError) throw ticketsError
 
     let serviceLiability = 0
