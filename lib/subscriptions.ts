@@ -4,6 +4,8 @@
  * - 顧客の加入・利用回数・更新日 → Supabase API
  */
 
+import { getSalonId } from '@/lib/supabase'
+
 /** サブスクプラン定義 */
 export interface SubscriptionPlan {
   id: string
@@ -27,11 +29,18 @@ function mapRowToPlan(r: Record<string, unknown>): SubscriptionPlan {
 
 /** APIからサブスクプランを取得 */
 export async function fetchSubscriptionPlans(): Promise<SubscriptionPlan[]> {
-  const res = await fetch('/api/subscription-plans')
+  const salonId = getSalonId()
+  const url = `/api/subscription-plans?salon_id=${encodeURIComponent(salonId)}`
+  const res = await fetch(url)
   const json = await res.json()
   if (!res.ok) throw new Error(json.error || '取得に失敗しました')
   const rows = json.plans || []
-  return rows.map((r: Record<string, unknown>) => mapRowToPlan(r))
+  const plans = rows.map((r: Record<string, unknown>) => mapRowToPlan(r))
+  if (typeof window !== 'undefined') {
+    console.log('subscription_plans:', plans)
+    console.log('salon_id:', salonId)
+  }
+  return plans
 }
 
 export async function createSubscriptionPlan(plan: {

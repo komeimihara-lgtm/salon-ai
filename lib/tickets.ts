@@ -5,6 +5,8 @@
  * LocalStorage は使用しない
  */
 
+import { getSalonId } from '@/lib/supabase'
+
 /** 回数券マスタ（商品定義） */
 export interface TicketPlan {
   id: string
@@ -52,11 +54,18 @@ function mapRowToPlan(r: Record<string, unknown>): TicketPlan {
 }
 
 export async function fetchTicketPlans(): Promise<TicketPlan[]> {
-  const res = await fetch('/api/tickets')
+  const salonId = getSalonId()
+  const url = `/api/tickets?salon_id=${encodeURIComponent(salonId)}`
+  const res = await fetch(url)
   const json = await res.json()
   if (!res.ok) throw new Error(json.error || '取得に失敗しました')
   const rows = json.plans || []
-  return rows.map((r: Record<string, unknown>) => mapRowToPlan(r))
+  const plans = rows.map((r: Record<string, unknown>) => mapRowToPlan(r))
+  if (typeof window !== 'undefined') {
+    console.log('ticket_plans:', plans)
+    console.log('salon_id:', salonId)
+  }
+  return plans
 }
 
 export async function createTicketPlan(plan: {

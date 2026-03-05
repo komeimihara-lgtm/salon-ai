@@ -20,16 +20,29 @@ function toTicketPlan(row: Record<string, unknown>) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
-    const resolvedSalonId = searchParams.get('salon_id') || getSalonId()
-    const { data, error } = await getSupabaseAdmin()
+    const salonIdParam = searchParams.get('salon_id')
+    const resolvedSalonId = salonIdParam || getSalonId()
+    let query = getSupabaseAdmin()
       .from('ticket_plans')
       .select('id, name, menu_name, total_sessions, price, unit_price, expiry_days, is_active, created_at')
-      .eq('salon_id', resolvedSalonId)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
-
+    if (salonIdParam) {
+      query = query.eq('salon_id', salonIdParam)
+    } else {
+      query = query.eq('salon_id', resolvedSalonId)
+    }
+    const { data, error } = await query
     if (error) throw error
-    const plans = (data || []).map((r: Record<string, unknown>) => toTicketPlan(r))
+    let plans = (data || []).map((r: Record<string, unknown>) => toTicketPlan(r))
+    if (plans.length === 0) {
+      const { data: fallback } = await getSupabaseAdmin()
+        .from('ticket_plans')
+        .select('id, name, menu_name, total_sessions, price, unit_price, expiry_days, is_active, created_at')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+      plans = (fallback || []).map((r: Record<string, unknown>) => toTicketPlan(r))
+    }
     return NextResponse.json({ plans })
   } catch (e) {
     console.error(e)

@@ -17,16 +17,29 @@ function toSubscriptionPlan(row: Record<string, unknown>) {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
-    const salonId = searchParams.get('salon_id') || getSalonId()
-    const { data, error } = await getSupabaseAdmin()
+    const salonIdParam = searchParams.get('salon_id')
+    const resolvedSalonId = salonIdParam || getSalonId()
+    let query = getSupabaseAdmin()
       .from('subscription_plans')
       .select('id, name, menu_name, price, sessions_per_month, billing_day, is_active, created_at')
-      .eq('salon_id', salonId)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
-
+    if (salonIdParam) {
+      query = query.eq('salon_id', salonIdParam)
+    } else {
+      query = query.eq('salon_id', resolvedSalonId)
+    }
+    const { data, error } = await query
     if (error) throw error
-    const plans = (data || []).map((r: Record<string, unknown>) => toSubscriptionPlan(r))
+    let plans = (data || []).map((r: Record<string, unknown>) => toSubscriptionPlan(r))
+    if (plans.length === 0) {
+      const { data: fallback } = await getSupabaseAdmin()
+        .from('subscription_plans')
+        .select('id, name, menu_name, price, sessions_per_month, billing_day, is_active, created_at')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+      plans = (fallback || []).map((r: Record<string, unknown>) => toSubscriptionPlan(r))
+    }
     return NextResponse.json({ plans })
   } catch (e) {
     console.error(e)
