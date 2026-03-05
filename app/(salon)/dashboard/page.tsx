@@ -108,6 +108,7 @@ export default function DashboardPage() {
   const [todaySales, setTodaySales] = useState(0)
   const [rescheduleTarget, setRescheduleTarget] = useState<Reservation | null>(null)
   const [editTarget, setEditTarget] = useState<Reservation | null>(null)
+  const [detailModal, setDetailModal] = useState<'cash' | 'consume' | null>(null)
 
   useEffect(() => {
     const s = getSalonSettings()
@@ -326,16 +327,26 @@ export default function DashboardPage() {
         )}
         {salesSummary && (
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="bg-white rounded-xl p-4 card-shadow border border-[#BAE6FD]">
+            <button
+              type="button"
+              onClick={() => setDetailModal('cash')}
+              className="bg-white rounded-xl p-4 card-shadow border border-[#BAE6FD] text-left hover:border-rose/50 hover:shadow-md transition-all cursor-pointer group"
+              title="クリックで明細を見る"
+            >
               <p className="text-xs text-text-sub mb-1">💰 着金売上</p>
               <p className="text-lg font-bold text-[#1A202C]">¥{salesSummary.cashSales.toLocaleString()}</p>
-              <p className="text-xs text-text-sub mt-0.5">現金・カード等の入金</p>
-            </div>
-            <div className="bg-white rounded-xl p-4 card-shadow border border-[#BAE6FD]">
+              <p className="text-xs text-text-sub mt-0.5 group-hover:text-rose">クリックで明細を見る</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDetailModal('consume')}
+              className="bg-white rounded-xl p-4 card-shadow border border-[#BAE6FD] text-left hover:border-rose/50 hover:shadow-md transition-all cursor-pointer group"
+              title="クリックで明細を見る"
+            >
               <p className="text-xs text-text-sub mb-1">✅ 消化売上</p>
               <p className="text-lg font-bold text-rose">¥{salesSummary.consumeSales.toLocaleString()}</p>
-              <p className="text-xs text-text-sub mt-0.5">回数券・サブスク消化による売上</p>
-            </div>
+              <p className="text-xs text-text-sub mt-0.5 group-hover:text-rose">クリックで明細を見る</p>
+            </button>
             <div className="bg-white rounded-xl p-4 card-shadow border border-[#BAE6FD]">
               <p className="text-xs text-text-sub mb-1">📋 役務残（前受金残高）</p>
               <p className="text-lg font-bold text-lavender">¥{salesSummary.serviceLiability.toLocaleString()}</p>
@@ -700,6 +711,14 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* 売上明細モーダル */}
+      {detailModal && (
+        <SalesDetailModal
+          type={detailModal}
+          onClose={() => setDetailModal(null)}
+        />
+      )}
+
       {/* 予約追加・詳細モーダル */}
       {rescheduleTarget && (
         <RescheduleModal
@@ -858,6 +877,135 @@ function ReservationDetailContent({
       >
         予約を削除
       </button>
+    </div>
+  )
+}
+
+function SalesDetailModal({ type, onClose }: { type: 'cash' | 'consume'; onClose: () => void }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [loading, setLoading] = useState(true)
+  const [data, setData] = useState<{ sales: Array<Record<string, unknown>>; total: number } | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/kpi/daily-detail?date=${today}&type=${type}`)
+      .then(res => res.json())
+      .then(json => {
+        setData({ sales: json.sales || [], total: json.total ?? 0 })
+      })
+      .catch(() => setData({ sales: [], total: 0 }))
+      .finally(() => setLoading(false))
+  }, [type, today])
+
+  const formatTime = (createdAt: unknown) => {
+    if (!createdAt || typeof createdAt !== 'string') return '-'
+    try {
+      const d = new Date(createdAt)
+      return d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+    } catch {
+      return '-'
+    }
+  }
+
+  const getSaleTypeLabel = (st: unknown) => {
+    const s = String(st ?? '')
+    if (s === 'ticket_consume') return '回数券'
+    if (s === 'subscription_consume') return 'サブスク'
+    if (s === 'cash') return '現金'
+    if (s === 'card') return 'カード'
+    if (s === 'online') return 'オンライン'
+    if (s === 'loan') return 'ローン'
+    if (s === 'product') return '物販'
+    return s || '-'
+  }
+
+  const getPaymentLabel = (pm: unknown) => {
+    const s = String(pm ?? '')
+    if (s === 'cash') return '現金'
+    if (s === 'card') return 'カード'
+    if (s === 'online') return 'オンライン'
+    if (s === 'loan') return 'ローン'
+    return s || '-'
+  }
+
+  const title = type === 'cash' ? '本日の着金売上明細' : '本日の消化売上明細'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col card-shadow">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <h3 className="text-lg font-bold text-text-main">{title}</h3>
+          <button onClick={onClose} className="p-2 text-text-sub hover:text-text-main rounded-lg hover:bg-gray-100">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto p-4">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-8 h-8 text-rose animate-spin" />
+            </div>
+          ) : data && data.sales.length > 0 ? (
+            <>
+              <div className="overflow-x-auto">
+                {type === 'cash' ? (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-light-lav/50">
+                        <th className="text-left p-3 text-text-sub font-medium">顧客名</th>
+                        <th className="text-left p-3 text-text-sub font-medium">メニュー/商品名</th>
+                        <th className="text-left p-3 text-text-sub font-medium">種別</th>
+                        <th className="text-right p-3 text-text-sub font-medium">金額</th>
+                        <th className="text-left p-3 text-text-sub font-medium">支払方法</th>
+                        <th className="text-left p-3 text-text-sub font-medium">時間</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.sales.map((s, i) => (
+                        <tr key={String(s.id ?? i)} className={i % 2 === 0 ? 'bg-off-white' : 'bg-white'}>
+                          <td className="p-3 text-text-main">{String(s.customer_name ?? '-')}</td>
+                          <td className="p-3 text-text-main">{String(s.menu ?? '-')}</td>
+                          <td className="p-3 text-text-sub">{getSaleTypeLabel(s.sale_type)}</td>
+                          <td className="p-3 text-right font-medium">¥{Number(s.amount ?? 0).toLocaleString()}</td>
+                          <td className="p-3 text-text-sub">{getPaymentLabel(s.payment_method)}</td>
+                          <td className="p-3 text-text-sub">{formatTime(s.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-light-lav/50">
+                        <th className="text-left p-3 text-text-sub font-medium">顧客名</th>
+                        <th className="text-left p-3 text-text-sub font-medium">回数券/サブスク名</th>
+                        <th className="text-left p-3 text-text-sub font-medium">残回数</th>
+                        <th className="text-right p-3 text-text-sub font-medium">消化単価</th>
+                        <th className="text-left p-3 text-text-sub font-medium">時間</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.sales.map((s, i) => (
+                        <tr key={String(s.id ?? i)} className={i % 2 === 0 ? 'bg-off-white' : 'bg-white'}>
+                          <td className="p-3 text-text-main">{String(s.customer_name ?? '-')}</td>
+                          <td className="p-3 text-text-main">{String(s.menu ?? '-')}</td>
+                          <td className="p-3 text-text-sub">{s.remaining_sessions !== undefined && s.remaining_sessions !== '-' ? String(s.remaining_sessions) : '-'}</td>
+                          <td className="p-3 text-right font-medium">¥{Number(s.amount ?? 0).toLocaleString()}</td>
+                          <td className="p-3 text-text-sub">{formatTime(s.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div className="mt-4 pt-4 border-t-2 border-rose/20 flex justify-end">
+                <p className="text-lg font-bold text-rose">合計: ¥{data.total.toLocaleString()}</p>
+              </div>
+            </>
+          ) : (
+            <p className="text-center py-12 text-text-sub">本日の明細はありません</p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
