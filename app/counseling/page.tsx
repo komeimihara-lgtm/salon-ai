@@ -482,7 +482,7 @@ function CounselingContent() {
   const useSplitLayout = isChatStep
 
   return (
-    <div className={`bg-white flex flex-col h-[calc(100vh-128px)] ${useSplitLayout ? 'lg:flex-row lg:max-w-none -mx-4 lg:-mx-8 -mt-4 lg:-mt-8' : 'max-w-lg mx-auto'}`}>
+    <div className={`bg-white flex flex-col h-[calc(100vh-128px)] ${useSplitLayout ? 'lg:flex-row lg:max-w-none -mx-4 lg:-mx-8' : 'max-w-lg mx-auto'}`}>
       <header className="flex items-center h-14 px-4 border-b border-gray-100 shrink-0">
         <Link href="/dashboard" className="p-2 -ml-2 text-[#3D3D3D]">
           <BackIcon className="w-5 h-5" />
