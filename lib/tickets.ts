@@ -16,6 +16,7 @@ export interface TicketPlan {
   price: number
   unitPrice: number
   expiryDays: number | null
+  category: string
   isActive?: boolean
   createdAt?: string
 }
@@ -48,6 +49,7 @@ function mapRowToPlan(r: Record<string, unknown>): TicketPlan {
     price,
     unitPrice,
     expiryDays: r.expiryDays != null ? Number(r.expiryDays) : r.expiry_days != null ? Number(r.expiry_days) : null,
+    category: String(r.category ?? ''),
     isActive: Boolean(r.isActive ?? r.is_active ?? true),
     createdAt: r.createdAt != null ? String(r.createdAt) : r.created_at != null ? String(r.created_at) : undefined,
   }
@@ -74,6 +76,7 @@ export async function createTicketPlan(plan: {
   totalSessions: number
   price: number
   expiryDays?: number | null
+  category?: string
 }): Promise<TicketPlan> {
   const res = await fetch('/api/tickets', {
     method: 'POST',
@@ -84,6 +87,7 @@ export async function createTicketPlan(plan: {
       total_sessions: plan.totalSessions,
       price: plan.price,
       expiry_days: plan.expiryDays ?? null,
+      category: plan.category ?? '',
     }),
   })
   const json = await res.json()

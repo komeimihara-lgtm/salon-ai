@@ -7,6 +7,7 @@ import { fetchSubscriptionPlans, createSubscriptionPlan, deleteSubscriptionPlan,
 import {
   getMenus, setMenus, getCategories, setCategories,
   getTaxSettings, setTaxSettings, getCampaigns, setCampaigns,
+  DEFAULT_CATEGORIES,
   type MenuItem, type TaxSettings, type Campaign
 } from '@/lib/menus'
 
@@ -281,11 +282,13 @@ export default function MenuSettingsPage() {
   // コース・サブスク
   const [courseName, setCourseName] = useState('')
   const [courseMenuName, setCourseMenuName] = useState('')
+  const [courseCategory, setCourseCategory] = useState('')
   const [courseSessions, setCourseSessions] = useState(5)
   const [coursePrice, setCoursePrice] = useState(40000)
   const [courseExpiryDays, setCourseExpiryDays] = useState(180)
   const [subName, setSubName] = useState('')
   const [subMenuName, setSubMenuName] = useState('')
+  const [subCategory, setSubCategory] = useState('')
   const [subPrice, setSubPrice] = useState(8000)
   const [subSessions, setSubSessions] = useState(2)
   const [subBillingDay, setSubBillingDay] = useState(1)
@@ -302,15 +305,24 @@ export default function MenuSettingsPage() {
     setCampaignsState(getCampaigns())
     setCourseMenuName(m[0]?.name ?? '')
     setSubMenuName(m[0]?.name ?? '')
+    setCourseCategory(c[0] ?? '')
+    setSubCategory(c[0] ?? '')
     setTicketPlansLoading(true)
     setSubPlansLoading(true)
     fetchTicketPlans().then(p => { setTicketPlansState(p) }).catch(() => {}).finally(() => setTicketPlansLoading(false))
     fetchSubscriptionPlans().then(p => { setSubPlansState(p) }).catch(() => {}).finally(() => setSubPlansLoading(false))
   }, [])
 
+  const categoriesForFilter = categories.length > 0 ? categories : DEFAULT_CATEGORIES
   const filteredMenus = selectedCategory
     ? menus.filter(m => m.category === selectedCategory)
     : menus
+  const filteredTicketPlans = selectedCategory
+    ? ticketPlans.filter(p => (p.category || '') === selectedCategory)
+    : ticketPlans
+  const filteredSubPlans = selectedCategory
+    ? subPlans.filter(p => (p.category || '') === selectedCategory)
+    : subPlans
 
   const addMenu = () => {
     if (!newName.trim()) return
@@ -408,6 +420,7 @@ export default function MenuSettingsPage() {
         totalSessions: courseSessions,
         price: coursePrice,
         expiryDays: courseExpiryDays,
+        category: courseCategory || categories[0] || '',
       })
       setTicketPlansState(prev => [...prev, plan])
       setCourseName('')
@@ -425,6 +438,7 @@ export default function MenuSettingsPage() {
         price: subPrice,
         sessionsPerMonth: subSessions,
         billingDay: Math.min(28, Math.max(1, subBillingDay)),
+        category: subCategory || categories[0] || '',
       })
       setSubPlansState(prev => [...prev, plan])
       setSubName('')
@@ -472,11 +486,11 @@ export default function MenuSettingsPage() {
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden space-y-6">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
 
-          {/* 大分類 */}
+          {/* 大分類（カテゴリタブ） */}
           <div>
-            <h3 className="text-sm font-bold text-text-main mb-3">大分類</h3>
+            <h3 className="text-sm font-bold text-text-main mb-3">カテゴリ</h3>
             <div className="flex flex-wrap gap-2 mb-3">
-              {categories.map(cat => (
+              {categoriesForFilter.map(cat => (
                 <div key={cat} className="flex items-center gap-1 px-3 py-1.5 bg-light-lav rounded-lg">
                   <button
                     onClick={() => setSelectedCategory(cat)}
@@ -507,12 +521,12 @@ export default function MenuSettingsPage() {
             </div>
           </div>
 
-          {/* 小分類メニュー一覧 */}
+          {/* メニュー・回数券・サブスクをまとめて表示 */}
           <div>
             <h3 className="text-sm font-bold text-text-main mb-3">
-              小分類メニュー {selectedCategory ? `（${selectedCategory}）` : '（全て）'}
+              メニュー {selectedCategory ? `（${selectedCategory}）` : '（全て）'}
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-2 mb-4">
               {filteredMenus.map(m => (
                 <div key={m.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
                   {editingId === m.id ? (
@@ -553,6 +567,75 @@ export default function MenuSettingsPage() {
                   )}
                 </div>
               ))}
+            </div>
+
+            {/* 回数券（カテゴリで絞り込み） */}
+            <h3 className="text-sm font-bold text-text-main mb-3 mt-6">
+              回数券 {selectedCategory ? `（${selectedCategory}）` : '（全て）'}
+            </h3>
+            <div className="space-y-2 mb-4">
+              {filteredTicketPlans.length === 0 ? (
+                <p className="text-sm text-text-sub py-2">このカテゴリの回数券はありません</p>
+              ) : (
+                filteredTicketPlans.map(p => (
+                  <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
+                    <div>
+                      <p className="font-medium text-text-main">{p.name}</p>
+                      <p className="text-xs text-text-sub">
+                        {p.menuName} · {p.totalSessions}回 · ¥{p.price.toLocaleString()}
+                        {p.expiryDays ? ` · 有効${p.expiryDays}日` : ''}
+                      </p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!confirm('削除しますか？')) return
+                        try {
+                          await deleteTicketPlan(p.id)
+                          setTicketPlansState(prev => prev.filter(x => x.id !== p.id))
+                        } catch {
+                          alert('削除に失敗しました')
+                        }
+                      }}
+                      className="p-2 text-text-sub hover:text-red-600 rounded-lg"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* サブスク（カテゴリで絞り込み） */}
+            <h3 className="text-sm font-bold text-text-main mb-3 mt-6">
+              サブスク {selectedCategory ? `（${selectedCategory}）` : '（全て）'}
+            </h3>
+            <div className="space-y-2 mb-4">
+              {filteredSubPlans.length === 0 ? (
+                <p className="text-sm text-text-sub py-2">このカテゴリのサブスクはありません</p>
+              ) : (
+                filteredSubPlans.map(p => (
+                  <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
+                    <div>
+                      <p className="font-medium text-text-main">{p.name}</p>
+                      <p className="text-xs text-text-sub">¥{p.price.toLocaleString()}/月 · {p.menuName} {p.sessionsPerMonth}回 · 毎月{p.billingDay}日課金</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!confirm('削除しますか？')) return
+                        try {
+                          await deleteSubscriptionPlan(p.id)
+                          setSubPlansState(prev => prev.filter(x => x.id !== p.id))
+                        } catch {
+                          alert('削除に失敗しました')
+                        }
+                      }}
+                      className="p-2 text-text-sub hover:text-red-600 rounded-lg"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
 
             {/* メニュー追加フォーム */}
@@ -660,6 +743,10 @@ export default function MenuSettingsPage() {
               <div className="flex gap-2 flex-wrap border-t border-gray-100 pt-4">
                 <input type="text" value={courseName} onChange={e => setCourseName(e.target.value)}
                   placeholder="例: フェイシャル5回券" className="px-4 py-2 rounded-xl border border-gray-200 outline-none min-w-48 flex-1" />
+                <select value={courseCategory} onChange={e => setCourseCategory(e.target.value)}
+                  className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
+                  {(categories.length ? categories : DEFAULT_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
                 <select value={courseMenuName} onChange={e => setCourseMenuName(e.target.value)}
                   className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
                   {menus.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
@@ -718,6 +805,10 @@ export default function MenuSettingsPage() {
           <div className="flex gap-2 flex-wrap border-t border-gray-100 pt-4">
             <input type="text" value={subName} onChange={e => setSubName(e.target.value)}
               placeholder="例: 月額プレミアム" className="px-4 py-2 rounded-xl border border-gray-200 outline-none min-w-48 flex-1" />
+            <select value={subCategory} onChange={e => setSubCategory(e.target.value)}
+              className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
+              {(categories.length ? categories : DEFAULT_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
             <select value={subMenuName} onChange={e => setSubMenuName(e.target.value)}
               className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
               {menus.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}

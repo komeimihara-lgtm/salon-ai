@@ -9,6 +9,7 @@ function toSubscriptionPlan(row: Record<string, unknown>) {
     price: Number(row.price ?? 0),
     sessionsPerMonth: Number(row.sessions_per_month ?? 0),
     billingDay: Number(row.billing_day ?? 1),
+    category: String(row.category ?? ''),
     isActive: row.is_active !== false,
     createdAt: row.created_at,
   }
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
     const resolvedSalonId = salonIdParam || getSalonId()
     let query = getSupabaseAdmin()
       .from('subscription_plans')
-      .select('id, name, menu_name, price, sessions_per_month, billing_day, is_active, created_at')
+      .select('id, name, menu_name, price, sessions_per_month, billing_day, category, is_active, created_at')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
     if (salonIdParam) {
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     if (plans.length === 0) {
       const { data: fallback } = await getSupabaseAdmin()
         .from('subscription_plans')
-        .select('id, name, menu_name, price, sessions_per_month, billing_day, is_active, created_at')
+        .select('id, name, menu_name, price, sessions_per_month, billing_day, category, is_active, created_at')
         .eq('is_active', true)
         .order('created_at', { ascending: false })
       plans = (fallback || []).map((r: Record<string, unknown>) => toSubscriptionPlan(r))
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { name, menu_name, price, sessions_per_month, billing_day } = body
+    const { name, menu_name, price, sessions_per_month, billing_day, category } = body
 
     if (!name || !menu_name || price == null || sessions_per_month == null) {
       return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
@@ -65,6 +66,7 @@ export async function POST(req: NextRequest) {
         price: Number(price),
         sessions_per_month: Number(sessions_per_month),
         billing_day: Math.min(28, Math.max(1, Number(billing_day) || 1)),
+        category: category ?? '',
         is_active: true,
       })
       .select()

@@ -14,6 +14,7 @@ export interface SubscriptionPlan {
   sessionsPerMonth: number
   menuName: string
   billingDay: number
+  category: string
 }
 
 function mapRowToPlan(r: Record<string, unknown>): SubscriptionPlan {
@@ -24,6 +25,7 @@ function mapRowToPlan(r: Record<string, unknown>): SubscriptionPlan {
     sessionsPerMonth: Number(r.sessionsPerMonth ?? r.sessions_per_month ?? 0),
     menuName: String(r.menuName ?? r.menu_name ?? ''),
     billingDay: Number(r.billingDay ?? r.billing_day ?? 1),
+    category: String(r.category ?? ''),
   }
 }
 
@@ -49,6 +51,7 @@ export async function createSubscriptionPlan(plan: {
   price: number
   sessionsPerMonth: number
   billingDay?: number
+  category?: string
 }): Promise<SubscriptionPlan> {
   const res = await fetch('/api/subscription-plans', {
     method: 'POST',
@@ -59,6 +62,7 @@ export async function createSubscriptionPlan(plan: {
       price: plan.price,
       sessions_per_month: plan.sessionsPerMonth,
       billing_day: plan.billingDay ?? 1,
+      category: plan.category ?? '',
     }),
   })
   const json = await res.json()
@@ -89,8 +93,8 @@ export interface CustomerSubscription {
 }
 
 const DEFAULT_PLANS: SubscriptionPlan[] = [
-  { id: '1', name: '月額プレミアム', price: 8000, sessionsPerMonth: 2, menuName: 'フェイシャル', billingDay: 1 },
-  { id: '2', name: '月額ベーシック', price: 5000, sessionsPerMonth: 1, menuName: 'フェイシャル', billingDay: 1 },
+  { id: '1', name: '月額プレミアム', price: 8000, sessionsPerMonth: 2, menuName: 'フェイシャル', billingDay: 1, category: 'フェイシャル' },
+  { id: '2', name: '月額ベーシック', price: 5000, sessionsPerMonth: 1, menuName: 'フェイシャル', billingDay: 1, category: 'フェイシャル' },
 ]
 
 // ========== プラン定義（Supabase API・後方互換のためgetSubscriptionPlansは非推奨） ==========

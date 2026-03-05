@@ -12,6 +12,7 @@ function toTicketPlan(row: Record<string, unknown>) {
     price,
     unitPrice: row.unit_price != null ? Number(row.unit_price) : (totalSessions > 0 ? Math.round(price / totalSessions) : 0),
     expiryDays: row.expiry_days,
+    category: String(row.category ?? ''),
     isActive: row.is_active,
     createdAt: row.created_at,
   }
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     const resolvedSalonId = salonIdParam || getSalonId()
     let query = getSupabaseAdmin()
       .from('ticket_plans')
-      .select('id, name, menu_name, total_sessions, price, unit_price, expiry_days, is_active, created_at')
+      .select('id, name, menu_name, total_sessions, price, unit_price, expiry_days, category, is_active, created_at')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
     if (salonIdParam) {
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
     if (plans.length === 0) {
       const { data: fallback } = await getSupabaseAdmin()
         .from('ticket_plans')
-        .select('id, name, menu_name, total_sessions, price, unit_price, expiry_days, is_active, created_at')
+        .select('id, name, menu_name, total_sessions, price, unit_price, expiry_days, category, is_active, created_at')
         .eq('is_active', true)
         .order('created_at', { ascending: false })
       plans = (fallback || []).map((r: Record<string, unknown>) => toTicketPlan(r))
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { name, menu_name, total_sessions, price, expiry_days } = body
+    const { name, menu_name, total_sessions, price, expiry_days, category } = body
 
     if (!name || !menu_name || total_sessions == null || price == null) {
       return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
@@ -73,6 +74,7 @@ export async function POST(req: NextRequest) {
         price,
         unit_price: unitPrice,
         expiry_days: expiry_days ?? null,
+        category: category ?? '',
         is_active: true,
       })
       .select()

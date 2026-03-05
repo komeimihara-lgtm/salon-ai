@@ -23,6 +23,7 @@ import {
   type CustomerTicket,
   type TicketPlan,
 } from '@/lib/tickets'
+import { getCategories, DEFAULT_CATEGORIES } from '@/lib/menus'
 import {
   fetchCustomerSubscriptions,
   fetchSubscriptionPlans,
@@ -60,6 +61,8 @@ export default function CustomerDetailPage() {
   const [selectedSubPlan, setSelectedSubPlan] = useState<Awaited<ReturnType<typeof fetchSubscriptionPlans>>[0] | null>(null)
   const [subUseTarget, setSubUseTarget] = useState<CustomerSubscription | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [ticketModalCategory, setTicketModalCategory] = useState('')
+  const [subModalCategory, setSubModalCategory] = useState('')
 
   const refresh = useCallback(async () => {
     if (!id) return
@@ -102,6 +105,16 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     if (customer) refresh()
   }, [customer, refresh])
+
+  const ticketCategories = getCategories()
+  const categoriesForTicket = ticketCategories.length ? ticketCategories : DEFAULT_CATEGORIES
+  const categoriesForSub = ticketCategories.length ? ticketCategories : DEFAULT_CATEGORIES
+  const filteredPacksForModal = ticketModalCategory
+    ? packs.filter(p => (p.category || '') === ticketModalCategory)
+    : packs
+  const filteredSubPlansForModal = subModalCategory
+    ? subPlans.filter(p => (p.category || '') === subModalCategory)
+    : subPlans
 
   const handlePurchase = async () => {
     if (!selectedPack || !customer) return
@@ -332,8 +345,25 @@ export default function CustomerDetailPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
-              {packs.map(p => (
+            <div className="flex flex-wrap gap-1 mb-3">
+              <button
+                onClick={() => setTicketModalCategory('')}
+                className={`px-2 py-1 rounded-lg text-xs font-medium ${!ticketModalCategory ? 'bg-rose text-white' : 'bg-gray-100 text-text-sub'}`}
+              >
+                全て
+              </button>
+              {categoriesForTicket.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setTicketModalCategory(cat)}
+                  className={`px-2 py-1 rounded-lg text-xs font-medium ${ticketModalCategory === cat ? 'bg-rose text-white' : 'bg-gray-100 text-text-sub'}`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+              {filteredPacksForModal.map(p => (
                 <button
                   key={p.id}
                   onClick={() => setSelectedPack(p)}
@@ -378,8 +408,25 @@ export default function CustomerDetailPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
-              {subPlans.map(p => (
+            <div className="flex flex-wrap gap-1 mb-3">
+              <button
+                onClick={() => setSubModalCategory('')}
+                className={`px-2 py-1 rounded-lg text-xs font-medium ${!subModalCategory ? 'bg-rose text-white' : 'bg-gray-100 text-text-sub'}`}
+              >
+                全て
+              </button>
+              {categoriesForSub.map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setSubModalCategory(cat)}
+                  className={`px-2 py-1 rounded-lg text-xs font-medium ${subModalCategory === cat ? 'bg-rose text-white' : 'bg-gray-100 text-text-sub'}`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+              {filteredSubPlansForModal.map(p => (
                 <button
                   key={p.id}
                   onClick={() => setSelectedSubPlan(p)}

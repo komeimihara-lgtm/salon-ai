@@ -114,6 +114,12 @@ export default function SalesPage() {
   useEffect(() => { setLoading(true); fetchSales() }, [fetchSales])
 
   const filteredMenus = selectedCategory ? menus.filter(m => m.category === selectedCategory) : menus
+  const filteredTicketPlans = selectedCategory
+    ? ticketPlans.filter(p => (p.category || '') === selectedCategory)
+    : ticketPlans
+  const filteredSubPlans = selectedCategory
+    ? subPlans.filter(p => (p.category || '') === selectedCategory)
+    : subPlans
 
   const handleTicketPurchase = async (plan: TicketPlan) => {
     if (!selectedCustomer) {
@@ -281,7 +287,7 @@ export default function SalesPage() {
                 ))}
               </div>
               <h3 className="text-sm font-bold text-text-main mb-3">メニュー</h3>
-              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                 {filteredMenus.map(m => (
                   <button key={m.id} onClick={() => addToCart(m)}
                     className="p-3 rounded-xl border border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all">
@@ -292,8 +298,8 @@ export default function SalesPage() {
                 ))}
               </div>
               <h3 className="text-sm font-bold text-text-main mb-2 mt-4">回数券</h3>
-              <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
-                {ticketPlans.map(p => (
+              <div className="grid grid-cols-2 gap-2 max-h-28 overflow-y-auto">
+                {filteredTicketPlans.map(p => (
                   <button
                     key={p.id}
                     onClick={() => handleTicketPurchase(p)}
@@ -305,13 +311,13 @@ export default function SalesPage() {
                     <p className="text-xs text-text-sub">{p.totalSessions}回</p>
                   </button>
                 ))}
-                {ticketPlans.length === 0 && (
-                  <p className="col-span-2 text-xs text-text-sub py-2">メニュー設定で回数券を登録してください</p>
+                {filteredTicketPlans.length === 0 && (
+                  <p className="col-span-2 text-xs text-text-sub py-2">このカテゴリの回数券はありません（顧客選択後に購入可能）</p>
                 )}
               </div>
               <h3 className="text-sm font-bold text-text-main mb-2 mt-4">サブスク</h3>
-              <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
-                {subPlans.map(p => (
+              <div className="grid grid-cols-2 gap-2 max-h-28 overflow-y-auto">
+                {filteredSubPlans.map(p => (
                   <button
                     key={p.id}
                     onClick={() => handleSubPurchase(p)}
@@ -323,8 +329,8 @@ export default function SalesPage() {
                     <p className="text-xs text-text-sub">{p.sessionsPerMonth}回/月</p>
                   </button>
                 ))}
-                {subPlans.length === 0 && (
-                  <p className="col-span-2 text-xs text-text-sub py-2">メニュー設定でサブスクを登録してください</p>
+                {filteredSubPlans.length === 0 && (
+                  <p className="col-span-2 text-xs text-text-sub py-2">このカテゴリのサブスクはありません（顧客選択後に加入可能）</p>
                 )}
               </div>
             </div>
