@@ -22,14 +22,14 @@ import {
 } from '@/lib/dashboard-reservations'
 import { getSalonSettings } from '@/lib/salon-settings'
 import {
-  getExpiringSoon,
-  getExpired,
-  getCustomerCourses,
+  fetchExpiringSoon,
+  fetchExpired,
+  fetchCustomerCourses,
   consumeCourse,
   isExpired,
 } from '@/lib/courses'
 import {
-  getCustomerSubscriptions,
+  fetchCustomerSubscriptions,
   useSubscriptionSession,
   ensureBillingPeriodCurrent,
   getRemainingSessions,
@@ -118,26 +118,26 @@ export default function DashboardPage() {
     setMenus(loadMenus().map(m => ({ id: m.id, name: m.name })))
     setStaff(s.staff.map(x => ({ name: x.name })))
     setBeds(s.beds.length > 0 ? s.beds : ['A', 'B'])
-    const expiring = getExpiringSoon(14)
-    const expired = getExpired()
-    const alerts: { id: string; type: string; text: string; action: string }[] = []
-    if (expired.length > 0) {
-      alerts.push({
-        id: 'course-expired',
-        type: 'alert',
-        text: `${expired.length}件のコースが期限切れ（残り回数あり）`,
-        action: '確認する',
-      })
-    }
-    if (expiring.length > 0 && alerts.length === 0) {
-      alerts.push({
-        id: 'course-expiring',
-        type: 'alert',
-        text: `${expiring.length}件のコースが14日以内に期限`,
-        action: '確認する',
-      })
-    }
-    setCourseAlerts(alerts)
+    Promise.all([fetchExpiringSoon(14), fetchExpired()]).then(([expiring, expired]) => {
+      const alerts: { id: string; type: string; text: string; action: string }[] = []
+      if (expired.length > 0) {
+        alerts.push({
+          id: 'course-expired',
+          type: 'alert',
+          text: `${expired.length}件のコースが期限切れ（残り回数あり）`,
+          action: '確認する',
+        })
+      }
+      if (expiring.length > 0 && alerts.length === 0) {
+        alerts.push({
+          id: 'course-expiring',
+          type: 'alert',
+          text: `${expiring.length}件のコースが14日以内に期限`,
+          action: '確認する',
+        })
+      }
+      setCourseAlerts(alerts)
+    })
   }, [])
 
   const toggleTaskDone = (id: string) => {
@@ -660,34 +660,49 @@ function ReservationDetailContent({
   onRemove: () => void
   onConsumed: () => void
 }) {
-  const allCourses = getCustomerCourses()
-  const matchingCourse = allCourses.find(
-    c =>
-      c.customerName === reservation.name &&
-      c.menuName === reservation.menu &&
-      c.remainingSessions > 0 &&
-      !isExpired(c)
-  )
+  const [matchingCourse, setMatchingCourse] = useState<import('@/lib/courses').CustomerCourse | null>(null)
+  const [matchingSub, setMatchingSub] = useState<import('@/lib/subscriptions').CustomerSubscription | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  const allSubs = getCustomerSubscriptions()
-    .filter(s => s.status === 'active')
-    .map(s => ensureBillingPeriodCurrent(s))
-  const matchingSub = allSubs.find(
-    s =>
-      s.customerName === reservation.name &&
-      s.menuName === reservation.menu &&
-      getRemainingSessions(s) > 0
-  )
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    Promise.all([fetchCustomerCourses(), fetchCustomerSubscriptions()])
+      .then(([courses, subs]) => {
+        if (cancelled) return
+        const course = courses.find(
+          c =>
+            c.customerName === reservation.name &&
+            c.menuName === reservation.menu &&
+            c.remainingSessions > 0 &&
+            !isExpired(c)
+        )
+        const activeSubs = subs
+          .filter(s => s.status === 'active')
+          .map(s => ensureBillingPeriodCurrent(s))
+        const sub = activeSubs.find(
+          s =>
+            s.customerName === reservation.name &&
+            s.menuName === reservation.menu &&
+            getRemainingSessions(s) > 0
+        )
+        setMatchingCourse(course ?? null)
+        setMatchingSub(sub ?? null)
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [reservation.name, reservation.menu])
 
-  const handleConsume = () => {
+  const handleConsume = async () => {
     if (!matchingCourse) return
-    consumeCourse(matchingCourse.id)
+    await consumeCourse(matchingCourse.id)
     onConsumed()
   }
 
-  const handleSubUse = () => {
+  const handleSubUse = async () => {
     if (!matchingSub) return
-    useSubscriptionSession(matchingSub.id)
+    await useSubscriptionSession(matchingSub.id)
     onConsumed()
   }
 
@@ -702,21 +717,27 @@ function ReservationDetailContent({
       <p><span className="text-text-sub text-sm">メニュー</span> {reservation.menu}</p>
       <p><span className="text-text-sub text-sm">担当</span> {reservation.staff}</p>
       <p><span className="text-text-sub text-sm">時間</span> {reservation.time} ベッド{reservation.bed}</p>
-      {matchingCourse && (
-        <button
-          onClick={handleConsume}
-          className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium"
-        >
-          回数券で1回消化（{matchingCourse.courseName} 残{matchingCourse.remainingSessions}回）
-        </button>
-      )}
-      {matchingSub && (
-        <button
-          onClick={handleSubUse}
-          className="w-full py-2.5 rounded-xl bg-lavender text-white font-medium"
-        >
-          サブスクで1回利用（{matchingSub.planName} 残{getRemainingSessions(matchingSub)}回）
-        </button>
+      {loading ? (
+        <p className="text-sm text-text-sub">回数券・サブスクを確認中...</p>
+      ) : (
+        <>
+          {matchingCourse && (
+            <button
+              onClick={handleConsume}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium"
+            >
+              回数券で1回消化（{matchingCourse.courseName} 残{matchingCourse.remainingSessions}回）
+            </button>
+          )}
+          {matchingSub && (
+            <button
+              onClick={handleSubUse}
+              className="w-full py-2.5 rounded-xl bg-lavender text-white font-medium"
+            >
+              サブスクで1回利用（{matchingSub.planName} 残{getRemainingSessions(matchingSub)}回）
+            </button>
+          )}
+        </>
       )}
       <button
         onClick={onRemove}

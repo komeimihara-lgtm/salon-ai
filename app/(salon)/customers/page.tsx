@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { Customer } from '@/types'
 import {
-  getCoursesByCustomer,
+  fetchCustomerCourses,
   getCoursePacks,
   addCustomerCourse,
   consumeCourse,
@@ -17,7 +17,7 @@ import {
   type CustomerCourse,
 } from '@/lib/courses'
 import {
-  getSubscriptionsByCustomer,
+  fetchCustomerSubscriptions,
   getSubscriptionPlans,
   addCustomerSubscription,
   useSubscriptionSession,
@@ -68,10 +68,14 @@ function CustomerDetailModal({
   const [selectedSubPlan, setSelectedSubPlan] = useState<ReturnType<typeof getSubscriptionPlans>[0] | null>(null)
   const [subUseTarget, setSubUseTarget] = useState<CustomerSubscription | null>(null)
 
-  const refresh = useCallback(() => {
-    setCourses(getCoursesByCustomer(customer.id))
+  const refresh = useCallback(async () => {
+    const [coursesData, subsData] = await Promise.all([
+      fetchCustomerCourses(customer.id),
+      fetchCustomerSubscriptions(customer.id),
+    ])
+    setCourses(coursesData)
+    setSubs(subsData.map(s => ensureBillingPeriodCurrent(s)))
     setPacks(getCoursePacks())
-    setSubs(getSubscriptionsByCustomer(customer.id).map(s => ensureBillingPeriodCurrent(s)))
     setSubPlans(getSubscriptionPlans())
     onCourseUpdated?.()
   }, [customer.id, onCourseUpdated])
@@ -87,31 +91,39 @@ function CustomerDetailModal({
     }
   }, [refresh])
 
-  const handlePurchase = () => {
+  const handlePurchase = async () => {
     if (!selectedPack) return
-    addCustomerCourse(customer.id, customer.name, selectedPack)
-    refresh()
-    setPurchaseOpen(false)
-    setSelectedPack(null)
+    try {
+      await addCustomerCourse(customer.id, customer.name, selectedPack)
+      refresh()
+      setPurchaseOpen(false)
+      setSelectedPack(null)
+    } catch (e) {
+      alert('登録に失敗しました')
+    }
   }
 
-  const handleConsume = (c: CustomerCourse) => {
-    consumeCourse(c.id)
-    refresh()
+  const handleConsume = async (c: CustomerCourse) => {
+    const ok = await consumeCourse(c.id)
+    if (ok) refresh()
     setConsumeTarget(null)
   }
 
-  const handleSubJoin = () => {
+  const handleSubJoin = async () => {
     if (!selectedSubPlan) return
-    addCustomerSubscription(customer.id, customer.name, selectedSubPlan)
-    refresh()
-    setSubPurchaseOpen(false)
-    setSelectedSubPlan(null)
+    try {
+      await addCustomerSubscription(customer.id, customer.name, selectedSubPlan)
+      refresh()
+      setSubPurchaseOpen(false)
+      setSelectedSubPlan(null)
+    } catch (e) {
+      alert('登録に失敗しました')
+    }
   }
 
-  const handleSubUse = (s: CustomerSubscription) => {
-    useSubscriptionSession(s.id)
-    refresh()
+  const handleSubUse = async (s: CustomerSubscription) => {
+    const ok = await useSubscriptionSession(s.id)
+    if (ok) refresh()
     setSubUseTarget(null)
   }
 

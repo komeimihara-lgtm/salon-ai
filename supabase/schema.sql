@@ -167,3 +167,60 @@ CREATE TABLE IF NOT EXISTS counseling_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_counseling_sessions_salon_id ON counseling_sessions(salon_id);
+
+-- ============================================================
+-- 顧客の回数券・サブスク・クーポン（メニュー設定と紐づけ）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS customer_courses (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
+  customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  customer_name TEXT NOT NULL,
+  course_pack_id TEXT NOT NULL,
+  course_name TEXT NOT NULL,
+  menu_name TEXT NOT NULL,
+  total_sessions INTEGER NOT NULL,
+  remaining_sessions INTEGER NOT NULL,
+  purchased_at DATE NOT NULL,
+  expiry_date DATE NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS customer_subscriptions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
+  customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  customer_name TEXT NOT NULL,
+  plan_id TEXT NOT NULL,
+  plan_name TEXT NOT NULL,
+  menu_name TEXT NOT NULL,
+  price INTEGER NOT NULL,
+  sessions_per_month INTEGER NOT NULL,
+  started_at DATE NOT NULL,
+  next_billing_date DATE NOT NULL,
+  sessions_used_in_period INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'paused', 'cancelled')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS customer_coupons (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
+  customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  coupon_id TEXT NOT NULL,
+  coupon_name TEXT NOT NULL,
+  discount_type TEXT NOT NULL CHECK (discount_type IN ('percent', 'amount')),
+  discount_value INTEGER NOT NULL,
+  target_menu TEXT,
+  obtained_at DATE NOT NULL,
+  used_at DATE,
+  expiry_date DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_courses_customer_id ON customer_courses(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_courses_salon_id ON customer_courses(salon_id);
+CREATE INDEX IF NOT EXISTS idx_customer_subscriptions_customer_id ON customer_subscriptions(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_subscriptions_salon_id ON customer_subscriptions(salon_id);
+CREATE INDEX IF NOT EXISTS idx_customer_coupons_customer_id ON customer_coupons(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_coupons_salon_id ON customer_coupons(salon_id);

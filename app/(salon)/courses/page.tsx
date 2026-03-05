@@ -14,12 +14,11 @@ import {
 } from 'lucide-react'
 import {
   getCoursePacks,
-  getCustomerCourses,
-  setCustomerCourses,
+  fetchCustomerCourses,
   addCustomerCourse,
   consumeCourse,
-  getExpiringSoon,
-  getExpired,
+  fetchExpiringSoon,
+  fetchExpired,
   isExpired,
   daysUntilExpiry,
   type CustomerCourse,
@@ -31,14 +30,21 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState<CustomerCourse[]>([])
   const [packs, setPacks] = useState<CoursePack[]>([])
   const [expiringSoon, setExpiringSoon] = useState<CustomerCourse[]>([])
+  const [expiredCount, setExpiredCount] = useState(0)
   const [filter, setFilter] = useState<'all' | 'active' | 'expiring'>('all')
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false)
   const [consumeModalOpen, setConsumeModalOpen] = useState<CustomerCourse | null>(null)
 
-  const refresh = useCallback(() => {
-    setCourses(getCustomerCourses())
+  const refresh = useCallback(async () => {
+    const [coursesData, expiringData, expiredData] = await Promise.all([
+      fetchCustomerCourses(),
+      fetchExpiringSoon(30),
+      fetchExpired(),
+    ])
+    setCourses(coursesData)
+    setExpiringSoon(expiringData)
+    setExpiredCount(expiredData.length)
     setPacks(getCoursePacks())
-    setExpiringSoon(getExpiringSoon(30))
   }, [])
 
   useEffect(() => {
@@ -58,8 +64,6 @@ export default function CoursesPage() {
       : filter === 'active'
         ? courses.filter(c => c.remainingSessions > 0 && !isExpired(c))
         : courses
-
-  const expiredCount = getExpired().length
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -241,8 +245,8 @@ export default function CoursesPage() {
                 キャンセル
               </button>
               <button
-                onClick={() => {
-                  consumeCourse(consumeModalOpen.id)
+                onClick={async () => {
+                  await consumeCourse(consumeModalOpen.id)
                   refresh()
                   setConsumeModalOpen(null)
                 }}
@@ -322,13 +326,21 @@ function PurchaseModal({
     setStep('course')
   }
 
-  const handlePurchase = () => {
+  const handlePurchase = async () => {
     if (!selectedPack) return
-    const cid = selectedCustomer?.id ?? (customerId || `local-${Date.now()}`)
+    const cid = selectedCustomer?.id ?? customerId
     const cname = selectedCustomer?.name ?? (customerName.trim() || '未登録顧客')
-    addCustomerCourse(cid, cname, selectedPack)
-    onSaved()
-    onClose()
+    if (cid?.startsWith('local-')) {
+      alert('顧客一覧から顧客を選択するか、先に顧客を登録してください')
+      return
+    }
+    try {
+      await addCustomerCourse(cid, cname, selectedPack)
+      onSaved()
+      onClose()
+    } catch (e) {
+      alert('登録に失敗しました')
+    }
   }
 
   return (

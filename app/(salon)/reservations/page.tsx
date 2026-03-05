@@ -7,9 +7,9 @@ import {
   User, Check, X, AlertCircle, Loader2, Phone
 } from 'lucide-react'
 import { Reservation, Customer } from '@/types'
-import { getCustomerCourses, consumeCourse, isExpired } from '@/lib/courses'
+import { fetchCustomerCourses, consumeCourse, isExpired } from '@/lib/courses'
 import {
-  getCustomerSubscriptions,
+  fetchCustomerSubscriptions,
   useSubscriptionSession,
   ensureBillingPeriodCurrent,
   getRemainingSessions,
@@ -398,8 +398,14 @@ export default function ReservationsPage() {
         const customerName = reservation.customer_name
         const menu = reservation.menu
 
-        // 回数券: 顧客・メニューが一致する有効なコースを1回消化
-        const allCourses = getCustomerCourses()
+        const [allCourses, allSubsRaw] = await Promise.all([
+          fetchCustomerCourses(customerId || undefined),
+          fetchCustomerSubscriptions(customerId || undefined),
+        ])
+        const allSubs = allSubsRaw
+          .filter(s => s.status === 'active')
+          .map(s => ensureBillingPeriodCurrent(s))
+
         const matchingCourse = allCourses.find(
           c =>
             (c.customerId === customerId || c.customerName === customerName) &&
@@ -408,12 +414,8 @@ export default function ReservationsPage() {
             !isExpired(c)
         )
         if (matchingCourse) {
-          consumeCourse(matchingCourse.id)
+          await consumeCourse(matchingCourse.id)
         } else {
-          // サブスク: 回数券がなければ、一致するサブスクを1回利用
-          const allSubs = getCustomerSubscriptions()
-            .filter(s => s.status === 'active')
-            .map(s => ensureBillingPeriodCurrent(s))
           const matchingSub = allSubs.find(
             s =>
               (s.customerId === customerId || s.customerName === customerName) &&
@@ -421,7 +423,7 @@ export default function ReservationsPage() {
               getRemainingSessions(s) > 0
           )
           if (matchingSub) {
-            useSubscriptionSession(matchingSub.id)
+            await useSubscriptionSession(matchingSub.id)
           }
         }
       }
