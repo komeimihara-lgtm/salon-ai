@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
         concerns: body.concerns || null,
         allergies: body.allergies || null,
         memo: body.memo || null,
-        status: 'active',
+        status: body.status === 'temporary' ? 'temporary' : 'active',
         imported_from: body.imported_from || 'manual',
       })
       .select()

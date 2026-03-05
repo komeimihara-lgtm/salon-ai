@@ -36,6 +36,7 @@ function StatusBadge({ status }: { status: Customer['status'] }) {
     active: { label: 'アクティブ', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
     lost: { label: '失客', color: 'bg-red-500/20 text-red-600 border-red-500/30' },
     vip: { label: 'VIP', color: 'bg-amber-500/20 text-[#0891B2] border-amber-500/30' },
+    temporary: { label: '仮登録', color: 'bg-sky-500/20 text-sky-600 border-sky-500/30' },
   }
   const { label, color } = map[status]
   return (

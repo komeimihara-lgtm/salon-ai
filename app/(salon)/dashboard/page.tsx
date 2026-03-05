@@ -17,6 +17,7 @@ import {
 import type { Reservation } from '@/types'
 import ReservationActionCard from '@/components/ReservationActionCard'
 import { RescheduleModal, EditReservationModal } from '@/components/ReservationModals'
+import ReservationFormModal from '@/components/ReservationFormModal'
 import { useReservations } from '@/hooks/useReservations'
 import { useTodayShifts } from '@/lib/staff-shifts'
 import { getManualTasks, setManualTasks, type ManualTask } from '@/lib/dashboard-tasks'
@@ -75,6 +76,7 @@ export default function DashboardPage() {
   const [rescheduleTarget, setRescheduleTarget] = useState<Reservation | null>(null)
   const [editTarget, setEditTarget] = useState<Reservation | null>(null)
   const [detailModal, setDetailModal] = useState<'cash' | 'consume' | null>(null)
+  const [newReservationSlot, setNewReservationSlot] = useState<{ date: string; start: string; end: string } | null>(null)
 
   useEffect(() => {
     const s = getSalonSettings()
@@ -428,8 +430,27 @@ export default function DashboardPage() {
                 今日の予約
               </div>
               <div className="col-span-20 flex relative min-h-[60px]">
+                {/* 空き枠クリック用グリッド（各30分枠） */}
+                {!reservationsLoading && Array.from({ length: 20 }, (_, i) => {
+                  const h = 10 + Math.floor(i / 2)
+                  const m = (i % 2) * 30
+                  const startTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+                  const endH = m === 30 ? h + 1 : h
+                  const endM = m === 30 ? 0 : 30
+                  const endTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`
+                  return (
+                    <button
+                      key={`slot-${i}`}
+                      type="button"
+                      onClick={() => setNewReservationSlot({ date: today, start: startTime, end: endTime })}
+                      className="absolute top-0 bottom-0 hover:bg-rose/5 transition-colors cursor-pointer z-0"
+                      style={{ left: `${i * 5}%`, width: '5%' }}
+                      title={`${startTime}〜 予約を追加`}
+                    />
+                  )
+                })}
                 {reservationsLoading ? (
-                  <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="absolute inset-0 flex items-center justify-center z-10">
                     <Loader2 className="w-5 h-5 text-rose animate-spin" />
                   </div>
                 ) : (
@@ -640,6 +661,15 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {newReservationSlot && (
+        <ReservationFormModal
+          defaultDate={newReservationSlot.date}
+          defaultStartTime={newReservationSlot.start}
+          defaultEndTime={newReservationSlot.end}
+          onClose={() => setNewReservationSlot(null)}
+          onSaved={() => { refresh(); setNewReservationSlot(null) }}
+        />
+      )}
       {rescheduleTarget && (
         <RescheduleModal
           reservation={rescheduleTarget}

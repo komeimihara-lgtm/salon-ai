@@ -52,7 +52,7 @@ export interface Customer {
   allergies?: string
   memo?: string
   line_user_id?: string
-  status: 'active' | 'lost' | 'vip'
+  status: 'active' | 'lost' | 'vip' | 'temporary'
   imported_from?: string
   created_at: string
   updated_at: string
