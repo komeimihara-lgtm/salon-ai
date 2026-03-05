@@ -30,8 +30,8 @@ function mapRowToPlan(r: Record<string, unknown>): SubscriptionPlan {
 }
 
 /** APIからサブスクプランを取得 */
-export async function fetchSubscriptionPlans(): Promise<SubscriptionPlan[]> {
-  const salonId = getSalonId()
+export async function fetchSubscriptionPlans(salonIdOverride?: string): Promise<SubscriptionPlan[]> {
+  const salonId = salonIdOverride ?? getSalonId()
   const url = `/api/subscription-plans?salon_id=${encodeURIComponent(salonId)}`
   const res = await fetch(url)
   const json = await res.json()

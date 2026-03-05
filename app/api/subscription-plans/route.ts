@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
+import { getSupabaseAdmin, getSalonId, DEMO_SALON_ID } from '@/lib/supabase'
 
 function toSubscriptionPlan(row: Record<string, unknown>) {
   return {
@@ -33,6 +33,15 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query
     if (error) throw error
     let plans = (data || []).map((r: Record<string, unknown>) => toSubscriptionPlan(r))
+    if (plans.length === 0 && resolvedSalonId !== DEMO_SALON_ID) {
+      const { data: demoData } = await getSupabaseAdmin()
+        .from('subscription_plans')
+        .select('id, name, menu_name, price, sessions_per_month, billing_day, category, is_active, created_at')
+        .eq('salon_id', DEMO_SALON_ID)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+      plans = (demoData || []).map((r: Record<string, unknown>) => toSubscriptionPlan(r))
+    }
     if (plans.length === 0) {
       const { data: fallback } = await getSupabaseAdmin()
         .from('subscription_plans')

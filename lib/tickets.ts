@@ -55,8 +55,8 @@ function mapRowToPlan(r: Record<string, unknown>): TicketPlan {
   }
 }
 
-export async function fetchTicketPlans(): Promise<TicketPlan[]> {
-  const salonId = getSalonId()
+export async function fetchTicketPlans(salonIdOverride?: string): Promise<TicketPlan[]> {
+  const salonId = salonIdOverride ?? getSalonId()
   const url = `/api/tickets?salon_id=${encodeURIComponent(salonId)}`
   const res = await fetch(url)
   const json = await res.json()

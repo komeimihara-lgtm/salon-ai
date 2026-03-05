@@ -13,6 +13,7 @@ import {
   Minus,
   Repeat,
 } from 'lucide-react'
+import { DEMO_SALON_ID } from '@/lib/supabase'
 import {
   fetchCustomerTickets,
   fetchTicketPlans,
@@ -68,22 +69,20 @@ export default function CustomerDetailPage() {
     if (!id) return
     setTicketsLoading(true)
     try {
-      const [ticketsData, packsData, subsData, plansData] = await Promise.all([
+      const [ticketsResult, packsResult, subsResult, plansResult] = await Promise.allSettled([
         fetchCustomerTickets(id),
-        fetchTicketPlans(),
+        fetchTicketPlans(DEMO_SALON_ID),
         fetchCustomerSubscriptions(id),
-        fetchSubscriptionPlans(),
+        fetchSubscriptionPlans(DEMO_SALON_ID),
       ])
-      setTickets(ticketsData)
-      setPacks(packsData)
-      setSubs(subsData.map(s => ensureBillingPeriodCurrent(s)))
-      setSubPlans(plansData)
-    } catch (err) {
-      console.error('回数券・サブスク取得エラー:', err)
-      setTickets([])
-      setPacks([])
-      setSubs([])
-      setSubPlans([])
+      setTickets(ticketsResult.status === 'fulfilled' ? ticketsResult.value : [])
+      setPacks(packsResult.status === 'fulfilled' ? packsResult.value : [])
+      setSubs(subsResult.status === 'fulfilled' ? subsResult.value.map(s => ensureBillingPeriodCurrent(s)) : [])
+      setSubPlans(plansResult.status === 'fulfilled' ? plansResult.value : [])
+      if (ticketsResult.status === 'rejected') console.error('fetchCustomerTickets:', ticketsResult.reason)
+      if (packsResult.status === 'rejected') console.error('fetchTicketPlans:', packsResult.reason)
+      if (subsResult.status === 'rejected') console.error('fetchCustomerSubscriptions:', subsResult.reason)
+      if (plansResult.status === 'rejected') console.error('fetchSubscriptionPlans:', plansResult.reason)
     } finally {
       setTicketsLoading(false)
     }
