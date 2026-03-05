@@ -40,7 +40,7 @@ function mapRowToPlan(r: Record<string, unknown>): TicketPlan {
     totalSessions: Number(r.totalSessions ?? r.total_sessions ?? 0),
     price: Number(r.price ?? 0),
     expiryDays: r.expiryDays != null ? Number(r.expiryDays) : r.expiry_days != null ? Number(r.expiry_days) : null,
-    isActive: r.isActive ?? r.is_active ?? true,
+    isActive: Boolean(r.isActive ?? r.is_active ?? true),
     createdAt: r.createdAt != null ? String(r.createdAt) : r.created_at != null ? String(r.created_at) : undefined,
   }
 }
