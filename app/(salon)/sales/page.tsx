@@ -376,7 +376,7 @@ export default function SalesPage() {
                   </div>
                   {discountType && (
                     <div className="flex items-center gap-2">
-                      <input type="number" value={discountValue} onChange={e => setDiscountValue(Number(e.target.value))} min={0}
+                      <input type="number" value={discountValue} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setDiscountValue(val === '' ? 0 : Number(val)) }} onFocus={e => e.target.select()} min={0}
                         className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 text-sm outline-none" />
                       <span className="text-text-sub text-sm">{discountType === 'percent' ? '%' : '円'}</span>
                     </div>

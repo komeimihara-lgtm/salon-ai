@@ -391,11 +391,11 @@ export default function MenuSettingsPage() {
                     <div className="flex-1 flex gap-2 flex-wrap items-center">
                       <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
                         className="px-3 py-1.5 rounded-lg border border-gray-200 min-w-48 flex-1" />
-                      <input type="number" value={editDuration} onChange={e => setEditDuration(Number(e.target.value))}
-                        className="px-3 py-1.5 rounded-lg border border-gray-200 w-20" />
+                      <input type="number" value={editDuration} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setEditDuration(val === '' ? 0 : Number(val)) }}
+                        onFocus={e => e.target.select()} className="px-3 py-1.5 rounded-lg border border-gray-200 w-20" />
                       <span className="text-text-sub text-sm">分</span>
-                      <input type="number" value={editPrice} onChange={e => setEditPrice(Number(e.target.value))}
-                        className="px-3 py-1.5 rounded-lg border border-gray-200 w-24" />
+                      <input type="number" value={editPrice} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setEditPrice(val === '' ? 0 : Number(val)) }}
+                        onFocus={e => e.target.select()} className="px-3 py-1.5 rounded-lg border border-gray-200 w-24" />
                       <span className="text-text-sub text-sm">円</span>
                       <select value={editCategory} onChange={e => setEditCategory(e.target.value)}
                         className="px-3 py-1.5 rounded-lg border border-gray-200">
@@ -431,11 +431,11 @@ export default function MenuSettingsPage() {
             <div className="flex gap-2 flex-wrap pt-4 border-t border-gray-100 mt-4">
               <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
                 placeholder="メニュー名" className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none min-w-48 flex-1" />
-              <input type="number" value={newDuration} onChange={e => setNewDuration(Number(e.target.value))}
-                className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-20" />
+              <input type="number" value={newDuration} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setNewDuration(val === '' ? 0 : Number(val)) }}
+                onFocus={e => e.target.select()} className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-20" />
               <span className="self-center text-text-sub text-sm">分</span>
-              <input type="number" value={newPrice} onChange={e => setNewPrice(Number(e.target.value))}
-                className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-28" />
+              <input type="number" value={newPrice} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setNewPrice(val === '' ? 0 : Number(val)) }}
+                onFocus={e => e.target.select()} className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-28" />
               <span className="self-center text-text-sub text-sm">円</span>
               <select value={newCategory} onChange={e => setNewCategory(e.target.value)}
                 className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none">
@@ -479,8 +479,8 @@ export default function MenuSettingsPage() {
               <option value="percent">%OFF</option>
               <option value="amount">円引き</option>
             </select>
-            <input type="number" value={campDiscountValue} onChange={e => setCampDiscountValue(Number(e.target.value))}
-              className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-24" />
+            <input type="number" value={campDiscountValue} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampDiscountValue(val === '' ? 0 : Number(val)) }}
+              onFocus={e => e.target.select()} className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-24" />
             <input type="date" value={campStartDate} onChange={e => setCampStartDate(e.target.value)}
               className="px-4 py-2 rounded-xl border border-gray-200 outline-none" />
             <span className="self-center text-text-sub text-sm">〜</span>
@@ -536,14 +536,14 @@ export default function MenuSettingsPage() {
                   className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
                   {menus.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                 </select>
-                <input type="number" value={courseSessions} onChange={e => setCourseSessions(Number(e.target.value))}
-                  min={2} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-20" />
+                <input type="number" value={courseSessions} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCourseSessions(val === '' ? 0 : Number(val)) }}
+                  onFocus={e => e.target.select()} min={2} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-20" />
                 <span className="self-center text-text-sub text-sm">回</span>
-                <input type="number" value={coursePrice} onChange={e => setCoursePrice(Number(e.target.value))}
-                  className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-28" />
+                <input type="number" value={coursePrice} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCoursePrice(val === '' ? 0 : Number(val)) }}
+                  onFocus={e => e.target.select()} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-28" />
                 <span className="self-center text-text-sub text-sm">円</span>
-                <input type="number" value={courseExpiryDays} onChange={e => setCourseExpiryDays(Number(e.target.value))}
-                  min={1} placeholder="日数" className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-24" />
+                <input type="number" value={courseExpiryDays} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCourseExpiryDays(val === '' ? 0 : Number(val)) }}
+                  onFocus={e => e.target.select()} min={1} placeholder="日数" className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-24" />
                 <span className="self-center text-text-sub text-sm">日</span>
                 <button onClick={addTicketPlan}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium">
@@ -594,14 +594,14 @@ export default function MenuSettingsPage() {
               className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
               {menus.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
-            <input type="number" value={subPrice} onChange={e => setSubPrice(Number(e.target.value))}
-              className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-24" />
+            <input type="number" value={subPrice} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSubPrice(val === '' ? 0 : Number(val)) }}
+              onFocus={e => e.target.select()} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-24" />
             <span className="self-center text-text-sub text-sm">円/月</span>
-            <input type="number" value={subSessions} onChange={e => setSubSessions(Number(e.target.value))}
-              min={1} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-16" />
+            <input type="number" value={subSessions} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSubSessions(val === '' ? 0 : Number(val)) }}
+              onFocus={e => e.target.select()} min={1} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-16" />
             <span className="self-center text-text-sub text-sm">回/月</span>
-            <input type="number" value={subBillingDay} onChange={e => setSubBillingDay(Number(e.target.value))}
-              min={1} max={28} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-16" />
+            <input type="number" value={subBillingDay} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSubBillingDay(val === '' ? 0 : Number(val)) }}
+              onFocus={e => e.target.select()} min={1} max={28} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-16" />
             <span className="self-center text-text-sub text-sm">日課金</span>
             <button onClick={addSubPlan}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium">
@@ -638,8 +638,8 @@ export default function MenuSettingsPage() {
               <label className="text-sm font-bold text-text-main block mb-3">消費税率</label>
               <div className="flex items-center gap-3">
                 <input type="number" value={taxSettings.taxRate}
-                  onChange={e => setTaxSettingsState(prev => ({ ...prev, taxRate: Number(e.target.value) }))}
-                  min={0} max={100}
+                  onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setTaxSettingsState(prev => ({ ...prev, taxRate: val === '' ? 0 : Number(val) })) }}
+                  onFocus={e => e.target.select()} min={0} max={100}
                   className="w-24 px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none text-lg font-bold" />
                 <span className="text-text-main font-bold">%</span>
               </div>

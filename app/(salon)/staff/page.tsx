@@ -390,10 +390,11 @@ function StaffMonthlySection({
               <input
                 type="number"
                 value={data.monthlyKpi.sales || ''}
-                onChange={e => setData(d => ({
+                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => ({
                   ...d,
-                  monthlyKpi: { ...d.monthlyKpi, sales: Number(e.target.value) },
-                }))}
+                  monthlyKpi: { ...d.monthlyKpi, sales: val === '' ? 0 : Number(val) },
+                })) }}
+                onFocus={e => e.target.select()}
                 className="w-full px-3 py-2 rounded-lg border border-gray-200"
               />
             </div>
@@ -402,10 +403,11 @@ function StaffMonthlySection({
               <input
                 type="number"
                 value={data.monthlyKpi.visits || ''}
-                onChange={e => setData(d => ({
+                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => ({
                   ...d,
-                  monthlyKpi: { ...d.monthlyKpi, visits: Number(e.target.value) },
-                }))}
+                  monthlyKpi: { ...d.monthlyKpi, visits: val === '' ? 0 : Number(val) },
+                })) }}
+                onFocus={e => e.target.select()}
                 className="w-full px-3 py-2 rounded-lg border border-gray-200"
               />
             </div>
@@ -414,10 +416,11 @@ function StaffMonthlySection({
               <input
                 type="number"
                 value={data.monthlyKpi.avgPrice || ''}
-                onChange={e => setData(d => ({
+                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => ({
                   ...d,
-                  monthlyKpi: { ...d.monthlyKpi, avgPrice: Number(e.target.value) },
-                }))}
+                  monthlyKpi: { ...d.monthlyKpi, avgPrice: val === '' ? 0 : Number(val) },
+                })) }}
+                onFocus={e => e.target.select()}
                 className="w-full px-3 py-2 rounded-lg border border-gray-200"
               />
             </div>

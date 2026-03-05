@@ -45,6 +45,16 @@ body {
   box-shadow: 0 4px 24px rgba(90, 74, 110, 0.08);
 }
 
+/* 数値入力スピナー非表示 */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
 /* スクロールバー */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #F8F5FF; }

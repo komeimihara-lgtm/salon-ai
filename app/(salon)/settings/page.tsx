@@ -259,7 +259,8 @@ export default function SettingsPage() {
               <input
                 type="number"
                 value={settings.targets.sales}
-                onChange={(e) => setSettings(s => ({ ...s, targets: { ...s.targets, sales: Number(e.target.value) } }))}
+                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, sales: val === '' ? 0 : Number(val) } })) }}
+                onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
             </div>
@@ -268,7 +269,8 @@ export default function SettingsPage() {
               <input
                 type="number"
                 value={settings.targets.visits}
-                onChange={(e) => setSettings(s => ({ ...s, targets: { ...s.targets, visits: Number(e.target.value) } }))}
+                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, visits: val === '' ? 0 : Number(val) } })) }}
+                onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
             </div>
@@ -277,7 +279,8 @@ export default function SettingsPage() {
               <input
                 type="number"
                 value={settings.targets.avgPrice}
-                onChange={(e) => setSettings(s => ({ ...s, targets: { ...s.targets, avgPrice: Number(e.target.value) } }))}
+                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, avgPrice: val === '' ? 0 : Number(val) } })) }}
+                onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
             </div>
@@ -286,7 +289,8 @@ export default function SettingsPage() {
               <input
                 type="number"
                 value={settings.targets.productSales ?? 0}
-                onChange={(e) => setSettings(s => ({ ...s, targets: { ...s.targets, productSales: Number(e.target.value) } }))}
+                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, productSales: val === '' ? 0 : Number(val) } })) }}
+                onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
             </div>
@@ -295,7 +299,8 @@ export default function SettingsPage() {
               <input
                 type="number"
                 value={settings.targets.newCustomers ?? 0}
-                onChange={(e) => setSettings(s => ({ ...s, targets: { ...s.targets, newCustomers: Number(e.target.value) } }))}
+                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, newCustomers: val === '' ? 0 : Number(val) } })) }}
+                onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
             </div>
@@ -304,7 +309,8 @@ export default function SettingsPage() {
               <input
                 type="number"
                 value={settings.targets.newReservations ?? 0}
-                onChange={(e) => setSettings(s => ({ ...s, targets: { ...s.targets, newReservations: Number(e.target.value) } }))}
+                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, newReservations: val === '' ? 0 : Number(val) } })) }}
+                onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
             </div>

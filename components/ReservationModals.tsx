@@ -167,8 +167,8 @@ export function EditReservationModal({ reservation, onClose, onSaved }: { reserv
           </div>
           <div>
             <label className="text-xs text-text-sub mb-1 block">金額（円）</label>
-            <input type="number" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))}
-              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-rose outline-none" placeholder="15000" />
+            <input type="number" value={form.price} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setForm(p => ({ ...p, price: val })) }}
+              onFocus={e => e.target.select()} className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-rose outline-none" placeholder="15000" />
           </div>
           <div>
             <label className="text-xs text-text-sub mb-1 block">メモ</label>

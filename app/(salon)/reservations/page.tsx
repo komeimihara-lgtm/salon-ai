@@ -236,8 +236,8 @@ function NewReservationModal({
             </div>
             <div>
               <label className="text-xs text-[#4A5568] mb-1 block">料金（円）</label>
-              <input type="number" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))}
-                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+              <input type="number" value={form.price} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setForm(p => ({ ...p, price: val })) }}
+                onFocus={e => e.target.select()} className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
                 placeholder="15000" />
             </div>
           </div>

@@ -68,7 +68,7 @@ function NewSaleModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
             </div>
             <div>
               <label className="text-xs text-[#4A5568] mb-1 block">金額（円） *</label>
-              <input type="number" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]" placeholder="15000" />
+              <input type="number" value={form.amount} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setForm(p => ({ ...p, amount: val })) }} onFocus={e => e.target.select()} className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]" placeholder="15000" />
             </div>
           </div>
           <div>
@@ -127,7 +127,7 @@ function TargetModal({ year, month, onClose, onSaved }: { year: number; month: n
         </div>
         <div className="p-5">
           <label className="text-xs text-[#4A5568] mb-1 block">月次売上目標（円）</label>
-          <input type="number" value={targetAmount} onChange={e => setTargetAmount(e.target.value)} className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2] mb-4" placeholder="3000000" />
+          <input type="number" value={targetAmount} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setTargetAmount(val) }} onFocus={e => e.target.select()} className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2] mb-4" placeholder="3000000" />
           <div className="flex gap-3">
             <button onClick={onClose} className="flex-1 bg-white border border-[#BAE6FD] text-[#4A5568] rounded-xl py-2.5 text-sm">キャンセル</button>
             <button onClick={handleSubmit} disabled={saving || !targetAmount} className="flex-1 bg-gradient-to-r from-[#0891B2] to-[#0e7490] text-white rounded-xl py-2.5 text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2">
