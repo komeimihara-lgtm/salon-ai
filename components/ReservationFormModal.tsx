@@ -3,9 +3,33 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Plus, Loader2 } from 'lucide-react'
 import type { Customer } from '@/types'
+import { getMenus, type MenuItem } from '@/lib/menus'
 
-const MENUS = ['フェイシャル60分', 'フェイシャル90分', 'ボディ60分', 'ボディ90分', '美白コース', 'エイジングケア']
-const TIMES = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00']
+// 10:00〜21:00 を15分刻み（予約表と一致）
+function buildTimeOptions(): string[] {
+  const opts: string[] = []
+  for (let h = 10; h <= 21; h++) {
+    for (let m = 0; m < 60; m += 15) {
+      if (h === 21 && m > 0) break
+      opts.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`)
+    }
+  }
+  return opts
+}
+const TIMES = buildTimeOptions()
+
+function calculateEndTime(start: string, minutes: number): string {
+  const [h = 10, m = 0] = start.slice(0, 5).split(':').map(Number)
+  const total = h * 60 + m + minutes
+  const endH = Math.floor(total / 60)
+  const endM = total % 60
+  return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
+}
+
+function parseTimeToMinutes(t: string): number {
+  const [h = 0, m = 0] = t.slice(0, 5).split(':').map(Number)
+  return h * 60 + m
+}
 
 export type CustomerMode = 'existing' | 'temporary' | 'name_only'
 
@@ -22,12 +46,13 @@ export interface ReservationFormModalProps {
 export default function ReservationFormModal({
   defaultDate,
   defaultStartTime = '10:00',
-  defaultEndTime = '11:00',
+  defaultEndTime,
   defaultBed,
   beds = ['A', 'B'],
   onClose,
   onSaved,
 }: ReservationFormModalProps) {
+  const [menus, setMenus] = useState<MenuItem[]>([])
   const [mode, setMode] = useState<CustomerMode>('existing')
   const [form, setForm] = useState({
     customer_name: '',
@@ -35,9 +60,8 @@ export default function ReservationFormModal({
     customer_id: '',
     reservation_date: defaultDate,
     start_time: defaultStartTime,
-    end_time: defaultEndTime,
+    end_time: defaultEndTime ?? calculateEndTime(defaultStartTime, 60),
     bed_id: defaultBed || beds[0] || 'A',
-    duration_minutes: 60,
     menu: '',
     staff_name: '',
     price: '',
@@ -53,14 +77,30 @@ export default function ReservationFormModal({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    setMenus(getMenus())
+  }, [])
+
+  // 予約表の空き枠クリック時: 日付・開始時間・ベッドを自動入力
+  useEffect(() => {
     setForm(p => ({
       ...p,
       reservation_date: defaultDate,
       start_time: defaultStartTime,
-      end_time: defaultEndTime,
-      bed_id: defaultBed || beds[0] || p.bed_id,
+      bed_id: defaultBed ?? p.bed_id,
+      end_time: defaultEndTime ?? calculateEndTime(defaultStartTime, 60),
     }))
-  }, [defaultDate, defaultStartTime, defaultEndTime, defaultBed, beds])
+  }, [defaultDate, defaultStartTime, defaultEndTime, defaultBed])
+
+  // 開始時間またはメニューが変わったら終了時間を再計算
+  const startTime = form.start_time
+  const selectedMenuName = form.menu
+  useEffect(() => {
+    if (!startTime) return
+    const selectedMenu = menus.find(m => m.name === selectedMenuName)
+    const duration = selectedMenu?.duration ?? 60
+    const end = calculateEndTime(startTime, duration)
+    setForm(p => ({ ...p, end_time: end }))
+  }, [startTime, selectedMenuName, menus])
 
   useEffect(() => {
     if (!searchQuery.trim() || mode !== 'existing') {
@@ -126,6 +166,7 @@ export default function ReservationFormModal({
       setError('仮登録の場合は電話番号も入力してください')
       return
     }
+    const durationMinutes = Math.max(1, parseTimeToMinutes(form.end_time) - parseTimeToMinutes(form.start_time))
     setSaving(true)
     try {
       let customerId: string | undefined = form.customer_id || undefined
@@ -159,7 +200,7 @@ export default function ReservationFormModal({
           start_time: form.start_time,
           end_time: form.end_time,
           bed_id: form.bed_id || undefined,
-          duration_minutes: form.duration_minutes || 60,
+          duration_minutes: durationMinutes,
           menu: form.menu || undefined,
           staff_name: form.staff_name || undefined,
           price: parseInt(form.price) || 0,
@@ -189,7 +230,32 @@ export default function ReservationFormModal({
         <div className="p-5 space-y-3 overflow-y-auto flex-1">
           {error && <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
 
-          {/* 顧客選択パターン */}
+          {/* 1. 日付 */}
+          <div>
+            <label className="text-xs text-[#4A5568] mb-1 block">予約日</label>
+            <input type="date" value={form.reservation_date} onChange={e => setForm(p => ({ ...p, reservation_date: e.target.value }))}
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]" />
+          </div>
+
+          {/* 2. 開始時間 */}
+          <div>
+            <label className="text-xs text-[#4A5568] mb-1 block">開始時間</label>
+            <select value={form.start_time} onChange={e => setForm(p => ({ ...p, start_time: e.target.value }))}
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
+              {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+
+          {/* 3. 終了時間（メニュー選択後に自動計算・手動変更可） */}
+          <div>
+            <label className="text-xs text-[#4A5568] mb-1 block">終了時間</label>
+            <select value={form.end_time} onChange={e => setForm(p => ({ ...p, end_time: e.target.value }))}
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
+              {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+
+          {/* 4. 顧客選択 */}
           <div>
             <label className="text-xs text-[#4A5568] mb-1 block">顧客の登録方法</label>
             <div className="flex gap-2 flex-wrap">
@@ -214,79 +280,89 @@ export default function ReservationFormModal({
             </div>
           </div>
 
-          {/* 顧客入力 */}
-          <div className="grid grid-cols-2 gap-3">
-            <div ref={dropdownRef} className="relative col-span-2">
-              <label className="text-xs text-[#4A5568] mb-1 block">顧客名 *</label>
-              {mode === 'existing' ? (
-                <>
-                  <input
-                    value={form.customer_name}
-                    onChange={e => {
-                      const v = e.target.value
-                      setForm(p => ({ ...p, customer_name: v, customer_id: '' }))
-                      setSearchQuery(v)
-                    }}
-                    onFocus={() => searchQuery && setShowDropdown(true)}
-                    className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
-                    placeholder="名前で検索"
-                  />
-                  {showDropdown && searchQuery.trim() && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#BAE6FD] rounded-lg shadow-xl z-10 max-h-48 overflow-y-auto">
-                      {loadingCandidates ? (
-                        <div className="flex items-center gap-2 px-3 py-3 text-[#4A5568] text-sm">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          検索中...
-                        </div>
-                      ) : candidates.length === 0 ? (
-                        <p className="px-3 py-3 text-[#4A5568] text-sm">該当する顧客がいません</p>
-                      ) : (
-                        <ul className="py-1">
-                          {candidates.map(c => (
-                            <li key={c.id}>
-                              <button
-                                type="button"
-                                onClick={() => selectCustomer(c)}
-                                className="w-full text-left px-3 py-2 text-sm text-[#1A202C] hover:bg-[#BAE6FD] flex items-center justify-between gap-2"
-                              >
-                                <span>{c.name}</span>
-                                {c.phone && <span className="text-[#4A5568] text-xs">{c.phone}</span>}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-                </>
-              ) : (
+          <div ref={dropdownRef} className="relative">
+            <label className="text-xs text-[#4A5568] mb-1 block">顧客名 *</label>
+            {mode === 'existing' ? (
+              <>
                 <input
                   value={form.customer_name}
-                  onChange={e => setForm(p => ({ ...p, customer_name: e.target.value }))}
+                  onChange={e => {
+                    const v = e.target.value
+                    setForm(p => ({ ...p, customer_name: v, customer_id: '' }))
+                    setSearchQuery(v)
+                  }}
+                  onFocus={() => searchQuery && setShowDropdown(true)}
                   className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
-                  placeholder={mode === 'temporary' ? '名前（仮登録）' : '名前のみ（後から紐づけ可）'}
+                  placeholder="名前で検索"
                 />
-              )}
-            </div>
-            {(mode === 'temporary' || mode === 'name_only') && (
-              <div className="col-span-2">
-                <label className="text-xs text-[#4A5568] mb-1 block">電話番号 {mode === 'temporary' ? '*' : '（任意）'}</label>
-                <input
-                  value={form.customer_phone}
-                  onChange={e => setForm(p => ({ ...p, customer_phone: e.target.value }))}
-                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
-                  placeholder="090-0000-0000"
-                />
-              </div>
+                {showDropdown && searchQuery.trim() && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#BAE6FD] rounded-lg shadow-xl z-10 max-h-48 overflow-y-auto">
+                    {loadingCandidates ? (
+                      <div className="flex gap-2 px-3 py-3 text-[#4A5568] text-sm">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        検索中...
+                      </div>
+                    ) : candidates.length === 0 ? (
+                      <p className="px-3 py-3 text-[#4A5568] text-sm">該当する顧客がいません</p>
+                    ) : (
+                      <ul className="py-1">
+                        {candidates.map(c => (
+                          <li key={c.id}>
+                            <button
+                              type="button"
+                              onClick={() => selectCustomer(c)}
+                              className="w-full text-left px-3 py-2 text-sm text-[#1A202C] hover:bg-[#BAE6FD] flex items-center justify-between gap-2"
+                            >
+                              <span>{c.name}</span>
+                              {c.phone && <span className="text-[#4A5568] text-xs">{c.phone}</span>}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <input
+                value={form.customer_name}
+                onChange={e => setForm(p => ({ ...p, customer_name: e.target.value }))}
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+                placeholder={mode === 'temporary' ? '名前（仮登録）' : '名前のみ（後から紐づけ可）'}
+              />
             )}
           </div>
+          {(mode === 'temporary' || mode === 'name_only') && (
+            <div>
+              <label className="text-xs text-[#4A5568] mb-1 block">電話番号 {mode === 'temporary' ? '*' : '（任意）'}</label>
+              <input
+                value={form.customer_phone}
+                onChange={e => setForm(p => ({ ...p, customer_phone: e.target.value }))}
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+                placeholder="090-0000-0000"
+              />
+            </div>
+          )}
 
+          {/* 5. 施術メニュー（選択すると終了時間を自動計算） */}
           <div>
-            <label className="text-xs text-[#4A5568] mb-1 block">予約日</label>
-            <input type="date" value={form.reservation_date} onChange={e => setForm(p => ({ ...p, reservation_date: e.target.value }))}
-              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]" />
+            <label className="text-xs text-[#4A5568] mb-1 block">施術メニュー</label>
+            <select value={form.menu} onChange={e => setForm(p => ({ ...p, menu: e.target.value }))}
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
+              <option value="">選択してください</option>
+              {menus.map(m => <option key={m.id} value={m.name}>{m.name}（{m.duration}分）</option>)}
+            </select>
           </div>
 
+          {/* 6. 担当スタッフ */}
+          <div>
+            <label className="text-xs text-[#4A5568] mb-1 block">担当スタッフ</label>
+            <input value={form.staff_name} onChange={e => setForm(p => ({ ...p, staff_name: e.target.value }))}
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+              placeholder="田中" />
+          </div>
+
+          {/* 7. ベッド選択 */}
           {beds.length > 0 && (
             <div>
               <label className="text-xs text-[#4A5568] mb-1 block">ベッド</label>
@@ -296,50 +372,10 @@ export default function ReservationFormModal({
               </select>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-[#4A5568] mb-1 block">開始時間</label>
-              <select value={form.start_time} onChange={e => setForm(p => ({ ...p, start_time: e.target.value }))}
-                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
-                {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-[#4A5568] mb-1 block">施術時間（分）</label>
-              <select value={form.duration_minutes} onChange={e => {
-                const d = Number(e.target.value)
-                setForm(p => {
-                  const [sh = 10, sm = 0] = p.start_time.slice(0, 5).split(':').map(Number)
-                  const endMin = sh * 60 + sm + d
-                  const eh = Math.floor(endMin / 60)
-                  const em = endMin % 60
-                  return { ...p, duration_minutes: d, end_time: `${eh.toString().padStart(2, '0')}:${em.toString().padStart(2, '0')}` }
-                })
-              }}
-                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
-                {[30, 45, 60, 75, 90, 120].map(m => <option key={m} value={m}>{m}分</option>)}
-              </select>
-            </div>
-          </div>
 
+          {/* 8. メモ・備考 */}
           <div>
-            <label className="text-xs text-[#4A5568] mb-1 block">施術メニュー</label>
-            <select value={form.menu} onChange={e => setForm(p => ({ ...p, menu: e.target.value }))}
-              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
-              <option value="">選択してください</option>
-              {MENUS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-[#4A5568] mb-1 block">担当スタッフ</label>
-            <input value={form.staff_name} onChange={e => setForm(p => ({ ...p, staff_name: e.target.value }))}
-              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
-              placeholder="田中" />
-          </div>
-
-          <div>
-            <label className="text-xs text-[#4A5568] mb-1 block">メモ</label>
+            <label className="text-xs text-[#4A5568] mb-1 block">メモ・備考</label>
             <textarea value={form.memo} onChange={e => setForm(p => ({ ...p, memo: e.target.value }))}
               rows={2} className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2] resize-none"
               placeholder="アレルギーや注意事項など" />

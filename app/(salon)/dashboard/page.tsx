@@ -778,7 +778,11 @@ export default function DashboardPage() {
         <ReservationFormModal
           defaultDate={selectedSlot.date}
           defaultStartTime={selectedSlot.start}
-          defaultEndTime={selectedSlot.end}
+          defaultEndTime={(() => {
+            const [h = 10, m = 0] = selectedSlot.start.slice(0, 5).split(':').map(Number)
+            const total = h * 60 + m + 60
+            return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+          })()}
           defaultBed={selectedSlot.bed}
           beds={getSalonSettings().beds.length > 0 ? getSalonSettings().beds : ['A', 'B']}
           onClose={() => { setShowReservationModal(false); setSelectedSlot(null) }}
