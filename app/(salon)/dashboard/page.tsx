@@ -726,7 +726,7 @@ function ReservationDetailContent({
               onClick={handleConsume}
               className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium"
             >
-              回数券で1回消化（{matchingCourse.courseName} 残{matchingCourse.remainingSessions}回）
+              回数券で1回消化（{matchingCourse.planName} 残{matchingCourse.remainingSessions}回）
             </button>
           )}
           {matchingSub && (
