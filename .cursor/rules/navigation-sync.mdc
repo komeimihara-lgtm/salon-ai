@@ -1,0 +1,42 @@
+---
+description: 新規ページ作成時はサイドバー・ナビゲーションのリンクも同時に更新すること
+alwaysApply: true
+---
+
+# ナビゲーション同期ルール（salon-ai）
+
+## 必須ルール
+
+**新しいページ（ルート）を作成した場合、必ずサイドバー・ナビゲーションのリンク先も同時に更新する。**
+
+## 更新対象ファイル
+
+| ファイル | 用途 |
+|----------|------|
+| `components/AppShell.tsx` | メインサイドバーの `NAV_ITEMS` |
+| `components/layout/Sidebar.tsx` | サブレイアウト用サイドバーの `NAV_ITEMS` |
+
+## チェックリスト
+
+新規ページ作成時：
+
+1. [ ] `app/(salon)/**/page.tsx` など新規ルートを作成
+2. [ ] `AppShell.tsx` の `NAV_ITEMS` に `{ href: '/新ルート', icon: Icon, label: '表示名' }` を追加
+3. [ ] `Sidebar.tsx` の `NAV_ITEMS` に同様のエントリを追加（該当レイアウトを使う場合）
+4. [ ] 他ページからのリンク（例: `Link href="/xxx"`）があれば更新
+
+## 例
+
+`/menu` を新規作成した場合：
+
+```tsx
+// AppShell.tsx
+{ href: '/menu', icon: List, label: 'メニュー設定' },
+
+// Sidebar.tsx
+{ href: '/menu', icon: UtensilsCrossed, label: 'メニュー設定' },
+```
+
+## 背景
+
+ルートを変更・新規作成した際、ナビゲーションを更新し忘れると、ユーザーが新ページにアクセスできない。必ずセットで更新する。
