@@ -95,6 +95,8 @@ export interface Reservation {
   duration_minutes?: number
   created_at: string
   updated_at: string
+  /** 顧客JOIN（list API用） */
+  customers?: { memo?: string } | null
 }
 
 export interface PenguinCSVRow {

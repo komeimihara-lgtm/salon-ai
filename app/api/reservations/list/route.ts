@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabaseAdmin()
     let query = supabase
       .from('reservations')
-      .select('*')
+      .select('*, customers(memo)')
       .eq('salon_id', DEMO_SALON_ID)
       .order('reservation_date', { ascending: true })
       .order('start_time', { ascending: true })

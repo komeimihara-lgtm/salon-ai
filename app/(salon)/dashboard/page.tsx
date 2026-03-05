@@ -34,18 +34,6 @@ const TASKS_AUTO_BASE = [
   { id: 3, type: 'consult', text: '今月の達成率53%。経営会議に戦略を相談する', action: '相談する' },
 ]
 
-const VISITORS = [
-  { time: '10:00', name: '山田 花子', count: 12, menu: 'フェイシャル', staff: '田中', status: '施術中', task: '施術後フォロー予定' },
-  { time: '11:30', name: '佐藤 美咲', count: 5, menu: 'ボディケア', staff: '鈴木', status: '来店前', task: '' },
-  { time: '14:00', name: '高橋 恵', count: 3, menu: 'フェイシャル', staff: '田中', status: '来店前', task: '誕生日特典送付' },
-  { time: '15:30', name: '伊藤 さくら', count: 8, menu: 'フルコース', staff: '鈴木', status: '来店前', task: '' },
-]
-
-const FALLBACK_STAFF = [
-  { name: '田中', initial: '田', color: '#C4728A', start: '09:00', end: '18:00', bookings: 5, free: '12:00-13:00' },
-  { name: '鈴木', initial: '鈴', color: '#9B8EC4', start: '10:00', end: '19:00', bookings: 4, free: '14:00-14:30' },
-]
-
 // 10:00〜21:00 を15分刻み = 44スロット
 const SLOT_COUNT = 44
 const SLOT_WIDTH_PX = 56
@@ -308,17 +296,32 @@ export default function DashboardPage() {
   const dailyTarget = getDailyTarget(getSalonSettings().targets.sales, workingDays)
   const dailyRate = getAchievementRate(todaySales, dailyTarget)
 
-  const staffShifts = todayShifts.length > 0
-    ? todayShifts.map(s => ({
-        name: s.staffName,
-        initial: s.staffName[0],
-        color: s.staffColor,
-        start: s.start,
-        end: s.end,
-        bookings: s.bookings ?? 0,
-        free: s.freeSlots ?? '-',
-      }))
-    : FALLBACK_STAFF
+  const staffShifts = todayShifts.map(s => ({
+    name: s.staffName,
+    initial: s.staffName[0],
+    color: s.staffColor,
+    start: s.start,
+    end: s.end,
+    bookings: s.bookings ?? 0,
+    free: s.freeSlots ?? '-',
+  }))
+
+  // 顧客管理に存在する予約のみ（customer_id あり）、開始時刻でソート
+  const visitorsFromReservations = todayReservations
+    .filter((r): r is Reservation & { customer_id: string } => !!r.customer_id)
+    .sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''))
+
+  const getStatusLabel = (status: string) => {
+    const map: Record<string, string> = {
+      confirmed: '来店待ち',
+      rescheduled: '来店待ち',
+      visited: '来店済',
+      completed: '施術完了',
+      no_show: '無断キャンセル',
+      cancelled: 'キャンセル',
+    }
+    return map[status] ?? status
+  }
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-6">
@@ -570,9 +573,9 @@ export default function DashboardPage() {
         />
       </section>
 
-      {/* ⑤ 今日の来店客一覧 + ⑥ 出勤スタッフ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <section>
+      {/* ⑤ 今日の来店客一覧（約70%） + ⑥ 出勤スタッフ（約30%） */}
+      <div className="grid grid-cols-1 lg:grid-cols-[7fr_3fr] gap-6">
+        <section className="min-w-0">
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
             <span className="section-label font-dm-sans text-2xl font-bold text-text-main">今日の来店客一覧</span>
@@ -583,49 +586,74 @@ export default function DashboardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-light-lav/50">
-                    <th className="text-left p-3 text-text-sub font-medium">時間</th>
+                    <th className="text-left p-3 text-text-sub font-medium">予約時間</th>
                     <th className="text-left p-3 text-text-sub font-medium">顧客名</th>
-                    <th className="text-left p-3 text-text-sub font-medium">施術</th>
-                    <th className="text-left p-3 text-text-sub font-medium">担当</th>
-                    <th className="text-left p-3 text-text-sub font-medium">フォロータスク</th>
+                    <th className="text-left p-3 text-text-sub font-medium">施術メニュー</th>
+                    <th className="text-left p-3 text-text-sub font-medium">担当スタッフ</th>
+                    <th className="text-left p-3 text-text-sub font-medium">感動タスク</th>
                     <th className="text-left p-3 text-text-sub font-medium">ステータス</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {VISITORS.map((v, i) => (
-                    <tr key={v.name} className={i % 2 === 0 ? 'bg-off-white' : 'bg-white'}>
-
-                      <td className="p-3 text-text-main">{v.time}</td>
-                      <td className="p-3">
-                        <Link href={`/chart?name=${encodeURIComponent(v.name)}`} className="font-medium text-text-main hover:text-rose hover:underline">
-                          {v.name}様
-                        </Link>
-                        <span className="ml-1 text-xs text-text-sub bg-light-lav px-1.5 py-0.5 rounded">{v.count}回目</span>
-                      </td>
-                      <td className="p-3 text-text-sub">{v.menu}</td>
-                      <td className="p-3 text-text-sub">{v.staff}</td>
-                      <td className="p-3">
-                        {v.task ? (
-                          <span className="text-xs bg-lavender/20 text-lavender px-2 py-0.5 rounded">{v.task}</span>
-                        ) : (
-                          <span className="text-text-sub">-</span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded ${
-                            v.status === '施術中'
-                              ? 'bg-gradient-to-r from-rose/20 to-lavender/20 text-rose'
-                              : v.status === '施術完了'
-                                ? 'bg-emerald-100 text-emerald-700'
-                                : 'bg-gray-100 text-text-sub'
-                          }`}
-                        >
-                          {v.status}
-                        </span>
+                  {reservationsLoading ? (
+                    <tr>
+                      <td colSpan={6} className="p-6 text-center text-text-sub">
+                        <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
+                        読み込み中...
                       </td>
                     </tr>
-                  ))}
+                  ) : visitorsFromReservations.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-6 text-center text-text-sub">
+                        今日の来店予約はありません（顧客管理に登録済みの予約のみ表示）
+                      </td>
+                    </tr>
+                  ) : (
+                    visitorsFromReservations.map((r, i) => {
+                      const task = r.memo || (r.customers?.memo ?? '') || ''
+                      const statusClass =
+                        r.status === 'visited' || r.status === 'completed'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : r.status === 'no_show'
+                            ? 'bg-red-100 text-red-700'
+                            : 'bg-blue-100 text-blue-700'
+                      return (
+                        <tr
+                          key={r.id}
+                          className={`${i % 2 === 0 ? 'bg-off-white' : 'bg-white'} cursor-pointer hover:bg-rose/5`}
+                          onClick={() => setReservationDetailModal(r)}
+                        >
+                          <td className="p-3 text-text-main">
+                            {typeof r.start_time === 'string' ? r.start_time.slice(0, 5) : '-'}
+                            {r.end_time ? `〜${typeof r.end_time === 'string' ? r.end_time.slice(0, 5) : ''}` : ''}
+                          </td>
+                          <td className="p-3">
+                            <Link
+                              href={r.customer_id ? `/chart/${r.customer_id}` : `/chart?name=${encodeURIComponent(r.customer_name)}`}
+                              className="font-medium text-text-main hover:text-rose hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {r.customer_name}様
+                            </Link>
+                          </td>
+                          <td className="p-3 text-text-sub">{r.menu || '-'}</td>
+                          <td className="p-3 text-text-sub">{r.staff_name || '-'}</td>
+                          <td className="p-3">
+                            {task ? (
+                              <span className="text-xs bg-lavender/20 text-lavender px-2 py-0.5 rounded line-clamp-2">{task}</span>
+                            ) : (
+                              <span className="text-text-sub">-</span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <span className={`text-xs px-2 py-0.5 rounded ${statusClass}`}>
+                              {getStatusLabel(r.status)}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -640,7 +668,10 @@ export default function DashboardPage() {
           <div className="bg-white rounded-2xl p-5 card-shadow overflow-hidden">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-5 -mt-5 mb-4" />
             <div className="space-y-4">
-              {staffShifts.map((s) => (
+              {staffShifts.length === 0 ? (
+                <p className="text-sm text-text-sub text-center py-6">出勤スタッフの登録がありません</p>
+              ) : (
+                staffShifts.map((s) => (
                 <div key={s.name} className="flex items-center gap-4">
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
@@ -662,7 +693,7 @@ export default function DashboardPage() {
                     <p className="text-xs text-text-sub mt-0.5">空き: {s.free}</p>
                   </div>
                 </div>
-              ))}
+              )))}
             </div>
           </div>
         </section>
