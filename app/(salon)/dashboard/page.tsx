@@ -37,8 +37,8 @@ import {
 
 const STORAGE_MENUS = 'sola_menus'
 
-// モックデータ
-const KPI_DATA = [
+// モックデータ（初期値、useEffectでサロン設定から目標値を反映）
+const KPI_DATA_INITIAL = [
   { label: '今月売上', value: '¥320,000', sub: '目標 ¥600,000', rate: 53, diff: 8, diffUp: true },
   { label: '来店数', value: '38名', sub: '目標 60名', rate: 63, diff: 12, diffUp: true },
   { label: '客単価', value: '¥8,421', sub: '目標 ¥10,000', rate: 84, diff: 3, diffUp: true },
@@ -75,8 +75,11 @@ const FALLBACK_STAFF = [
   { name: '鈴木', initial: '鈴', color: '#9B8EC4', start: '10:00', end: '19:00', bookings: 4, free: '14:00-14:30' },
 ]
 
+type KpiItem = { label: string; value: string; sub: string; rate: number; diff: number; diffUp: boolean }
+
 export default function DashboardPage() {
   const todayShifts = useTodayShifts()
+  const [kpiData, setKpiData] = useState<KpiItem[]>(KPI_DATA_INITIAL)
   const [manualTasks, setManualTasksState] = useState<ManualTask[]>([])
   const [reservations, setReservationsState] = useState<DashboardReservation[]>([])
   const [taskModalOpen, setTaskModalOpen] = useState(false)
@@ -90,10 +93,20 @@ export default function DashboardPage() {
   const [courseAlerts, setCourseAlerts] = useState<{ id: string; type: string; text: string; action: string }[]>([])
 
   useEffect(() => {
+    const settings = getSalonSettings()
+    const monthlyTarget = settings.targets?.sales ?? 600000
+    const visitsTarget = settings.targets?.visits ?? 60
+    const avgPriceTarget = settings.targets?.avgPrice ?? 10000
+    setKpiData([
+      { ...KPI_DATA_INITIAL[0], sub: `目標 ¥${monthlyTarget.toLocaleString()}` },
+      { ...KPI_DATA_INITIAL[1], sub: `目標 ${visitsTarget}名` },
+      { ...KPI_DATA_INITIAL[2], sub: `目標 ¥${avgPriceTarget.toLocaleString()}` },
+      KPI_DATA_INITIAL[3],
+    ])
     setManualTasksState(getManualTasks())
     setReservationsState(getDashboardReservations())
     setMenus(loadMenus().map(m => ({ id: m.id, name: m.name })))
-    const s = getSalonSettings()
+    const s = settings
     setStaff(s.staff.map(x => ({ name: x.name })))
     setBeds(s.beds.length > 0 ? s.beds : ['A', 'B'])
     const expiring = getExpiringSoon(14)
@@ -217,10 +230,10 @@ export default function DashboardPage() {
       <section>
         <div className="flex items-center gap-3 mb-4">
           <div className="gradient-line rounded-full" />
-          <span className="section-label font-dm-sans">月間KPI</span>
+          <span className="section-label font-dm-sans text-base font-bold text-text-main">月間KPI</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {KPI_DATA.map((k) => (
+          {kpiData.map((k) => (
             <div
               key={k.label}
               className="bg-white rounded-2xl p-5 card-shadow overflow-hidden"
@@ -256,7 +269,7 @@ export default function DashboardPage() {
         <section className="lg:col-span-1">
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="section-label font-dm-sans">今日の日割り目標</span>
+            <span className="section-label font-dm-sans text-base font-bold text-text-main">今日の日割り目標</span>
           </div>
           <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
@@ -302,7 +315,7 @@ export default function DashboardPage() {
         <section className="lg:col-span-2">
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="section-label font-dm-sans">今日のタスク</span>
+            <span className="section-label font-dm-sans text-base font-bold text-text-main">今日のタスク</span>
           </div>
           <div className="bg-white rounded-2xl p-5 card-shadow overflow-hidden max-h-[320px] overflow-y-auto">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-5 -mt-5 mb-4" />
@@ -380,7 +393,7 @@ export default function DashboardPage() {
       <section>
         <div className="flex items-center gap-3 mb-4">
           <div className="gradient-line rounded-full" />
-          <span className="section-label font-dm-sans">今日の予約表</span>
+          <span className="section-label font-dm-sans text-base font-bold text-text-main">今日の予約表</span>
         </div>
         <div className="bg-white rounded-2xl overflow-hidden card-shadow overflow-x-auto">
           <div className="min-w-[800px]">
@@ -449,7 +462,7 @@ export default function DashboardPage() {
         <section>
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="section-label font-dm-sans">今日の来店客一覧</span>
+            <span className="section-label font-dm-sans text-base font-bold text-text-main">今日の来店客一覧</span>
           </div>
           <div className="bg-white rounded-2xl overflow-hidden card-shadow">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender" />
@@ -472,7 +485,7 @@ export default function DashboardPage() {
                       <td className="p-3 text-text-main">{v.time}</td>
                       <td className="p-3">
                         <Link href={`/chart?name=${encodeURIComponent(v.name)}`} className="font-medium text-text-main hover:text-rose hover:underline">
-                          {v.name}
+                          {v.name}様
                         </Link>
                         <span className="ml-1 text-xs text-text-sub bg-light-lav px-1.5 py-0.5 rounded">{v.count}回目</span>
                       </td>
@@ -509,7 +522,7 @@ export default function DashboardPage() {
         <section>
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="section-label font-dm-sans">今日の出勤スタッフ</span>
+            <span className="section-label font-dm-sans text-base font-bold text-text-main">今日の出勤スタッフ</span>
           </div>
           <div className="bg-white rounded-2xl p-5 card-shadow overflow-hidden">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-5 -mt-5 mb-4" />
