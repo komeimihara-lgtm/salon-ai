@@ -174,7 +174,7 @@ export async function addCustomerSubscription(
     }),
   })
   const json = await res.json()
-  if (!res.ok) throw new Error(json.error || '登録に失敗しました')
+  if (!res.ok) throw new Error(json.details || json.error || '登録に失敗しました')
   window.dispatchEvent(new Event('customer-subscriptions-updated'))
   return mapRowToSub(json.subscription)
 }

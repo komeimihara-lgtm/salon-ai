@@ -183,7 +183,7 @@ export async function addCustomerTicket(
     }),
   })
   const json = await res.json()
-  if (!res.ok) throw new Error(json.error || '登録に失敗しました')
+  if (!res.ok) throw new Error(json.details || json.error || '登録に失敗しました')
   window.dispatchEvent(new Event('customer-tickets-updated'))
   return mapRowToTicket(json.ticket)
 }

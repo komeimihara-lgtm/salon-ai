@@ -142,8 +142,10 @@ export default function SalesPage() {
     try {
       await addCustomerTicket(selectedCustomer.id, selectedCustomer.name, plan)
       alert(`${plan.name} を購入登録しました`)
-    } catch {
-      setError('登録に失敗しました')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '登録に失敗しました'
+      console.error('[sales] 回数券登録エラー:', msg)
+      setError(msg)
     } finally {
       setTicketPurchasing(false)
     }
@@ -159,8 +161,10 @@ export default function SalesPage() {
     try {
       await addCustomerSubscription(selectedCustomer.id, selectedCustomer.name, plan)
       alert(`${plan.name} を加入登録しました`)
-    } catch {
-      setError('登録に失敗しました')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '登録に失敗しました'
+      console.error('[sales] サブスク登録エラー:', msg)
+      setError(msg)
     } finally {
       setSubPurchasing(false)
     }

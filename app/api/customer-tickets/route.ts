@@ -75,39 +75,47 @@ export async function POST(req: NextRequest) {
       expiry_date,
     } = body
 
+    const salonId = getSalonId()
     if (!customer_id || !plan_name || !menu_name || total_sessions == null || remaining_sessions == null) {
       return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
     }
 
-    const purchasedAt = purchased_at || new Date().toISOString()
+    const purchasedAt = purchased_at || new Date().toISOString().slice(0, 10)
     const expiryDate = expiry_date || null
     const unitPrice = unit_price != null ? Number(unit_price) : null
 
+    const insertData = {
+      salon_id: salonId,
+      customer_id,
+      customer_name: customer_name || '',
+      ticket_plan_id: ticket_plan_id || null,
+      plan_name,
+      menu_name,
+      total_sessions: Number(total_sessions),
+      remaining_sessions: Number(remaining_sessions),
+      unit_price: unitPrice,
+      purchased_at: purchasedAt,
+      expiry_date: expiryDate,
+    }
+
     const { data, error } = await getSupabaseAdmin()
       .from('customer_tickets')
-      .insert({
-        salon_id: getSalonId(),
-        customer_id,
-        customer_name: customer_name || '',
-        ticket_plan_id: ticket_plan_id || null,
-        plan_name,
-        menu_name,
-        total_sessions,
-        remaining_sessions,
-        unit_price: unitPrice,
-        purchased_at: purchasedAt,
-        expiry_date: expiryDate,
-      })
+      .insert(insertData)
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('[customer-tickets] POST Supabase error:', error.message, error.details, error.hint)
+      throw error
+    }
     return NextResponse.json({ ticket: toCustomerTicket({ ...data, customer_name: customer_name || '' }) })
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e))
-    console.error('customer-tickets POST error:', err.message, err.stack)
+    const supabaseErr = e as { message?: string; details?: string; hint?: string }
+    const details = [supabaseErr.message, supabaseErr.details, supabaseErr.hint].filter(Boolean).join(' ') || err.message
+    console.error('[customer-tickets] POST 詳細エラー:', err, details)
     return NextResponse.json(
-      { error: 'customer_ticketの登録に失敗しました', details: err.message },
+      { error: 'customer_ticketの登録に失敗しました', details },
       { status: 500 }
     )
   }
