@@ -33,12 +33,19 @@ function parseTimeToMinutes(t: string): number {
 
 export type CustomerMode = 'existing' | 'temporary' | 'name_only'
 
+export interface StaffOption {
+  name: string
+  color?: string
+}
+
 export interface ReservationFormModalProps {
   defaultDate: string
   defaultStartTime?: string
   defaultEndTime?: string
   defaultBed?: string
   beds?: string[]
+  /** 出勤スタッフ（親から渡す場合。空ならAPIから取得） */
+  staffList?: StaffOption[]
   onClose: () => void
   onSaved: () => void
 }
@@ -49,6 +56,7 @@ export default function ReservationFormModal({
   defaultEndTime,
   defaultBed,
   beds = ['A', 'B'],
+  staffList: staffListProp,
   onClose,
   onSaved,
 }: ReservationFormModalProps) {
@@ -73,12 +81,40 @@ export default function ReservationFormModal({
   const [candidates, setCandidates] = useState<Customer[]>([])
   const [loadingCandidates, setLoadingCandidates] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
+  const [staffList, setStaffList] = useState<StaffOption[]>(staffListProp ?? [])
   const dropdownRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     setMenus(getMenus())
   }, [])
+
+  // 担当スタッフ: 親から渡されていれば使用、そうでなければAPIから取得
+  useEffect(() => {
+    if (staffListProp && staffListProp.length > 0) {
+      setStaffList(staffListProp)
+      return
+    }
+    let cancelled = false
+    const date = form.reservation_date || defaultDate
+    fetch(`/api/staff/attendance?date=${encodeURIComponent(date)}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (cancelled) return
+        const list = data?.staff ?? []
+        if (list.length > 0) {
+          setStaffList(list)
+          return
+        }
+        return fetch('/api/staff').then(r => r.ok ? r.json() : null)
+      })
+      .then(data => {
+        if (cancelled) return
+        if (data?.staff?.length) setStaffList(data.staff)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [staffListProp, defaultDate, form.reservation_date])
 
   // 予約表の空き枠クリック時: 日付・開始時間・ベッドを自動入力
   useEffect(() => {
@@ -354,12 +390,30 @@ export default function ReservationFormModal({
             </select>
           </div>
 
-          {/* 6. 担当スタッフ */}
+          {/* 6. 担当スタッフ（出勤スタッフから選択） */}
           <div>
             <label className="text-xs text-[#4A5568] mb-1 block">担当スタッフ</label>
-            <input value={form.staff_name} onChange={e => setForm(p => ({ ...p, staff_name: e.target.value }))}
-              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
-              placeholder="田中" />
+            {staffList.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {staffList.map((s) => (
+                  <button
+                    key={s.name}
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, staff_name: p.staff_name === s.name ? '' : s.name }))}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      form.staff_name === s.name
+                        ? 'text-white ring-2 ring-[#0891B2]'
+                        : 'bg-white border border-[#BAE6FD] text-[#4A5568] hover:border-[#0891B2]'
+                    }`}
+                    style={form.staff_name === s.name ? { backgroundColor: s.color || '#0891B2' } : undefined}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-[#4A5568] py-2">スタッフを読み込み中...</p>
+            )}
           </div>
 
           {/* 7. ベッド選択 */}

@@ -212,6 +212,10 @@ export default function DashboardPage() {
   const [showReservationModal, setShowReservationModal] = useState(false)
 
   useEffect(() => {
+    fetch('/api/tickets/check-expiry', { method: 'POST' }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
     const s = getSalonSettings()
     const now = new Date()
     const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
@@ -386,20 +390,6 @@ export default function DashboardPage() {
             </div>
           )})}
         </div>
-        {salesSummary && kpiData[0] && (
-          <div className="mt-4 p-4 rounded-xl bg-white border border-[#E8E0F0] card-shadow">
-            <p className="text-xs text-text-sub mb-2">月間目標達成率</p>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-3 bg-light-lav rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${getAchievementBgColor(kpiData[0].rate)}`}
-                  style={{ width: `${Math.min(kpiData[0].rate, 100)}%` }}
-                />
-              </div>
-              <span className={`text-sm font-bold ${getAchievementColor(kpiData[0].rate)}`}>{kpiData[0].rate}%</span>
-            </div>
-          </div>
-        )}
         {salesSummary && (
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
             <button
@@ -778,6 +768,7 @@ export default function DashboardPage() {
         <ReservationFormModal
           defaultDate={selectedSlot.date}
           defaultStartTime={selectedSlot.start}
+          staffList={todayShifts.map(s => ({ name: s.staffName, color: s.staffColor }))}
           defaultEndTime={(() => {
             const [h = 10, m = 0] = selectedSlot.start.slice(0, 5).split(':').map(Number)
             const total = h * 60 + m + 60

@@ -186,6 +186,7 @@ export default function ReservationsPage() {
       {showNewModal && (
         <ReservationFormModal
           defaultDate={selectedDate}
+          staffList={getSalonSettings().staff?.length ? getSalonSettings().staff : undefined}
           beds={getSalonSettings().beds.length > 0 ? getSalonSettings().beds : ['A', 'B']}
           onClose={() => setShowNewModal(false)}
           onSaved={refresh}
