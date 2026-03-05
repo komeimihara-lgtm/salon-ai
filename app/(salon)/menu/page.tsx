@@ -329,6 +329,12 @@ export default function MenuSettingsPage() {
   const filteredMenus = selectedCategory
     ? menus.filter(m => m.category === selectedCategory)
     : menus
+  const filteredTickets = selectedCategory
+    ? ticketPlans.filter(t => t.category === selectedCategory || t.category === '' || !t.category?.trim())
+    : ticketPlans
+  const filteredSubs = selectedCategory
+    ? subPlans.filter(s => s.category === selectedCategory || s.category === '' || !s.category?.trim())
+    : subPlans
 
   const addMenu = () => {
     if (!newName.trim()) return
@@ -822,12 +828,21 @@ export default function MenuSettingsPage() {
       {activeTab === 'courses' && (
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
+          <div className="flex flex-wrap gap-2 mb-4">
+            {categoriesForFilter.map(cat => (
+              <button key={cat} onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${selectedCategory === cat ? 'bg-rose text-white' : 'bg-light-lav text-text-main'}`}>
+                {cat}
+              </button>
+            ))}
+          </div>
           {ticketPlansLoading ? (
             <p className="text-sm text-text-sub py-4">読み込み中...</p>
           ) : (
             <>
               <div className="space-y-3 mb-4">
-                {ticketPlans.map(p => (
+                <h3 className="text-sm font-bold text-text-main">回数券 {selectedCategory ? `（${selectedCategory}）` : '（全て）'}</h3>
+                {filteredTickets.map(p => (
                   <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
                     <div>
                       <p className="font-medium text-text-main">{p.name}</p>
@@ -887,12 +902,21 @@ export default function MenuSettingsPage() {
       {activeTab === 'subscriptions' && (
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
+          <div className="flex flex-wrap gap-2 mb-4">
+            {categoriesForFilter.map(cat => (
+              <button key={cat} onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${selectedCategory === cat ? 'bg-rose text-white' : 'bg-light-lav text-text-main'}`}>
+                {cat}
+              </button>
+            ))}
+          </div>
           {subPlansLoading ? (
             <p className="text-sm text-text-sub py-4">読み込み中...</p>
           ) : (
           <>
           <div className="space-y-3 mb-4">
-            {subPlans.map(p => (
+            <h3 className="text-sm font-bold text-text-main">サブスク {selectedCategory ? `（${selectedCategory}）` : '（全て）'}</h3>
+            {filteredSubs.map(p => (
               <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
                 <div>
                   <p className="font-medium text-text-main">{p.name}</p>
