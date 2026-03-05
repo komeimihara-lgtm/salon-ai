@@ -8,6 +8,7 @@ import {
 import { getMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, type MenuItem, type Campaign } from '@/lib/menus'
 import { getStaffList } from '@/lib/staff-management'
 import { fetchTicketPlans, addCustomerTicket, type TicketPlan } from '@/lib/tickets'
+import { fetchSubscriptionPlans, addCustomerSubscription, type SubscriptionPlan } from '@/lib/subscriptions'
 
 const PAYMENTS = [
   { value: 'cash', label: '現金' },
@@ -70,7 +71,9 @@ export default function SalesPage() {
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [editSale, setEditSale] = useState<Sale | null>(null)
   const [ticketPlans, setTicketPlans] = useState<TicketPlan[]>([])
+  const [subPlans, setSubPlans] = useState<SubscriptionPlan[]>([])
   const [ticketPurchasing, setTicketPurchasing] = useState(false)
+  const [subPurchasing, setSubPurchasing] = useState(false)
   const [isProductSale, setIsProductSale] = useState(false)
 
   const fetchSales = useCallback(async () => {
@@ -105,6 +108,7 @@ export default function SalesPage() {
     setCampaignsState(getCampaigns())
     fetchCustomers()
     fetchTicketPlans().then(setTicketPlans).catch(() => [])
+    fetchSubscriptionPlans().then(setSubPlans).catch(() => [])
   }, [fetchCustomers])
 
   useEffect(() => { setLoading(true); fetchSales() }, [fetchSales])
@@ -113,17 +117,35 @@ export default function SalesPage() {
 
   const handleTicketPurchase = async (plan: TicketPlan) => {
     if (!selectedCustomer) {
-      alert('先に顧客を選択してください')
+      setError('先に顧客を選択してください')
       return
     }
     setTicketPurchasing(true)
+    setError('')
     try {
       await addCustomerTicket(selectedCustomer.id, selectedCustomer.name, plan)
       alert(`${plan.name} を購入登録しました`)
     } catch {
-      alert('登録に失敗しました')
+      setError('登録に失敗しました')
     } finally {
       setTicketPurchasing(false)
+    }
+  }
+
+  const handleSubPurchase = async (plan: SubscriptionPlan) => {
+    if (!selectedCustomer) {
+      setError('先に顧客を選択してください')
+      return
+    }
+    setSubPurchasing(true)
+    setError('')
+    try {
+      await addCustomerSubscription(selectedCustomer.id, selectedCustomer.name, plan)
+      alert(`${plan.name} を加入登録しました`)
+    } catch {
+      setError('登録に失敗しました')
+    } finally {
+      setSubPurchasing(false)
     }
   }
 
@@ -285,6 +307,24 @@ export default function SalesPage() {
                 ))}
                 {ticketPlans.length === 0 && (
                   <p className="col-span-2 text-xs text-text-sub py-2">メニュー設定で回数券を登録してください</p>
+                )}
+              </div>
+              <h3 className="text-sm font-bold text-text-main mb-2 mt-4">サブスク</h3>
+              <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                {subPlans.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSubPurchase(p)}
+                    disabled={!selectedCustomer || subPurchasing}
+                    className="p-3 rounded-xl border border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <p className="font-medium text-text-main text-sm">{p.name}</p>
+                    <p className="text-sm text-rose font-bold">¥{p.price.toLocaleString()}/月</p>
+                    <p className="text-xs text-text-sub">{p.sessionsPerMonth}回/月</p>
+                  </button>
+                ))}
+                {subPlans.length === 0 && (
+                  <p className="col-span-2 text-xs text-text-sub py-2">メニュー設定でサブスクを登録してください</p>
                 )}
               </div>
             </div>

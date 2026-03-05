@@ -1,10 +1,8 @@
 /**
  * サブスク管理
- * - プラン定義（月額・含まれる施術回数など）→ LocalStorage
+ * - プラン定義（subscription_plans）→ Supabase API
  * - 顧客の加入・利用回数・更新日 → Supabase API
  */
-
-const SUBSCRIPTION_PLANS_KEY = 'sola_subscription_plans'
 
 /** サブスクプラン定義 */
 export interface SubscriptionPlan {
@@ -14,6 +12,55 @@ export interface SubscriptionPlan {
   sessionsPerMonth: number
   menuName: string
   billingDay: number
+}
+
+function mapRowToPlan(r: Record<string, unknown>): SubscriptionPlan {
+  return {
+    id: String(r.id),
+    name: String(r.name ?? ''),
+    price: Number(r.price ?? 0),
+    sessionsPerMonth: Number(r.sessionsPerMonth ?? r.sessions_per_month ?? 0),
+    menuName: String(r.menuName ?? r.menu_name ?? ''),
+    billingDay: Number(r.billingDay ?? r.billing_day ?? 1),
+  }
+}
+
+/** APIからサブスクプランを取得 */
+export async function fetchSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+  const res = await fetch('/api/subscription-plans')
+  const json = await res.json()
+  if (!res.ok) throw new Error(json.error || '取得に失敗しました')
+  const rows = json.plans || []
+  return rows.map((r: Record<string, unknown>) => mapRowToPlan(r))
+}
+
+export async function createSubscriptionPlan(plan: {
+  name: string
+  menuName: string
+  price: number
+  sessionsPerMonth: number
+  billingDay?: number
+}): Promise<SubscriptionPlan> {
+  const res = await fetch('/api/subscription-plans', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: plan.name,
+      menu_name: plan.menuName,
+      price: plan.price,
+      sessions_per_month: plan.sessionsPerMonth,
+      billing_day: plan.billingDay ?? 1,
+    }),
+  })
+  const json = await res.json()
+  if (!res.ok) throw new Error(json.error || '登録に失敗しました')
+  return mapRowToPlan(json.plan as Record<string, unknown>)
+}
+
+export async function deleteSubscriptionPlan(id: string): Promise<void> {
+  const res = await fetch(`/api/subscription-plans/${id}`, { method: 'DELETE' })
+  const json = await res.json()
+  if (!res.ok) throw new Error(json.error || '削除に失敗しました')
 }
 
 /** 顧客のサブスク加入 */
@@ -37,23 +84,10 @@ const DEFAULT_PLANS: SubscriptionPlan[] = [
   { id: '2', name: '月額ベーシック', price: 5000, sessionsPerMonth: 1, menuName: 'フェイシャル', billingDay: 1 },
 ]
 
-// ========== プラン定義（LocalStorage・メニュー設定連動） ==========
+// ========== プラン定義（Supabase API・後方互換のためgetSubscriptionPlansは非推奨） ==========
+/** @deprecated fetchSubscriptionPlans を使用してください */
 export function getSubscriptionPlans(): SubscriptionPlan[] {
-  if (typeof window === 'undefined') return DEFAULT_PLANS
-  try {
-    const raw = localStorage.getItem(SUBSCRIPTION_PLANS_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_PLANS
-    }
-  } catch (_) {}
   return DEFAULT_PLANS
-}
-
-export function setSubscriptionPlans(plans: SubscriptionPlan[]) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(SUBSCRIPTION_PLANS_KEY, JSON.stringify(plans))
-  window.dispatchEvent(new Event('subscription-plans-updated'))
 }
 
 // ========== 顧客サブスク（Supabase API） ==========

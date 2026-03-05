@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
 
 function toTicketPlan(row: Record<string, unknown>) {
   const price = Number(row.price ?? 0)
@@ -17,12 +17,14 @@ function toTicketPlan(row: Record<string, unknown>) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url)
+    const resolvedSalonId = searchParams.get('salon_id') || getSalonId()
     const { data, error } = await getSupabaseAdmin()
       .from('ticket_plans')
       .select('id, name, menu_name, total_sessions, price, unit_price, expiry_days, is_active, created_at')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', resolvedSalonId)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
 
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await getSupabaseAdmin()
       .from('ticket_plans')
       .insert({
-        salon_id: DEMO_SALON_ID,
+        salon_id: getSalonId(),
         name,
         menu_name,
         total_sessions,

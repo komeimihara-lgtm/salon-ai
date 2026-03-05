@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, Pencil, X, Ticket, Repeat, Tag, Settings2, Loader2 } from 'lucide-react'
 import { fetchTicketPlans, createTicketPlan, deleteTicketPlan, type TicketPlan } from '@/lib/tickets'
-import { getSubscriptionPlans, setSubscriptionPlans, type SubscriptionPlan } from '@/lib/subscriptions'
+import { fetchSubscriptionPlans, createSubscriptionPlan, deleteSubscriptionPlan, type SubscriptionPlan } from '@/lib/subscriptions'
 import {
   getMenus, setMenus, getCategories, setCategories,
   getTaxSettings, setTaxSettings, getCampaigns, setCampaigns,
@@ -127,6 +127,7 @@ export default function MenuSettingsPage() {
   const [ticketPlans, setTicketPlansState] = useState<TicketPlan[]>([])
   const [ticketPlansLoading, setTicketPlansLoading] = useState(true)
   const [subPlans, setSubPlansState] = useState<SubscriptionPlan[]>([])
+  const [subPlansLoading, setSubPlansLoading] = useState(true)
 
   // メニュー追加フォーム
   const [newName, setNewName] = useState('')
@@ -171,11 +172,12 @@ export default function MenuSettingsPage() {
     setNewCategory(c[0] ?? '')
     setTaxSettingsState(getTaxSettings())
     setCampaignsState(getCampaigns())
-    setSubPlansState(getSubscriptionPlans())
     setCourseMenuName(m[0]?.name ?? '')
     setSubMenuName(m[0]?.name ?? '')
     setTicketPlansLoading(true)
+    setSubPlansLoading(true)
     fetchTicketPlans().then(p => { setTicketPlansState(p) }).catch(() => {}).finally(() => setTicketPlansLoading(false))
+    fetchSubscriptionPlans().then(p => { setSubPlansState(p) }).catch(() => {}).finally(() => setSubPlansLoading(false))
   }, [])
 
   const filteredMenus = selectedCategory
@@ -286,20 +288,21 @@ export default function MenuSettingsPage() {
     }
   }
 
-  const addSubPlan = () => {
+  const addSubPlan = async () => {
     if (!subName.trim()) return
-    const plan: SubscriptionPlan = {
-      id: Date.now().toString(),
-      name: subName.trim(),
-      price: subPrice,
-      sessionsPerMonth: subSessions,
-      menuName: subMenuName,
-      billingDay: Math.min(28, Math.max(1, subBillingDay)),
+    try {
+      const plan = await createSubscriptionPlan({
+        name: subName.trim(),
+        menuName: subMenuName,
+        price: subPrice,
+        sessionsPerMonth: subSessions,
+        billingDay: Math.min(28, Math.max(1, subBillingDay)),
+      })
+      setSubPlansState(prev => [...prev, plan])
+      setSubName('')
+    } catch {
+      alert('登録に失敗しました')
     }
-    const next = [...subPlans, plan]
-    setSubPlansState(next)
-    setSubscriptionPlans(next)
-    setSubName('')
   }
 
   const TABS = [
@@ -556,6 +559,10 @@ export default function MenuSettingsPage() {
       {activeTab === 'subscriptions' && (
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
+          {subPlansLoading ? (
+            <p className="text-sm text-text-sub py-4">読み込み中...</p>
+          ) : (
+          <>
           <div className="space-y-3 mb-4">
             {subPlans.map(p => (
               <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
@@ -563,8 +570,20 @@ export default function MenuSettingsPage() {
                   <p className="font-medium text-text-main">{p.name}</p>
                   <p className="text-xs text-text-sub">¥{p.price.toLocaleString()}/月 · {p.menuName} {p.sessionsPerMonth}回 · 毎月{p.billingDay}日課金</p>
                 </div>
-                <button onClick={() => { const next = subPlans.filter(x => x.id !== p.id); setSubPlansState(next); setSubscriptionPlans(next) }}
-                  className="p-2 text-text-sub hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                <button
+                  onClick={async () => {
+                    if (!confirm('削除しますか？')) return
+                    try {
+                      await deleteSubscriptionPlan(p.id)
+                      setSubPlansState(prev => prev.filter(x => x.id !== p.id))
+                    } catch {
+                      alert('削除に失敗しました')
+                    }
+                  }}
+                  className="p-2 text-text-sub hover:text-red-600 rounded-lg"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             ))}
           </div>
@@ -589,6 +608,8 @@ export default function MenuSettingsPage() {
               <Plus className="w-4 h-4" />追加
             </button>
           </div>
+          </>
+          )}
         </div>
       )}
 

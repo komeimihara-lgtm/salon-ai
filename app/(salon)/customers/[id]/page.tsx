@@ -25,7 +25,7 @@ import {
 } from '@/lib/tickets'
 import {
   fetchCustomerSubscriptions,
-  getSubscriptionPlans,
+  fetchSubscriptionPlans,
   addCustomerSubscription,
   useSubscriptionSession,
   ensureBillingPeriodCurrent,
@@ -52,12 +52,12 @@ export default function CustomerDetailPage() {
   const [subs, setSubs] = useState<CustomerSubscription[]>([])
   const [ticketsLoading, setTicketsLoading] = useState(true)
   const [packs, setPacks] = useState<TicketPlan[]>([])
-  const [subPlans, setSubPlans] = useState<ReturnType<typeof getSubscriptionPlans>>([])
+  const [subPlans, setSubPlans] = useState<Awaited<ReturnType<typeof fetchSubscriptionPlans>>>([])
   const [purchaseOpen, setPurchaseOpen] = useState(false)
   const [selectedPack, setSelectedPack] = useState<TicketPlan | null>(null)
   const [consumeTarget, setConsumeTarget] = useState<CustomerTicket | null>(null)
   const [subPurchaseOpen, setSubPurchaseOpen] = useState(false)
-  const [selectedSubPlan, setSelectedSubPlan] = useState<ReturnType<typeof getSubscriptionPlans>[0] | null>(null)
+  const [selectedSubPlan, setSelectedSubPlan] = useState<Awaited<ReturnType<typeof fetchSubscriptionPlans>>[0] | null>(null)
   const [subUseTarget, setSubUseTarget] = useState<CustomerSubscription | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
@@ -65,15 +65,16 @@ export default function CustomerDetailPage() {
     if (!id) return
     setTicketsLoading(true)
     try {
-      const [ticketsData, packsData, subsData] = await Promise.all([
+      const [ticketsData, packsData, subsData, plansData] = await Promise.all([
         fetchCustomerTickets(id),
         fetchTicketPlans(),
         fetchCustomerSubscriptions(id),
+        fetchSubscriptionPlans(),
       ])
       setTickets(ticketsData)
       setPacks(packsData)
       setSubs(subsData.map(s => ensureBillingPeriodCurrent(s)))
-      setSubPlans(getSubscriptionPlans())
+      setSubPlans(plansData)
     } catch {
       setTickets([])
       setSubs([])

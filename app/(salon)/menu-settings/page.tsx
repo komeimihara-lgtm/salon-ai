@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, Pencil, X, Ticket, Repeat } from 'lucide-react'
 import { fetchTicketPlans, createTicketPlan, deleteTicketPlan, type TicketPlan } from '@/lib/tickets'
-import { getSubscriptionPlans, setSubscriptionPlans, type SubscriptionPlan } from '@/lib/subscriptions'
+import { fetchSubscriptionPlans, createSubscriptionPlan, deleteSubscriptionPlan, type SubscriptionPlan } from '@/lib/subscriptions'
 
 const STORAGE_KEY = 'sola_menus'
 
@@ -60,6 +60,7 @@ export default function MenuSettingsPage() {
   const [courseExpiryDays, setCourseExpiryDays] = useState(180)
 
   const [subPlans, setSubPlansState] = useState<SubscriptionPlan[]>([])
+  const [subPlansLoading, setSubPlansLoading] = useState(true)
   const [subName, setSubName] = useState('')
   const [subMenuName, setSubMenuName] = useState(() => {
     if (typeof window === 'undefined') return ''
@@ -71,10 +72,11 @@ export default function MenuSettingsPage() {
   const [subBillingDay, setSubBillingDay] = useState(1)
 
   useEffect(() => {
-    setSubPlansState(getSubscriptionPlans())
     if (!subMenuName && menus.length > 0) setSubMenuName(menus[0].name)
     setTicketPlansLoading(true)
+    setSubPlansLoading(true)
     fetchTicketPlans().then(p => { setTicketPlansState(p) }).catch(() => {}).finally(() => setTicketPlansLoading(false))
+    fetchSubscriptionPlans().then(p => { setSubPlansState(p) }).catch(() => {}).finally(() => setSubPlansLoading(false))
   }, [])
 
   const addMenu = () => {
@@ -149,30 +151,35 @@ export default function MenuSettingsPage() {
     }
   }
 
-  const addSubPlan = () => {
+  const addSubPlan = async () => {
     if (!subName.trim() || !subMenuName.trim()) return
-    const plan: SubscriptionPlan = {
-      id: Date.now().toString(),
-      name: subName.trim(),
-      price: subPrice,
-      sessionsPerMonth: subSessions,
-      menuName: subMenuName.trim(),
-      billingDay: Math.min(28, Math.max(1, subBillingDay)),
+    try {
+      const plan = await createSubscriptionPlan({
+        name: subName.trim(),
+        menuName: subMenuName.trim(),
+        price: subPrice,
+        sessionsPerMonth: subSessions,
+        billingDay: Math.min(28, Math.max(1, subBillingDay)),
+      })
+      setSubPlansState(prev => [...prev, plan])
+      setSubName('')
+      setSubMenuName(menus[0]?.name ?? '')
+      setSubPrice(8000)
+      setSubSessions(2)
+      setSubBillingDay(1)
+    } catch {
+      alert('登録に失敗しました')
     }
-    const next = [...subPlans, plan]
-    setSubPlansState(next)
-    setSubscriptionPlans(next)
-    setSubName('')
-    setSubMenuName(menus[0]?.name ?? '')
-    setSubPrice(8000)
-    setSubSessions(2)
-    setSubBillingDay(1)
   }
 
-  const removeSubPlan = (id: string) => {
-    const next = subPlans.filter(p => p.id !== id)
-    setSubPlansState(next)
-    setSubscriptionPlans(next)
+  const removeSubPlan = async (id: string) => {
+    if (!confirm('削除しますか？')) return
+    try {
+      await deleteSubscriptionPlan(id)
+      setSubPlansState(prev => prev.filter(p => p.id !== id))
+    } catch {
+      alert('削除に失敗しました')
+    }
   }
 
   return (

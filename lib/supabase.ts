@@ -2,6 +2,14 @@ import { createClient } from '@supabase/supabase-js'
 
 export const DEMO_SALON_ID = 'a0000000-0000-0000-0000-000000000001'
 
+/** 使用するサロンID（NEXT_PUBLIC_SALON_ID が設定されていればそれを使用） */
+export function getSalonId(): string {
+  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SALON_ID) {
+    return process.env.NEXT_PUBLIC_SALON_ID
+  }
+  return DEMO_SALON_ID
+}
+
 // 実行時に初期化（ビルド時エラー回避）
 export function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

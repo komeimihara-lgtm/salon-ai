@@ -19,7 +19,7 @@ import {
 } from '@/lib/tickets'
 import {
   fetchCustomerSubscriptions,
-  getSubscriptionPlans,
+  fetchSubscriptionPlans,
   addCustomerSubscription,
   useSubscriptionSession,
   pauseSubscription,
@@ -64,21 +64,22 @@ function CustomerDetailModal({
   const [consumeTarget, setConsumeTarget] = useState<CustomerTicket | null>(null)
 
   const [subs, setSubs] = useState<CustomerSubscription[]>([])
-  const [subPlans, setSubPlans] = useState<ReturnType<typeof getSubscriptionPlans>>([])
+  const [subPlans, setSubPlans] = useState<Awaited<ReturnType<typeof fetchSubscriptionPlans>>>([])
   const [subPurchaseOpen, setSubPurchaseOpen] = useState(false)
-  const [selectedSubPlan, setSelectedSubPlan] = useState<ReturnType<typeof getSubscriptionPlans>[0] | null>(null)
+  const [selectedSubPlan, setSelectedSubPlan] = useState<Awaited<ReturnType<typeof fetchSubscriptionPlans>>[0] | null>(null)
   const [subUseTarget, setSubUseTarget] = useState<CustomerSubscription | null>(null)
 
   const refresh = useCallback(async () => {
-    const [ticketsData, packsData, subsData] = await Promise.all([
+    const [ticketsData, packsData, subsData, plansData] = await Promise.all([
       fetchCustomerTickets(customer.id),
       fetchTicketPlans(),
       fetchCustomerSubscriptions(customer.id),
+      fetchSubscriptionPlans(),
     ])
     setTickets(ticketsData)
     setPacks(packsData)
     setSubs(subsData.map(s => ensureBillingPeriodCurrent(s)))
-    setSubPlans(getSubscriptionPlans())
+    setSubPlans(plansData)
     onCourseUpdated?.()
   }, [customer.id, onCourseUpdated])
 

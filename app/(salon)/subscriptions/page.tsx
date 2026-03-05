@@ -14,8 +14,8 @@ import {
   Play,
 } from 'lucide-react'
 import {
-  getSubscriptionPlans,
-  getCustomerSubscriptions,
+  fetchSubscriptionPlans,
+  fetchCustomerSubscriptions,
   addCustomerSubscription,
   useSubscriptionSession,
   cancelSubscription,
@@ -36,20 +36,21 @@ export default function SubscriptionsPage() {
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false)
   const [useModalOpen, setUseModalOpen] = useState<CustomerSubscription | null>(null)
 
-  const refresh = useCallback(() => {
-    const all = getCustomerSubscriptions()
-    setSubscriptions(all.map(s => ensureBillingPeriodCurrent(s)))
-    setPlans(getSubscriptionPlans())
+  const refresh = useCallback(async () => {
+    const [subsData, plansData] = await Promise.all([
+      fetchCustomerSubscriptions(),
+      fetchSubscriptionPlans(),
+    ])
+    setSubscriptions(subsData.map(s => ensureBillingPeriodCurrent(s)))
+    setPlans(plansData)
   }, [])
 
   useEffect(() => {
     refresh()
     const handler = () => refresh()
     window.addEventListener('customer-subscriptions-updated', handler)
-    window.addEventListener('subscription-plans-updated', () => setPlans(getSubscriptionPlans()))
     return () => {
       window.removeEventListener('customer-subscriptions-updated', handler)
-      window.removeEventListener('subscription-plans-updated', () => {})
     }
   }, [refresh])
 
@@ -157,8 +158,8 @@ export default function SubscriptionsPage() {
                         )}
                         {s.status === 'paused' && (
                           <button
-                            onClick={() => {
-                              resumeSubscription(s.id)
+                            onClick={async () => {
+                              await resumeSubscription(s.id)
                               refresh()
                             }}
                             className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-600"
@@ -209,9 +210,9 @@ export default function SubscriptionsPage() {
                 キャンセル
               </button>
               <button
-                onClick={() => {
-                  useSubscriptionSession(useModalOpen.id)
-                  refresh()
+                onClick={async () => {
+                  const ok = await useSubscriptionSession(useModalOpen.id)
+                  if (ok) refresh()
                   setUseModalOpen(null)
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium"
@@ -290,13 +291,17 @@ function PurchaseModal({
     setStep('plan')
   }
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     if (!selectedPlan) return
     const cid = selectedCustomer?.id ?? (customerId || `local-${Date.now()}`)
     const cname = selectedCustomer?.name ?? (customerName.trim() || '未登録顧客')
-    addCustomerSubscription(cid, cname, selectedPlan)
-    onSaved()
-    onClose()
+    try {
+      await addCustomerSubscription(cid, cname, selectedPlan)
+      onSaved()
+      onClose()
+    } catch {
+      alert('登録に失敗しました')
+    }
   }
 
   return (
