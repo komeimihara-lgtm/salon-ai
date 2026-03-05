@@ -137,6 +137,8 @@ CREATE TABLE reservations (
   status TEXT DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'completed', 'cancelled', 'no_show')),
   memo TEXT,
   reminder_sent_at TIMESTAMPTZ,
+  bed_id TEXT DEFAULT 'bed-1',
+  duration_minutes INTEGER DEFAULT 60,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

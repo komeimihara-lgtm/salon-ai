@@ -46,6 +46,150 @@ const FALLBACK_STAFF = [
   { name: '鈴木', initial: '鈴', color: '#9B8EC4', start: '10:00', end: '19:00', bookings: 4, free: '14:00-14:30' },
 ]
 
+// 10:00〜21:00 を15分刻み = 44スロット
+const SLOT_COUNT = 44
+const SLOT_WIDTH_PX = 56
+const MIN_WIDTH = SLOT_COUNT * SLOT_WIDTH_PX
+const ROW_HEIGHT = 72
+
+function timeToSlotIndex(time: string): number {
+  const [h = 10, m = 0] = time.slice(0, 5).split(':').map(Number)
+  return (h - 10) * 4 + Math.floor((m || 0) / 15)
+}
+
+function getDurationSlots(start: string, end: string): number {
+  const [h1 = 10, m1 = 0] = start.slice(0, 5).split(':').map(Number)
+  const [h2 = 11, m2 = 0] = (end || '11:00').slice(0, 5).split(':').map(Number)
+  return (h2 - h1) * 4 + Math.floor((m2 - m1) / 15)
+}
+
+function TimelineSchedule({
+  today,
+  beds,
+  reservations,
+  loading,
+  onSlotClick,
+  onReservationClick,
+}: {
+  today: string
+  beds: string[]
+  reservations: Reservation[]
+  loading: boolean
+  onSlotClick: (slot: { date: string; start: string; end: string; bed: string }) => void
+  onReservationClick: (r: Reservation) => void
+}) {
+  const now = new Date()
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const nowSlotIndex = currentMinutes >= 600 && currentMinutes < 1260 ? timeToSlotIndex(`${Math.floor(currentMinutes / 60)}:${currentMinutes % 60}`) : -1
+
+  const STATUS_COLORS: Record<string, string> = {
+    confirmed: 'bg-blue-500',
+    rescheduled: 'bg-blue-500',
+    visited: 'bg-emerald-500',
+    completed: 'bg-emerald-500',
+    no_show: 'bg-red-500',
+  }
+
+  return (
+    <div className="bg-white rounded-2xl overflow-hidden card-shadow overflow-x-auto overflow-y-hidden scroll-smooth">
+      <div className="min-w-[max(100%,280px)]" style={{ minWidth: MIN_WIDTH }}>
+        {/* ヘッダー行 */}
+        <div className="flex border-b border-gray-200 bg-light-lav sticky top-0 z-20">
+          <div className="w-16 shrink-0 p-2 text-xs font-dm-sans text-text-sub" />
+          <div className="flex shrink-0" style={{ width: SLOT_COUNT * SLOT_WIDTH_PX }}>
+            {Array.from({ length: SLOT_COUNT }, (_, i) => {
+              const h = 10 + Math.floor(i / 4)
+              const m = (i % 4) * 15
+              return (
+                <div key={i} className="p-2 text-center text-xs font-dm-sans text-text-sub border-l border-gray-200 shrink-0" style={{ width: SLOT_WIDTH_PX }}>
+                  {h}:{m.toString().padStart(2, '0')}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ベッド行 */}
+        {beds.map((bed) => (
+          <div key={bed} className="flex border-b border-gray-100">
+            <div className="w-16 shrink-0 p-3 bg-deep/5 text-sm font-medium text-text-main flex items-center justify-center border-r border-gray-100">
+              ベッド{bed}
+            </div>
+            <div className="relative shrink-0" style={{ width: SLOT_COUNT * SLOT_WIDTH_PX, height: ROW_HEIGHT }}>
+              {/* 現在時刻の赤線 */}
+              {nowSlotIndex >= 0 && (
+                <div
+                  className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-[15]"
+                  style={{ left: nowSlotIndex * SLOT_WIDTH_PX }}
+                />
+              )}
+              {loading ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 text-rose animate-spin" />
+                </div>
+              ) : (
+                <>
+                  {/* 空き枠クリック */}
+                  {Array.from({ length: SLOT_COUNT }, (_, i) => {
+                    const h = 10 + Math.floor(i / 4)
+                    const m = (i % 4) * 15
+                    const startTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+                    const m2 = m + 15
+                    const endH = m2 >= 60 ? h + 1 : h
+                    const endM = m2 >= 60 ? m2 - 60 : m2
+                    const endTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`
+                    return (
+                      <button
+                        key={`${bed}-${i}`}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onSlotClick({ date: today, start: startTime, end: endTime, bed })
+                        }}
+                        className="absolute top-0.5 bottom-0.5 hover:bg-rose/10 transition-colors cursor-pointer z-[5]"
+                        style={{ left: i * SLOT_WIDTH_PX, width: SLOT_WIDTH_PX - 2 }}
+                      />
+                    )
+                  })}
+                  {/* 予約ブロック */}
+                  {reservations
+                    .filter(r => (!r.bed_id && bed === (beds[0] || 'A')) || r.bed_id === bed)
+                    .filter(r => r.status === 'confirmed' || r.status === 'rescheduled' || r.status === 'visited' || r.status === 'no_show')
+                    .map((r) => {
+                      const colIdx = timeToSlotIndex(r.start_time || '10:00')
+                      const durationSlots = r.duration_minutes
+                        ? Math.max(1, Math.floor(r.duration_minutes / 15))
+                        : getDurationSlots(r.start_time || '10:00', r.end_time || '11:00')
+                      const width = durationSlots * SLOT_WIDTH_PX - 4
+                      const bg = STATUS_COLORS[r.status] || 'bg-blue-500'
+                      return (
+                        <div
+                          key={r.id}
+                          onClick={(e) => { e.stopPropagation(); onReservationClick(r) }}
+                          className={`absolute rounded-lg px-2 py-1 text-white text-xs font-medium shadow-sm cursor-pointer hover:ring-2 hover:ring-white/80 z-10 ${bg}`}
+                          style={{
+                            left: colIdx * SLOT_WIDTH_PX + 2,
+                            width,
+                            minWidth: 48,
+                            top: 4,
+                            height: ROW_HEIGHT - 8,
+                          }}
+                        >
+                          <p className="font-semibold truncate">{r.customer_name}</p>
+                          <p className="text-white/90 truncate">{r.menu || '-'}</p>
+                        </div>
+                      )
+                    })}
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 type KpiItem = { label: string; value: string; sub: string; rate: number; diff: number; diffUp: boolean }
 
 export default function DashboardPage() {
@@ -76,7 +220,7 @@ export default function DashboardPage() {
   const [rescheduleTarget, setRescheduleTarget] = useState<Reservation | null>(null)
   const [editTarget, setEditTarget] = useState<Reservation | null>(null)
   const [detailModal, setDetailModal] = useState<'cash' | 'consume' | null>(null)
-  const [selectedTime, setSelectedTime] = useState<{ date: string; start: string; end: string } | null>(null)
+  const [selectedSlot, setSelectedSlot] = useState<{ date: string; start: string; end: string; bed: string } | null>(null)
   const [showReservationModal, setShowReservationModal] = useState(false)
 
   useEffect(() => {
@@ -409,98 +553,21 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      {/* ④ 今日の予約表（API連携） */}
+      {/* ④ 今日の予約表（タイムライン形式） */}
       <section>
         <div className="flex items-center gap-3 mb-4">
           <div className="gradient-line rounded-full" />
           <span className="section-label font-dm-sans text-2xl font-bold text-text-main">今日の予約表</span>
           <Link href="/reservations" className="text-sm text-rose hover:underline ml-auto">予約管理へ →</Link>
         </div>
-        <div className="bg-white rounded-2xl overflow-hidden card-shadow overflow-x-auto">
-          <div className="min-w-[800px]">
-            <div className="grid grid-cols-[60px_repeat(40,1fr)] bg-light-lav border-b border-gray-200">
-              <div className="p-2 text-xs font-dm-sans text-text-sub" />
-              {Array.from({ length: 40 }, (_, i) => {
-                const h = 10 + Math.floor(i / 4)
-                const m = (i % 4) * 15
-                return (
-                  <div key={i} className="p-2 text-center text-xs font-dm-sans text-text-sub border-l border-gray-200">
-                    {h}:{m.toString().padStart(2, '0')}
-                  </div>
-                )
-              })}
-            </div>
-            <div className="grid grid-cols-[60px_repeat(40,1fr)] border-b border-gray-100">
-              <div className="p-3 bg-deep text-white text-sm font-medium flex items-center justify-center">
-                今日の予約
-              </div>
-              <div className="col-span-40 relative h-[80px] min-h-[80px]">
-                {/* 空き枠クリック用グリッド（各15分枠） */}
-                {!reservationsLoading && Array.from({ length: 40 }, (_, i) => {
-                  const h = 10 + Math.floor(i / 4)
-                  const m = (i % 4) * 15
-                  const startTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
-                  const m2 = m + 15
-                  const endH = m2 >= 60 ? h + 1 : h
-                  const endM = m2 >= 60 ? m2 - 60 : m2
-                  const endTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`
-                  return (
-                    <button
-                      key={`slot-${i}`}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const slot = { date: today, start: startTime, end: endTime }
-                        setSelectedTime(slot)
-                        setShowReservationModal(true)
-                      }}
-                      className="absolute top-0 bottom-0 hover:bg-rose/10 transition-colors cursor-pointer z-[5]"
-                      style={{ left: `${i * 2.5}%`, width: '2.5%', minWidth: 16 }}
-                      title={`${startTime}〜 予約を追加`}
-                    />
-                  )
-                })}
-                {reservationsLoading ? (
-                  <div className="absolute inset-0 flex items-center justify-center z-10">
-                    <Loader2 className="w-5 h-5 text-rose animate-spin" />
-                  </div>
-                ) : (
-                  <>
-                    {todayReservations
-                      .filter(r => r.status === 'confirmed' || r.status === 'rescheduled' || r.status === 'visited')
-                      .map((r) => {
-                        const [h = 10, m = 0] = (r.start_time || '10:00').slice(0, 5).split(':').map(Number)
-                        const col = (h - 10) * 4 + (m || 0) / 15
-                        const colIdx = Math.max(0, Math.min(Math.floor(col), 39))
-                        const [eh = 11, em = 0] = (r.end_time || '11:00').slice(0, 5).split(':').map(Number)
-                        const endCol = (eh - 10) * 4 + (em || 0) / 15
-                        const colSpan = Math.max(1, Math.floor(endCol - col))
-                        const width = (colSpan / 40) * 100
-                        return (
-                          <div
-                            key={r.id}
-                            onClick={() => setReservationDetailModal(r)}
-                            className="absolute rounded-lg px-2 py-1 text-white text-xs font-medium shadow-sm cursor-pointer hover:ring-2 hover:ring-rose/50 z-10 pointer-events-auto"
-                            style={{
-                              left: `${colIdx * 2.5}%`,
-                              width: `${width}%`,
-                              minWidth: 48,
-                              background: 'linear-gradient(135deg, #C4728A, #9B8EC4)',
-                            }}
-                            title="クリックで詳細を見る"
-                          >
-                            <p className="font-semibold truncate">{r.customer_name}</p>
-                            <p className="text-white/90 truncate">{r.menu || '-'}</p>
-                            <p className="text-white/80 truncate text-[10px]">{r.staff_name || '-'}</p>
-                          </div>
-                        )
-                      })}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <TimelineSchedule
+          today={today}
+          beds={getSalonSettings().beds.length > 0 ? getSalonSettings().beds : ['A', 'B']}
+          reservations={todayReservations}
+          loading={reservationsLoading}
+          onSlotClick={(slot) => { setSelectedSlot(slot); setShowReservationModal(true) }}
+          onReservationClick={(r) => setReservationDetailModal(r)}
+        />
       </section>
 
       {/* ⑤ 今日の来店客一覧 + ⑥ 出勤スタッフ */}
@@ -676,13 +743,15 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showReservationModal && selectedTime && (
+      {showReservationModal && selectedSlot && (
         <ReservationFormModal
-          defaultDate={selectedTime.date}
-          defaultStartTime={selectedTime.start}
-          defaultEndTime={selectedTime.end}
-          onClose={() => { setShowReservationModal(false); setSelectedTime(null) }}
-          onSaved={() => { setShowReservationModal(false); setSelectedTime(null); refresh() }}
+          defaultDate={selectedSlot.date}
+          defaultStartTime={selectedSlot.start}
+          defaultEndTime={selectedSlot.end}
+          defaultBed={selectedSlot.bed}
+          beds={getSalonSettings().beds.length > 0 ? getSalonSettings().beds : ['A', 'B']}
+          onClose={() => { setShowReservationModal(false); setSelectedSlot(null) }}
+          onSaved={() => { setShowReservationModal(false); setSelectedSlot(null); refresh() }}
         />
       )}
       {rescheduleTarget && (

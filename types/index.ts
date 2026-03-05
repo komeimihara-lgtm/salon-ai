@@ -91,6 +91,8 @@ export interface Reservation {
   status: 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'visited' | 'rescheduled'
   memo?: string
   reminder_sent_at?: string
+  bed_id?: string
+  duration_minutes?: number
   created_at: string
   updated_at: string
 }

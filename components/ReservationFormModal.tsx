@@ -13,6 +13,8 @@ export interface ReservationFormModalProps {
   defaultDate: string
   defaultStartTime?: string
   defaultEndTime?: string
+  defaultBed?: string
+  beds?: string[]
   onClose: () => void
   onSaved: () => void
 }
@@ -21,6 +23,8 @@ export default function ReservationFormModal({
   defaultDate,
   defaultStartTime = '10:00',
   defaultEndTime = '11:00',
+  defaultBed,
+  beds = ['A', 'B'],
   onClose,
   onSaved,
 }: ReservationFormModalProps) {
@@ -32,6 +36,8 @@ export default function ReservationFormModal({
     reservation_date: defaultDate,
     start_time: defaultStartTime,
     end_time: defaultEndTime,
+    bed_id: defaultBed || beds[0] || 'A',
+    duration_minutes: 60,
     menu: '',
     staff_name: '',
     price: '',
@@ -52,8 +58,9 @@ export default function ReservationFormModal({
       reservation_date: defaultDate,
       start_time: defaultStartTime,
       end_time: defaultEndTime,
+      bed_id: defaultBed || beds[0] || p.bed_id,
     }))
-  }, [defaultDate, defaultStartTime, defaultEndTime])
+  }, [defaultDate, defaultStartTime, defaultEndTime, defaultBed, beds])
 
   useEffect(() => {
     if (!searchQuery.trim() || mode !== 'existing') {
@@ -151,6 +158,8 @@ export default function ReservationFormModal({
           reservation_date: form.reservation_date,
           start_time: form.start_time,
           end_time: form.end_time,
+          bed_id: form.bed_id || undefined,
+          duration_minutes: form.duration_minutes || 60,
           menu: form.menu || undefined,
           staff_name: form.staff_name || undefined,
           price: parseInt(form.price) || 0,
@@ -278,6 +287,15 @@ export default function ReservationFormModal({
               className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]" />
           </div>
 
+          {beds.length > 0 && (
+            <div>
+              <label className="text-xs text-[#4A5568] mb-1 block">ベッド</label>
+              <select value={form.bed_id} onChange={e => setForm(p => ({ ...p, bed_id: e.target.value }))}
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
+                {beds.map(b => <option key={b} value={b}>ベッド {b}</option>)}
+              </select>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-[#4A5568] mb-1 block">開始時間</label>
@@ -287,10 +305,19 @@ export default function ReservationFormModal({
               </select>
             </div>
             <div>
-              <label className="text-xs text-[#4A5568] mb-1 block">終了時間</label>
-              <select value={form.end_time} onChange={e => setForm(p => ({ ...p, end_time: e.target.value }))}
+              <label className="text-xs text-[#4A5568] mb-1 block">施術時間（分）</label>
+              <select value={form.duration_minutes} onChange={e => {
+                const d = Number(e.target.value)
+                setForm(p => {
+                  const [sh = 10, sm = 0] = p.start_time.slice(0, 5).split(':').map(Number)
+                  const endMin = sh * 60 + sm + d
+                  const eh = Math.floor(endMin / 60)
+                  const em = endMin % 60
+                  return { ...p, duration_minutes: d, end_time: `${eh.toString().padStart(2, '0')}:${em.toString().padStart(2, '0')}` }
+                })
+              }}
                 className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
-                {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                {[30, 45, 60, 75, 90, 120].map(m => <option key={m} value={m}>{m}分</option>)}
               </select>
             </div>
           </div>

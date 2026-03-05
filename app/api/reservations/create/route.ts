@@ -10,6 +10,13 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin()
+    const durationMin = body.duration_minutes ?? 60
+    const [sh = 10, sm = 0] = (body.start_time || '10:00').slice(0, 5).split(':').map(Number)
+    const endMin = sh * 60 + sm + durationMin
+    const endH = Math.floor(endMin / 60)
+    const endM = endMin % 60
+    const computedEndTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`
+
     const { data, error } = await supabase
       .from('reservations')
       .insert({
@@ -19,12 +26,14 @@ export async function POST(req: NextRequest) {
         customer_phone: body.customer_phone || null,
         reservation_date: body.reservation_date,
         start_time: body.start_time,
-        end_time: body.end_time || null,
+        end_time: body.end_time || computedEndTime,
         menu: body.menu || null,
         staff_name: body.staff_name || null,
         price: body.price || 0,
         status: 'confirmed',
         memo: body.memo || null,
+        bed_id: body.bed_id || null,
+        duration_minutes: durationMin,
       })
       .select()
       .single()

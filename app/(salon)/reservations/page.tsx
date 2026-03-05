@@ -10,6 +10,7 @@ import ReservationActionCard from '@/components/ReservationActionCard'
 import { RescheduleModal, EditReservationModal } from '@/components/ReservationModals'
 import ReservationFormModal from '@/components/ReservationFormModal'
 import { useReservations } from '@/hooks/useReservations'
+import { getSalonSettings } from '@/lib/salon-settings'
 
 // 週の日付配列を生成
 function getWeekDates(baseDate: Date): Date[] {
@@ -185,6 +186,7 @@ export default function ReservationsPage() {
       {showNewModal && (
         <ReservationFormModal
           defaultDate={selectedDate}
+          beds={getSalonSettings().beds.length > 0 ? getSalonSettings().beds : ['A', 'B']}
           onClose={() => setShowNewModal(false)}
           onSaved={refresh}
         />
