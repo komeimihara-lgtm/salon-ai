@@ -37,14 +37,6 @@ import {
 
 const STORAGE_MENUS = 'sola_menus'
 
-// モックデータ（初期値、useEffectでサロン設定から目標値を反映）
-const KPI_DATA_INITIAL = [
-  { label: '今月売上', value: '¥320,000', sub: '目標 ¥600,000', rate: 53, diff: 8, diffUp: true },
-  { label: '来店数', value: '38名', sub: '目標 60名', rate: 63, diff: 12, diffUp: true },
-  { label: '客単価', value: '¥8,421', sub: '目標 ¥10,000', rate: 84, diff: 3, diffUp: true },
-  { label: '再来店率', value: '68%', sub: '目標 75%', rate: 91, diff: 5, diffUp: true },
-]
-
 const TASKS_AUTO_BASE = [
   { id: 1, type: 'alert', text: '田中様（92日未来店）に失客防止メッセージを送る', action: '送信する' },
   { id: 2, type: 'birthday', text: '山田様の誕生日まで7日。特典クーポンを送る', action: '送信する' },
@@ -79,7 +71,12 @@ type KpiItem = { label: string; value: string; sub: string; rate: number; diff: 
 
 export default function DashboardPage() {
   const todayShifts = useTodayShifts()
-  const [kpiData, setKpiData] = useState<KpiItem[]>(KPI_DATA_INITIAL)
+  const [kpiData, setKpiData] = useState<KpiItem[]>([
+    { label: '今月売上', value: '¥-', sub: '目標 ¥-', rate: 0, diff: 0, diffUp: true },
+    { label: '来店数', value: '-名', sub: '目標 -名', rate: 0, diff: 0, diffUp: true },
+    { label: '客単価', value: '¥-', sub: '目標 ¥-', rate: 0, diff: 0, diffUp: true },
+    { label: '再来店率', value: '-%', sub: '目標 75%', rate: 0, diff: 0, diffUp: true },
+  ])
   const [manualTasks, setManualTasksState] = useState<ManualTask[]>([])
   const [reservations, setReservationsState] = useState<DashboardReservation[]>([])
   const [taskModalOpen, setTaskModalOpen] = useState(false)
@@ -93,20 +90,32 @@ export default function DashboardPage() {
   const [courseAlerts, setCourseAlerts] = useState<{ id: string; type: string; text: string; action: string }[]>([])
 
   useEffect(() => {
-    const settings = getSalonSettings()
-    const monthlyTarget = settings.targets?.sales ?? 600000
-    const visitsTarget = settings.targets?.visits ?? 60
-    const avgPriceTarget = settings.targets?.avgPrice ?? 10000
-    setKpiData([
-      { ...KPI_DATA_INITIAL[0], sub: `目標 ¥${monthlyTarget.toLocaleString()}` },
-      { ...KPI_DATA_INITIAL[1], sub: `目標 ${visitsTarget}名` },
-      { ...KPI_DATA_INITIAL[2], sub: `目標 ¥${avgPriceTarget.toLocaleString()}` },
-      KPI_DATA_INITIAL[3],
-    ])
+    const s = getSalonSettings()
+    // Supabaseから今月の売上を取得
+    const now = new Date()
+    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
+    fetch(`/api/kpi/sales?start=${start}&end=${end}`)
+      .then(r => r.json())
+      .then(json => {
+        const sales = json.sales || []
+        const totalSales = sales.reduce((sum: number, sale: { amount: number }) => sum + sale.amount, 0)
+        const visits = sales.length
+        const avgPrice = visits > 0 ? Math.round(totalSales / visits) : 0
+        const salesRate = Math.round((totalSales / s.targets.sales) * 100)
+        const visitsRate = Math.round((visits / s.targets.visits) * 100)
+        const avgRate = Math.round((avgPrice / s.targets.avgPrice) * 100)
+        setKpiData([
+          { label: '今月売上', value: `¥${totalSales.toLocaleString()}`, sub: `目標 ¥${s.targets.sales.toLocaleString()}`, rate: salesRate, diff: 0, diffUp: true },
+          { label: '来店数', value: `${visits}名`, sub: `目標 ${s.targets.visits}名`, rate: visitsRate, diff: 0, diffUp: true },
+          { label: '客単価', value: `¥${avgPrice.toLocaleString()}`, sub: `目標 ¥${s.targets.avgPrice.toLocaleString()}`, rate: avgRate, diff: 0, diffUp: true },
+          { label: '再来店率', value: '68%', sub: '目標 75%', rate: 91, diff: 5, diffUp: true },
+        ])
+      })
+      .catch(() => {})
     setManualTasksState(getManualTasks())
     setReservationsState(getDashboardReservations())
     setMenus(loadMenus().map(m => ({ id: m.id, name: m.name })))
-    const s = settings
     setStaff(s.staff.map(x => ({ name: x.name })))
     setBeds(s.beds.length > 0 ? s.beds : ['A', 'B'])
     const expiring = getExpiringSoon(14)
