@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await getSupabaseAdmin()
       .from('customer_tickets')
       .insert(insertData)
-      .select()
+      .select('id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date')
       .single()
 
     if (error) {

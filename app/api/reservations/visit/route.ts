@@ -30,15 +30,16 @@ export async function POST(req: NextRequest) {
     // 回数券を検索（customer_tickets）
     const { data: tickets } = await supabase
       .from('customer_tickets')
-      .select('id, customer_id, customer_name, menu_name, remaining_sessions, unit_price, ticket_plan_id')
+      .select('id, customer_id, menu_name, remaining_sessions, unit_price, ticket_plan_id, customers(name)')
       .eq('salon_id', DEMO_SALON_ID)
       .gt('remaining_sessions', 0)
 
-    const matchingTicket = (tickets || []).find(
-      (t: { customer_id?: string; customer_name?: string; menu_name?: string }) =>
-        (t.customer_id === customerId || (t.customer_name && t.customer_name === customerName)) &&
+    const matchingTicket = (tickets || []).find((t: Record<string, unknown>) => {
+      const cust = t.customers as { name?: string } | { name?: string }[] | null | undefined
+      const tName = Array.isArray(cust) ? cust[0]?.name : cust?.name
+      return (t.customer_id === customerId || (tName && tName === customerName)) &&
         (t.menu_name === menu || !menu)
-    )
+    })
 
     if (matchingTicket) {
       const newRemaining = Number(matchingTicket.remaining_sessions ?? 0) - 1
