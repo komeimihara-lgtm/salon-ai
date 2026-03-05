@@ -77,6 +77,7 @@ export default function DashboardPage() {
   const [editTarget, setEditTarget] = useState<Reservation | null>(null)
   const [detailModal, setDetailModal] = useState<'cash' | 'consume' | null>(null)
   const [selectedTime, setSelectedTime] = useState<{ date: string; start: string; end: string } | null>(null)
+  const [showReservationModal, setShowReservationModal] = useState(false)
 
   useEffect(() => {
     const s = getSalonSettings()
@@ -433,7 +434,7 @@ export default function DashboardPage() {
               <div className="p-3 bg-deep text-white text-sm font-medium flex items-center justify-center">
                 今日の予約
               </div>
-              <div className="col-span-40 flex relative min-h-[60px]">
+              <div className="col-span-40 relative h-[80px] min-h-[80px]">
                 {/* 空き枠クリック用グリッド（各15分枠） */}
                 {!reservationsLoading && Array.from({ length: 40 }, (_, i) => {
                   const h = 10 + Math.floor(i / 4)
@@ -447,9 +448,14 @@ export default function DashboardPage() {
                     <button
                       key={`slot-${i}`}
                       type="button"
-                      onClick={() => setSelectedTime({ date: today, start: startTime, end: endTime })}
-                      className="absolute top-0 bottom-0 hover:bg-rose/5 transition-colors cursor-pointer z-0"
-                      style={{ left: `${i * 2.5}%`, width: '2.5%' }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        const slot = { date: today, start: startTime, end: endTime }
+                        setSelectedTime(slot)
+                        setShowReservationModal(true)
+                      }}
+                      className="absolute top-0 bottom-0 hover:bg-rose/10 transition-colors cursor-pointer z-[5]"
+                      style={{ left: `${i * 2.5}%`, width: '2.5%', minWidth: 16 }}
                       title={`${startTime}〜 予約を追加`}
                     />
                   )
@@ -474,7 +480,7 @@ export default function DashboardPage() {
                           <div
                             key={r.id}
                             onClick={() => setReservationDetailModal(r)}
-                            className="absolute rounded-lg px-2 py-1 text-white text-xs font-medium shadow-sm cursor-pointer hover:ring-2 hover:ring-rose/50 z-10"
+                            className="absolute rounded-lg px-2 py-1 text-white text-xs font-medium shadow-sm cursor-pointer hover:ring-2 hover:ring-rose/50 z-10 pointer-events-auto"
                             style={{
                               left: `${colIdx * 2.5}%`,
                               width: `${width}%`,
@@ -670,13 +676,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {selectedTime && (
+      {showReservationModal && selectedTime && (
         <ReservationFormModal
           defaultDate={selectedTime.date}
           defaultStartTime={selectedTime.start}
           defaultEndTime={selectedTime.end}
-          onClose={() => setSelectedTime(null)}
-          onSaved={() => { refresh(); setSelectedTime(null) }}
+          onClose={() => { setShowReservationModal(false); setSelectedTime(null) }}
+          onSaved={() => { setShowReservationModal(false); setSelectedTime(null); refresh() }}
         />
       )}
       {rescheduleTarget && (
