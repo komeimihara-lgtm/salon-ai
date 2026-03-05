@@ -78,7 +78,6 @@ export default function SalesPage() {
   const [editSale, setEditSale] = useState<Sale | null>(null)
   const [ticketPlans, setTicketPlans] = useState<TicketPlan[]>([])
   const [subPlans, setSubPlans] = useState<SubscriptionPlan[]>([])
-  const [isProductSale, setIsProductSale] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null)
 
@@ -166,7 +165,6 @@ export default function SalesPage() {
   }
 
   const addToCart = (menu: { id: string; name: string; price: number; category: string }) => {
-    if (menu.category === '物販') setIsProductSale(true)
     setCart(prev => {
       const found = prev.find(c => c.type === 'menu' && c.menuId === menu.id)
       if (found) return prev.map(c => c.type === 'menu' && c.menuId === menu.id ? { ...c, qty: c.qty + 1 } : c)
@@ -175,11 +173,7 @@ export default function SalesPage() {
   }
 
   const removeFromCart = (menuId: string) => {
-    setCart(prev => {
-      const next = prev.filter(c => c.menuId !== menuId)
-      if (next.every(c => c.category !== '物販')) setIsProductSale(false)
-      return next
-    })
+    setCart(prev => prev.filter(c => c.menuId !== menuId))
   }
   const updateCartQty = (menuId: string, qty: number) => {
     if (qty < 1) return removeFromCart(menuId)
@@ -221,7 +215,7 @@ export default function SalesPage() {
     }
     setSaving(true); setError('')
     try {
-      const hasProduct = isProductSale || cart.some(c => c.category === '物販')
+      const hasProduct = cart.some(c => c.category === '物販')
       const salesToCreate: Array<Record<string, unknown>> = []
 
       for (const c of cart) {
@@ -263,7 +257,7 @@ export default function SalesPage() {
         if (!res.ok) throw new Error()
       }
       setCart([]); setSelectedCustomer(null); setSelectedStaff(null)
-      setDiscountType(null); setDiscountValue(0); setPaymentConfirmed(false); setIsProductSale(false)
+      setDiscountType(null); setDiscountValue(0); setPaymentConfirmed(false)
       fetchSales()
       showToast('売上を登録しました')
     } catch (e) {
@@ -380,23 +374,30 @@ export default function SalesPage() {
             {/* 右: カート・決済 */}
             <div>
               <h3 className="text-sm font-bold text-text-main mb-3">カート</h3>
-              <div className="space-y-2 mb-4 max-h-40 overflow-y-auto">
+              <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
                 {cart.length === 0 ? (
                   <p className="text-sm text-text-sub py-4">メニュー・回数券・サブスクを選択してください</p>
-                ) : cart.map(c => (
-                  <div key={`${c.type}-${c.menuId}`} className="flex items-center gap-3 p-3 bg-light-lav/50 rounded-xl">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-text-main truncate text-sm">{c.name}</p>
-                      <p className="text-xs text-text-sub">¥{c.price.toLocaleString()} × {c.qty}</p>
+                ) : cart.map(c => {
+                  const typeLabel = c.type === 'menu' ? '通常メニュー' : c.type === 'ticket' ? '回数券' : 'サブスク'
+                  const lineTotal = c.price * c.qty
+                  return (
+                    <div key={`${c.type}-${c.menuId}`} className="flex items-start gap-3 p-3 bg-light-lav/50 rounded-xl border border-gray-100">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-text-main text-sm">{c.name}</p>
+                        <p className="text-xs text-text-sub mt-0.5">
+                          <span className="inline-block px-1.5 py-0.5 rounded bg-white/80 text-text-sub mr-1.5">{typeLabel}</span>
+                          ¥{c.price.toLocaleString()} × {c.qty} = ¥{lineTotal.toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => updateCartQty(c.menuId, c.qty - 1)} className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-text-sub hover:text-rose text-sm">−</button>
+                        <span className="w-6 text-center text-sm font-medium">{c.qty}</span>
+                        <button onClick={() => updateCartQty(c.menuId, c.qty + 1)} className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-text-sub hover:text-rose text-sm">+</button>
+                        <button onClick={() => removeFromCart(c.menuId)} className="p-1.5 text-text-sub hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="削除"><X className="w-4 h-4" /></button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => updateCartQty(c.menuId, c.qty - 1)} className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-text-sub hover:text-rose text-sm">−</button>
-                      <span className="w-6 text-center text-sm font-medium">{c.qty}</span>
-                      <button onClick={() => updateCartQty(c.menuId, c.qty + 1)} className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-text-sub hover:text-rose text-sm">+</button>
-                      <button onClick={() => removeFromCart(c.menuId)} className="p-1 text-text-sub hover:text-red-600"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
               {/* 割引・キャンペーン */}
@@ -470,18 +471,6 @@ export default function SalesPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-text-sub block mb-1">物販</label>
-                  <button
-                    onClick={() => setIsProductSale(prev => !prev)}
-                    className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium border transition-all mb-2 ${isProductSale ? 'bg-amber-100 border-amber-400 text-amber-700' : 'border-gray-200 text-text-sub hover:border-amber-300'}`}
-                  >
-                    <span className={`w-4 h-4 rounded border-2 flex items-center justify-center ${isProductSale ? 'bg-amber-500 border-amber-500' : 'border-gray-300'}`}>
-                      {isProductSale && <span className="text-white text-xs">✓</span>}
-                    </span>
-                    {isProductSale ? '物販として登録' : '物販として登録する'}
-                  </button>
-                </div>
-                <div>
                   <label className="text-xs text-text-sub block mb-1">支払方法</label>
                   <div className="flex flex-wrap gap-2">
                     {PAYMENTS.map(p => (
@@ -496,7 +485,7 @@ export default function SalesPage() {
               </div>
 
               {/* 合計 */}
-              <div className="bg-light-lav/30 rounded-xl p-3 mb-3 space-y-1">
+              <div className="bg-light-lav/30 rounded-xl p-4 mb-3 space-y-2 border border-gray-100">
                 <div className="flex justify-between text-sm text-text-sub">
                   <span>小計</span><span>¥{subtotal.toLocaleString()}</span>
                 </div>
@@ -505,16 +494,21 @@ export default function SalesPage() {
                     <span>割引</span><span>-¥{discountAmount.toLocaleString()}</span>
                   </div>
                 )}
-                {taxSettings.taxType === 'excluded' && (
+                {taxSettings.taxType === 'excluded' ? (
                   <div className="flex justify-between text-sm text-text-sub">
-                    <span>消費税({taxSettings.taxRate}%)</span><span>¥{taxAmount.toLocaleString()}</span>
+                    <span>消費税（外税 {taxSettings.taxRate}%）</span><span>¥{taxAmount.toLocaleString()}</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-xs text-text-sub">
+                    <span>消費税（内税 {taxSettings.taxRate}%）</span><span>¥{taxAmount.toLocaleString()}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-bold text-lg border-t border-gray-200 pt-1 mt-1">
-                  <span>合計</span><span className="text-rose">¥{total.toLocaleString()}</span>
+                <div className="flex justify-between items-baseline border-t-2 border-rose/20 pt-3 mt-2">
+                  <span className="font-bold text-text-main">合計金額</span>
+                  <span className="text-2xl font-bold text-rose">¥{total.toLocaleString()}</span>
                 </div>
                 {taxSettings.taxType === 'included' && (
-                  <p className="text-xs text-text-sub text-right">うち消費税({taxSettings.taxRate}%) ¥{taxAmount.toLocaleString()}</p>
+                  <p className="text-xs text-text-sub text-right">税込 ¥{total.toLocaleString()}（うち消費税 ¥{taxAmount.toLocaleString()}）</p>
                 )}
               </div>
 
