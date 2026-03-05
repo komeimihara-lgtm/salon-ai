@@ -81,18 +81,17 @@ export async function POST(req: NextRequest) {
     let content: Anthropic.MessageParam['content'] = []
 
     if (type === 'url') {
-      content = [{ type: 'text', text: `URL: ${url}\n\n${prompt}` }]
+      content = [{ type: 'text' as const, text: `URL: ${url}\n\n${prompt}` }]
     } else {
       const bytes = await file.arrayBuffer()
       const base64 = Buffer.from(bytes).toString('base64')
       const mediaType = file.type as 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'
-      content = [
-        {
-          type: mediaType === 'application/pdf' ? 'document' : 'image',
-          source: { type: 'base64', media_type: mediaType, data: base64 },
-        } as Anthropic.MessageParam['content'][0],
-        { type: 'text', text: prompt }
-      ]
+      const imageBlock = {
+        type: (mediaType === 'application/pdf' ? 'document' : 'image') as 'image' | 'document',
+        source: { type: 'base64' as const, media_type: mediaType, data: base64 },
+      }
+      const textBlock = { type: 'text' as const, text: prompt }
+      content = [imageBlock, textBlock] as Anthropic.MessageParam['content']
     }
 
     const response = await client.messages.create({
