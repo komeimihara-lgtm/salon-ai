@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
 
 function toCustomerTicket(row: Record<string, unknown>) {
+  const cust = row.customers as { name?: string } | null | undefined
   return {
     id: row.id,
     customerId: row.customer_id,
-    customerName: row.customer_name,
+    customerName: row.customer_name ?? cust?.name ?? '',
     ticketPlanId: row.ticket_plan_id,
     planName: row.plan_name,
     menuName: row.menu_name,
@@ -32,7 +33,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // 現在のチケットを取得
     const { data: current, error: fetchError } = await supabase
       .from('customer_tickets')
-      .select('id, customer_id, customer_name, ticket_plan_id, plan_name, unit_price, remaining_sessions')
+      .select('id, customer_id, ticket_plan_id, plan_name, unit_price, remaining_sessions, customers(name)')
       .eq('id', id)
       .eq('salon_id', DEMO_SALON_ID)
       .single()
@@ -62,12 +63,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }
 
       const today = new Date().toISOString().slice(0, 10)
+      const cust = current.customers as { name?: string } | null | undefined
+      const customerName = cust?.name ?? ''
       await supabase.from('sales').insert({
         salon_id: DEMO_SALON_ID,
         sale_date: today,
         amount: unitPrice,
         customer_id: current.customer_id,
-        customer_name: current.customer_name || '',
+        customer_name: customerName,
         sale_type: 'ticket_consume',
         ticket_id: id,
         memo: `${current.plan_name} 消化（残${newRemaining}回）`,

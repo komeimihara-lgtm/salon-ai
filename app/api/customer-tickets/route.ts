@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
 
 function toCustomerTicket(row: Record<string, unknown>) {
+  const cust = row.customers as { name?: string } | null | undefined
   return {
     id: row.id,
     customerId: row.customer_id,
-    customerName: row.customer_name,
+    customerName: row.customer_name ?? cust?.name ?? '',
     ticketPlanId: row.ticket_plan_id,
     planName: row.plan_name,
     menuName: row.menu_name,
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabaseAdmin()
     let query = supabase
       .from('customer_tickets')
-      .select('id, customer_id, customer_name, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date')
+      .select('id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date, customers(name)')
       .eq('salon_id', salonId)
       .order('purchased_at', { ascending: false })
 
@@ -40,7 +41,7 @@ export async function GET(req: NextRequest) {
     if (tickets.length === 0 && !salonIdParam) {
       const { data: fallback } = await supabase
         .from('customer_tickets')
-        .select('id, customer_id, customer_name, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date')
+        .select('id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date, customers(name)')
         .order('purchased_at', { ascending: false })
       if (customerId) {
         tickets = (fallback || []).filter((r: Record<string, unknown>) => r.customer_id === customerId).map((r: Record<string, unknown>) => toCustomerTicket(r))
@@ -87,7 +88,6 @@ export async function POST(req: NextRequest) {
     const insertData = {
       salon_id: salonId,
       customer_id,
-      customer_name: customer_name || '',
       ticket_plan_id: ticket_plan_id || null,
       plan_name,
       menu_name,
