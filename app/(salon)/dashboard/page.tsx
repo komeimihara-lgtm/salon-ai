@@ -384,7 +384,7 @@ export default function DashboardPage() {
       <section>
         <div className="flex items-center gap-3 mb-4">
           <div className="gradient-line rounded-full" />
-          <span className="font-dm-sans text-lg font-bold text-gray-700">月間KPI</span>
+          <span className="font-dm-sans text-lg font-bold text-text-main">月間KPI</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {kpiData.map((k) => {
@@ -455,7 +455,7 @@ export default function DashboardPage() {
         <section className="lg:col-span-1">
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="font-dm-sans text-lg font-bold text-gray-700">今日の日割り目標</span>
+            <span className="font-dm-sans text-lg font-bold text-text-main">今日の日割り目標</span>
           </div>
           <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
@@ -501,7 +501,7 @@ export default function DashboardPage() {
         <section className="lg:col-span-2">
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="font-dm-sans text-lg font-bold text-gray-700">今日のタスク</span>
+            <span className="font-dm-sans text-lg font-bold text-text-main">今日のタスク</span>
           </div>
           <div className="bg-white rounded-2xl p-5 card-shadow overflow-hidden max-h-[320px] overflow-y-auto">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-5 -mt-5 mb-4" />
@@ -579,7 +579,7 @@ export default function DashboardPage() {
       <section>
         <div className="flex items-center gap-3 mb-4">
           <div className="gradient-line rounded-full" />
-          <span className="font-dm-sans text-lg font-bold text-gray-700">今日の予約表</span>
+          <span className="font-dm-sans text-lg font-bold text-text-main">今日の予約表</span>
           <Link href="/reservations" className="text-sm text-rose hover:underline ml-auto">予約管理へ →</Link>
         </div>
         <TimelineSchedule
@@ -599,7 +599,7 @@ export default function DashboardPage() {
         <section className="min-w-0">
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="font-dm-sans text-lg font-bold text-gray-700">今日の来店客一覧</span>
+            <span className="font-dm-sans text-lg font-bold text-text-main">今日の来店客一覧</span>
           </div>
           <div className="bg-white rounded-2xl overflow-hidden card-shadow">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender" />
@@ -684,7 +684,7 @@ export default function DashboardPage() {
         <section>
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="font-dm-sans text-lg font-bold text-gray-700">今日の出勤スタッフ</span>
+            <span className="font-dm-sans text-lg font-bold text-text-main">今日の出勤スタッフ</span>
           </div>
           <div className="bg-white rounded-2xl p-5 card-shadow overflow-hidden">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-5 -mt-5 mb-4" />
