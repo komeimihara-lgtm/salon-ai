@@ -5,11 +5,16 @@ export interface SalonStaff {
   color: string
 }
 
+export interface BusinessHours {
+  openTime: string
+  closeTime: string
+}
+
 export interface SalonSettings {
   salonName: string
   address: string
   phone: string
-  businessHours: string
+  businessHours: BusinessHours
   beds: string[]
   staff: SalonStaff[]
   targets: {
@@ -30,7 +35,7 @@ const DEFAULT: SalonSettings = {
   salonName: 'エステサロン ルミエール',
   address: '',
   phone: '',
-  businessHours: '10:00〜20:00',
+  businessHours: { openTime: '10:00', closeTime: '21:00' },
   beds: ['A', 'B'],
   staff: [
     { name: '田中', color: '#C4728A' },
@@ -50,6 +55,17 @@ const DEFAULT: SalonSettings = {
   },
 }
 
+function normalizeBusinessHours(v: unknown): BusinessHours {
+  if (v && typeof v === 'object' && 'openTime' in v && 'closeTime' in v) {
+    return { openTime: String((v as BusinessHours).openTime || '10:00'), closeTime: String((v as BusinessHours).closeTime || '21:00') }
+  }
+  if (typeof v === 'string' && v.includes('〜')) {
+    const [open, close] = v.split('〜').map(s => s.trim().slice(0, 5))
+    return { openTime: open || '10:00', closeTime: close || '21:00' }
+  }
+  return DEFAULT.businessHours
+}
+
 export function getSalonSettings(): SalonSettings {
   if (typeof window === 'undefined') return DEFAULT
   try {
@@ -59,6 +75,7 @@ export function getSalonSettings(): SalonSettings {
       return {
         ...DEFAULT,
         ...parsed,
+        businessHours: normalizeBusinessHours(parsed.businessHours),
         targets: { ...DEFAULT.targets, ...(parsed.targets || {}) },
       }
     }

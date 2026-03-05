@@ -34,21 +34,39 @@ const TASKS_AUTO_BASE = [
   { id: 3, type: 'consult', text: '今月の達成率53%。経営会議に戦略を相談する', action: '相談する' },
 ]
 
-// 10:00〜21:00 を15分刻み = 44スロット
-const SLOT_COUNT = 44
 const SLOT_WIDTH_PX = 56
-const MIN_WIDTH = SLOT_COUNT * SLOT_WIDTH_PX
 const ROW_HEIGHT = 72
 
-function timeToSlotIndex(time: string): number {
-  const [h = 10, m = 0] = time.slice(0, 5).split(':').map(Number)
-  return (h - 10) * 4 + Math.floor((m || 0) / 15)
+function timeToMinutes(t: string): number {
+  const [h = 0, m = 0] = t.slice(0, 5).split(':').map(Number)
+  return h * 60 + m
+}
+
+function getSlotCount(openTime: string, closeTime: string): number {
+  const open = timeToMinutes(openTime)
+  const close = timeToMinutes(closeTime)
+  const span = close > open ? close - open : (24 * 60 - open) + close
+  return Math.max(1, Math.floor(span / 15))
+}
+
+function timeToSlotIndex(time: string, openTime: string): number {
+  const t = timeToMinutes(time)
+  const o = timeToMinutes(openTime)
+  return Math.max(0, Math.floor((t - o) / 15))
+}
+
+function slotIndexToTime(index: number, openTime: string): string {
+  const [oh = 10, om = 0] = openTime.slice(0, 5).split(':').map(Number)
+  const total = oh * 60 + om + index * 15
+  const h = Math.floor(total / 60) % 24
+  const m = total % 60
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
 }
 
 function getDurationSlots(start: string, end: string): number {
-  const [h1 = 10, m1 = 0] = start.slice(0, 5).split(':').map(Number)
-  const [h2 = 11, m2 = 0] = (end || '11:00').slice(0, 5).split(':').map(Number)
-  return (h2 - h1) * 4 + Math.floor((m2 - m1) / 15)
+  const s = timeToMinutes(start)
+  const e = timeToMinutes(end)
+  return Math.max(1, Math.floor((e - s) / 15))
 }
 
 function TimelineSchedule({
@@ -56,6 +74,8 @@ function TimelineSchedule({
   beds,
   reservations,
   loading,
+  openTime,
+  closeTime,
   onSlotClick,
   onReservationClick,
 }: {
@@ -63,12 +83,19 @@ function TimelineSchedule({
   beds: string[]
   reservations: Reservation[]
   loading: boolean
+  openTime: string
+  closeTime: string
   onSlotClick: (slot: { date: string; start: string; end: string; bed: string }) => void
   onReservationClick: (r: Reservation) => void
 }) {
+  const slotCount = getSlotCount(openTime, closeTime)
+  const minWidth = slotCount * SLOT_WIDTH_PX
+  const openMinutes = timeToMinutes(openTime)
+  const closeMinutes = timeToMinutes(closeTime)
   const now = new Date()
   const currentMinutes = now.getHours() * 60 + now.getMinutes()
-  const nowSlotIndex = currentMinutes >= 600 && currentMinutes < 1260 ? timeToSlotIndex(`${Math.floor(currentMinutes / 60)}:${currentMinutes % 60}`) : -1
+  const inRange = currentMinutes >= openMinutes && currentMinutes < closeMinutes
+  const nowSlotIndex = inRange ? timeToSlotIndex(`${Math.floor(currentMinutes / 60)}:${currentMinutes % 60}`, openTime) : -1
 
   const STATUS_COLORS: Record<string, string> = {
     confirmed: 'bg-blue-500',
@@ -80,17 +107,16 @@ function TimelineSchedule({
 
   return (
     <div className="bg-white rounded-2xl overflow-hidden card-shadow overflow-x-auto overflow-y-hidden scroll-smooth">
-      <div className="min-w-[max(100%,280px)]" style={{ minWidth: MIN_WIDTH }}>
+      <div className="min-w-[max(100%,280px)]" style={{ minWidth }}>
         {/* ヘッダー行 */}
         <div className="flex border-b border-gray-200 bg-light-lav sticky top-0 z-20">
           <div className="w-16 shrink-0 p-2 text-xs font-dm-sans text-text-sub" />
-          <div className="flex shrink-0" style={{ width: SLOT_COUNT * SLOT_WIDTH_PX }}>
-            {Array.from({ length: SLOT_COUNT }, (_, i) => {
-              const h = 10 + Math.floor(i / 4)
-              const m = (i % 4) * 15
+          <div className="flex shrink-0" style={{ width: slotCount * SLOT_WIDTH_PX }}>
+            {Array.from({ length: slotCount }, (_, i) => {
+              const timeStr = slotIndexToTime(i, openTime)
               return (
                 <div key={i} className="p-2 text-center text-xs font-dm-sans text-text-sub border-l border-gray-200 shrink-0" style={{ width: SLOT_WIDTH_PX }}>
-                  {h}:{m.toString().padStart(2, '0')}
+                  {timeStr}
                 </div>
               )
             })}
@@ -103,9 +129,9 @@ function TimelineSchedule({
             <div className="w-16 shrink-0 p-3 bg-deep/5 text-sm font-medium text-text-main flex items-center justify-center border-r border-gray-100">
               ベッド{bed}
             </div>
-            <div className="relative shrink-0" style={{ width: SLOT_COUNT * SLOT_WIDTH_PX, height: ROW_HEIGHT }}>
+            <div className="relative shrink-0" style={{ width: slotCount * SLOT_WIDTH_PX, height: ROW_HEIGHT }}>
               {/* 現在時刻の赤線 */}
-              {nowSlotIndex >= 0 && (
+              {nowSlotIndex >= 0 && nowSlotIndex < slotCount && (
                 <div
                   className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-[15]"
                   style={{ left: nowSlotIndex * SLOT_WIDTH_PX }}
@@ -118,14 +144,9 @@ function TimelineSchedule({
               ) : (
                 <>
                   {/* 空き枠クリック */}
-                  {Array.from({ length: SLOT_COUNT }, (_, i) => {
-                    const h = 10 + Math.floor(i / 4)
-                    const m = (i % 4) * 15
-                    const startTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
-                    const m2 = m + 15
-                    const endH = m2 >= 60 ? h + 1 : h
-                    const endM = m2 >= 60 ? m2 - 60 : m2
-                    const endTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`
+                  {Array.from({ length: slotCount }, (_, i) => {
+                    const startTime = slotIndexToTime(i, openTime)
+                    const endTime = slotIndexToTime(i + 1, openTime)
                     return (
                       <button
                         key={`${bed}-${i}`}
@@ -144,11 +165,11 @@ function TimelineSchedule({
                     .filter(r => (!r.bed_id && bed === (beds[0] || 'A')) || r.bed_id === bed)
                     .filter(r => r.status === 'confirmed' || r.status === 'rescheduled' || r.status === 'visited' || r.status === 'no_show')
                     .map((r) => {
-                      const colIdx = timeToSlotIndex(r.start_time || '10:00')
+                      const colIdx = Math.max(0, timeToSlotIndex(r.start_time || openTime, openTime))
                       const durationSlots = r.duration_minutes
                         ? Math.max(1, Math.floor(r.duration_minutes / 15))
-                        : getDurationSlots(r.start_time || '10:00', r.end_time || '11:00')
-                      const width = durationSlots * SLOT_WIDTH_PX - 4
+                        : getDurationSlots(r.start_time || openTime, r.end_time || openTime)
+                      const width = Math.min(durationSlots * SLOT_WIDTH_PX - 4, (slotCount - colIdx) * SLOT_WIDTH_PX - 4)
                       const bg = STATUS_COLORS[r.status] || 'bg-blue-500'
                       return (
                         <div
@@ -558,6 +579,8 @@ export default function DashboardPage() {
           beds={getSalonSettings().beds.length > 0 ? getSalonSettings().beds : ['A', 'B']}
           reservations={todayReservations}
           loading={reservationsLoading}
+          openTime={getSalonSettings().businessHours.openTime}
+          closeTime={getSalonSettings().businessHours.closeTime}
           onSlotClick={(slot) => { setSelectedSlot(slot); setShowReservationModal(true) }}
           onReservationClick={(r) => setReservationDetailModal(r)}
         />

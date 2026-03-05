@@ -5,12 +5,25 @@ import Link from 'next/link'
 import { Plus, Trash2, Save } from 'lucide-react'
 import { getSalonSettings, setSalonSettings, type SalonSettings } from '@/lib/salon-settings'
 
+// 営業開始: 6:00〜13:00（30分刻み）
+const OPEN_TIME_OPTIONS = Array.from({ length: 15 }, (_, i) => {
+  const h = 6 + Math.floor(i / 2)
+  const m = (i % 2) * 30
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+})
+// 営業終了: 17:00〜25:00（30分刻み）
+const CLOSE_TIME_OPTIONS = Array.from({ length: 17 }, (_, i) => {
+  const h = 17 + Math.floor(i / 2)
+  const m = (i % 2) * 30
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+})
+
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SalonSettings>({
     salonName: '',
     address: '',
     phone: '',
-    businessHours: '10:00〜20:00',
+    businessHours: { openTime: '10:00', closeTime: '21:00' },
     beds: [],
     staff: [],
     targets: { sales: 600000, visits: 60, avgPrice: 10000, productSales: 50000, newCustomers: 10, newReservations: 15 },
@@ -137,15 +150,37 @@ export default function SettingsPage() {
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-text-main mb-1">営業時間</label>
-              <input
-                type="text"
-                value={settings.businessHours}
-                onChange={e => setSettings(s => ({ ...s, businessHours: e.target.value }))}
-                placeholder="10:00〜20:00"
-                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-text-main mb-1">営業開始時間</label>
+                <select
+                  value={settings.businessHours.openTime}
+                  onChange={e => setSettings(s => ({
+                    ...s,
+                    businessHours: { ...s.businessHours, openTime: e.target.value },
+                  }))}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none"
+                >
+                  {OPEN_TIME_OPTIONS.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-main mb-1">営業終了時間</label>
+                <select
+                  value={settings.businessHours.closeTime}
+                  onChange={e => setSettings(s => ({
+                    ...s,
+                    businessHours: { ...s.businessHours, closeTime: e.target.value },
+                  }))}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none"
+                >
+                  {CLOSE_TIME_OPTIONS.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         </div>
