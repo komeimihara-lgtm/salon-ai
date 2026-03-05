@@ -230,7 +230,7 @@ export default function DashboardPage() {
       <section>
         <div className="flex items-center gap-3 mb-4">
           <div className="gradient-line rounded-full" />
-          <span className="section-label font-dm-sans text-base font-bold text-text-main">月間KPI</span>
+          <span className="section-label font-dm-sans text-2xl font-bold text-text-main">月間KPI</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {kpiData.map((k) => (
@@ -269,7 +269,7 @@ export default function DashboardPage() {
         <section className="lg:col-span-1">
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="section-label font-dm-sans text-base font-bold text-text-main">今日の日割り目標</span>
+            <span className="section-label font-dm-sans text-2xl font-bold text-text-main">今日の日割り目標</span>
           </div>
           <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
@@ -315,7 +315,7 @@ export default function DashboardPage() {
         <section className="lg:col-span-2">
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="section-label font-dm-sans text-base font-bold text-text-main">今日のタスク</span>
+            <span className="section-label font-dm-sans text-2xl font-bold text-text-main">今日のタスク</span>
           </div>
           <div className="bg-white rounded-2xl p-5 card-shadow overflow-hidden max-h-[320px] overflow-y-auto">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-5 -mt-5 mb-4" />
@@ -393,7 +393,7 @@ export default function DashboardPage() {
       <section>
         <div className="flex items-center gap-3 mb-4">
           <div className="gradient-line rounded-full" />
-          <span className="section-label font-dm-sans text-base font-bold text-text-main">今日の予約表</span>
+          <span className="section-label font-dm-sans text-2xl font-bold text-text-main">今日の予約表</span>
         </div>
         <div className="bg-white rounded-2xl overflow-hidden card-shadow overflow-x-auto">
           <div className="min-w-[800px]">
@@ -462,7 +462,7 @@ export default function DashboardPage() {
         <section>
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="section-label font-dm-sans text-base font-bold text-text-main">今日の来店客一覧</span>
+            <span className="section-label font-dm-sans text-2xl font-bold text-text-main">今日の来店客一覧</span>
           </div>
           <div className="bg-white rounded-2xl overflow-hidden card-shadow">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender" />
@@ -471,7 +471,7 @@ export default function DashboardPage() {
                 <thead>
                   <tr className="bg-light-lav/50">
                     <th className="text-left p-3 text-text-sub font-medium">時間</th>
-                    <th className="text-left p-3 text-text-sub font-medium">お客様</th>
+                    <th className="text-left p-3 text-text-sub font-medium">顧客名</th>
                     <th className="text-left p-3 text-text-sub font-medium">施術</th>
                     <th className="text-left p-3 text-text-sub font-medium">担当</th>
                     <th className="text-left p-3 text-text-sub font-medium">フォロータスク</th>
@@ -522,7 +522,7 @@ export default function DashboardPage() {
         <section>
           <div className="flex items-center gap-3 mb-4">
             <div className="gradient-line rounded-full" />
-            <span className="section-label font-dm-sans text-base font-bold text-text-main">今日の出勤スタッフ</span>
+            <span className="section-label font-dm-sans text-2xl font-bold text-text-main">今日の出勤スタッフ</span>
           </div>
           <div className="bg-white rounded-2xl p-5 card-shadow overflow-hidden">
             <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-5 -mt-5 mb-4" />
@@ -685,7 +685,7 @@ function ReservationDetailContent({
   return (
     <div className="space-y-3">
       <p>
-        <span className="text-text-sub text-sm">お客様</span>{' '}
+        <span className="text-text-sub text-sm">顧客名</span>{' '}
         <Link href={`/chart?name=${encodeURIComponent(reservation.name)}`} className="font-medium text-rose hover:underline">
           {reservation.name}
         </Link>
@@ -742,7 +742,7 @@ function AddReservationForm({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-text-main mb-1">お客様名</label>
+        <label className="block text-sm font-medium text-text-main mb-1">顧客名</label>
         <input
           type="text"
           value={name}
