@@ -35,8 +35,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'salesが必要です' }, { status: 400 })
     }
 
-    // salon_idを除外してinsert
     const cleanedSales = sales.map((s: Record<string, unknown>) => ({
+      salon_id: process.env.NEXT_PUBLIC_SALON_ID || 'default',
       sale_date: s.sale_date,
       amount: s.amount,
       customer_id: s.customer_id || null,
