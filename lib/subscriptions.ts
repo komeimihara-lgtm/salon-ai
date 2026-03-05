@@ -150,12 +150,13 @@ function addMonths(dateStr: string, months: number): string {
 export async function addCustomerSubscription(
   customerId: string,
   customerName: string,
-  plan: SubscriptionPlan
+  plan: SubscriptionPlan,
+  options?: { startedAt?: string; paymentMethod?: 'cash' | 'card' | 'online' | 'loan' }
 ): Promise<CustomerSubscription> {
-  const startedAt = new Date().toISOString().slice(0, 10)
-  const d = new Date()
+  const startedAt = options?.startedAt ?? new Date().toISOString().slice(0, 10)
+  const d = new Date(startedAt)
   d.setDate(plan.billingDay)
-  if (d < new Date()) d.setMonth(d.getMonth() + 1)
+  if (d < new Date(startedAt)) d.setMonth(d.getMonth() + 1)
   const nextBillingDate = d.toISOString().slice(0, 10)
 
   const res = await fetch('/api/customer-subscriptions', {
@@ -171,6 +172,8 @@ export async function addCustomerSubscription(
       sessions_per_month: plan.sessionsPerMonth,
       started_at: startedAt,
       next_billing_date: nextBillingDate,
+      payment_method: options?.paymentMethod ?? 'card',
+      record_sale: true,
     }),
   })
   const json = await res.json()

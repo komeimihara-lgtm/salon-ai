@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
       for (const s of sales || []) {
         const amt = Number(s.amount ?? 0)
-        if (s.sale_type === 'ticket_consume') {
+        if (s.sale_type === 'ticket_consume' || s.sale_type === 'subscription_consume') {
           ticketConsumeSales += amt
         } else {
           cashSales += amt

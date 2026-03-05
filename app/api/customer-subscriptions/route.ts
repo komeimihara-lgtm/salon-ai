@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
 
+const PAYMENT_METHODS = ['cash', 'card', 'online', 'loan'] as const
+
 function toCustomerSubscription(row: Record<string, unknown>): Record<string, unknown> {
   return {
     id: row.id,
@@ -56,6 +58,8 @@ export async function POST(req: NextRequest) {
       sessions_per_month,
       started_at,
       next_billing_date,
+      payment_method,
+      record_sale,
     } = body
 
     const salonId = getSalonId()
@@ -88,6 +92,23 @@ export async function POST(req: NextRequest) {
       console.error('[customer-subscriptions] POST Supabase error:', error.message, error.details, error.hint)
       throw error
     }
+
+    // 売上計上（record_sale が true の場合）
+    if (record_sale !== false && Number(price) > 0) {
+      const saleType = PAYMENT_METHODS.includes(payment_method as (typeof PAYMENT_METHODS)[number]) ? payment_method : 'card'
+      await getSupabaseAdmin()
+        .from('sales')
+        .insert({
+          salon_id: salonId,
+          sale_date: started_at,
+          amount: Number(price),
+          customer_id,
+          customer_name: customer_name || null,
+          memo: `${plan_name} 加入`,
+          sale_type: saleType,
+        })
+    }
+
     return NextResponse.json({ subscription: toCustomerSubscription(data as Record<string, unknown>) })
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e))

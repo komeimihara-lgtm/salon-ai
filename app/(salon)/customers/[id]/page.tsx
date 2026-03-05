@@ -64,6 +64,10 @@ export default function CustomerDetailPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [ticketModalCategory, setTicketModalCategory] = useState('')
   const [subModalCategory, setSubModalCategory] = useState('')
+  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10))
+  const [purchasePaymentMethod, setPurchasePaymentMethod] = useState<'cash' | 'card' | 'online' | 'loan'>('card')
+  const [subJoinDate, setSubJoinDate] = useState(new Date().toISOString().slice(0, 10))
+  const [subPaymentMethod, setSubPaymentMethod] = useState<'cash' | 'card' | 'online' | 'loan'>('card')
 
   const refresh = useCallback(async () => {
     if (!id) return
@@ -105,6 +109,18 @@ export default function CustomerDetailPage() {
     if (customer) refresh()
   }, [customer, refresh])
 
+  useEffect(() => {
+    if (purchaseOpen) {
+      setPurchaseDate(new Date().toISOString().slice(0, 10))
+    }
+  }, [purchaseOpen])
+
+  useEffect(() => {
+    if (subPurchaseOpen) {
+      setSubJoinDate(new Date().toISOString().slice(0, 10))
+    }
+  }, [subPurchaseOpen])
+
   const ticketCategories = getCategories()
   const categoriesForTicket = ticketCategories.length ? ticketCategories : DEFAULT_CATEGORIES
   const categoriesForSub = ticketCategories.length ? ticketCategories : DEFAULT_CATEGORIES
@@ -119,7 +135,10 @@ export default function CustomerDetailPage() {
     if (!selectedPack || !customer) return
     setActionLoading(true)
     try {
-      await addCustomerTicket(customer.id, customer.name, selectedPack)
+      await addCustomerTicket(customer.id, customer.name, selectedPack, {
+        purchasedAt: purchaseDate,
+        paymentMethod: purchasePaymentMethod,
+      })
       await refresh()
       setPurchaseOpen(false)
       setSelectedPack(null)
@@ -145,7 +164,10 @@ export default function CustomerDetailPage() {
     if (!selectedSubPlan || !customer) return
     setActionLoading(true)
     try {
-      await addCustomerSubscription(customer.id, customer.name, selectedSubPlan)
+      await addCustomerSubscription(customer.id, customer.name, selectedSubPlan, {
+        startedAt: subJoinDate,
+        paymentMethod: subPaymentMethod,
+      })
       await refresh()
       setSubPurchaseOpen(false)
       setSelectedSubPlan(null)
@@ -378,6 +400,33 @@ export default function CustomerDetailPage() {
                 </button>
               ))}
             </div>
+            {selectedPack && (
+              <div className="space-y-3 mb-4 p-3 rounded-lg bg-[#F8F5FF] border border-[#BAE6FD]">
+                <div>
+                  <label className="text-xs text-[#4A5568] mb-1 block">購入日</label>
+                  <input
+                    type="date"
+                    value={purchaseDate}
+                    onChange={e => setPurchaseDate(e.target.value)}
+                    className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-[#4A5568] mb-1 block">支払方法</label>
+                  <select
+                    value={purchasePaymentMethod}
+                    onChange={e => setPurchasePaymentMethod(e.target.value as 'cash' | 'card' | 'online' | 'loan')}
+                    className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="cash">現金</option>
+                    <option value="card">カード</option>
+                    <option value="online">オンライン</option>
+                    <option value="loan">ローン</option>
+                  </select>
+                </div>
+                <p className="text-xs text-[#4A5568]">💡 購入日を今日にすると本日の売上に計上されます</p>
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={() => { setPurchaseOpen(false); setSelectedPack(null) }}
@@ -440,6 +489,33 @@ export default function CustomerDetailPage() {
                 </button>
               ))}
             </div>
+            {selectedSubPlan && (
+              <div className="space-y-3 mb-4 p-3 rounded-lg bg-[#F8F5FF] border border-[#BAE6FD]">
+                <div>
+                  <label className="text-xs text-[#4A5568] mb-1 block">加入日</label>
+                  <input
+                    type="date"
+                    value={subJoinDate}
+                    onChange={e => setSubJoinDate(e.target.value)}
+                    className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-[#4A5568] mb-1 block">支払方法</label>
+                  <select
+                    value={subPaymentMethod}
+                    onChange={e => setSubPaymentMethod(e.target.value as 'cash' | 'card' | 'online' | 'loan')}
+                    className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="cash">現金</option>
+                    <option value="card">カード</option>
+                    <option value="online">オンライン</option>
+                    <option value="loan">ローン</option>
+                  </select>
+                </div>
+                <p className="text-xs text-[#4A5568]">💡 加入日を今日にすると本日の売上に計上されます</p>
+              </div>
+            )}
             <div className="flex gap-2">
               <button
                 onClick={() => { setSubPurchaseOpen(false); setSelectedSubPlan(null) }}

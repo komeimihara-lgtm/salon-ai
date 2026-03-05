@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, getSalonId, DEMO_SALON_ID } from '@/lib/supabase'
 
+const PAYMENT_METHODS = ['cash', 'card', 'online', 'loan'] as const
+
 const SELECT_COLS = 'id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date, customers(name)'
 const SELECT_COLS_NO_UNIT_PRICE = 'id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, purchased_at, expiry_date, customers(name)'
 
@@ -113,6 +115,8 @@ export async function POST(req: NextRequest) {
       unit_price,
       purchased_at,
       expiry_date,
+      payment_method,
+      record_sale,
     } = body
 
     const salonId = getSalonId()
@@ -178,7 +182,37 @@ export async function POST(req: NextRequest) {
         throw err1
       }
     }
-    return NextResponse.json({ ticket: toCustomerTicket({ ...result.data, customer_name: customer_name || '' }, result.hasUnitPrice) })
+    const ticketData = { ...result.data, customer_name: customer_name || '' }
+    const ticket = toCustomerTicket(ticketData, result.hasUnitPrice)
+
+    // 売上計上（record_sale が true の場合）
+    if (record_sale !== false) {
+      let saleAmount = 0
+      if (ticket_plan_id) {
+        const { data: planRow } = await getSupabaseAdmin()
+          .from('ticket_plans')
+          .select('price')
+          .eq('id', ticket_plan_id)
+          .single()
+        saleAmount = Number(planRow?.price ?? 0)
+      }
+      if (saleAmount > 0) {
+        const saleType = PAYMENT_METHODS.includes(payment_method as (typeof PAYMENT_METHODS)[number]) ? payment_method : 'card'
+        await getSupabaseAdmin()
+          .from('sales')
+          .insert({
+            salon_id: salonId,
+            sale_date: purchasedAt,
+            amount: saleAmount,
+            customer_id,
+            customer_name: customer_name || null,
+            memo: `${plan_name} 購入`,
+            sale_type: saleType,
+          })
+      }
+    }
+
+    return NextResponse.json({ ticket })
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e))
     const supabaseErr = e as { message?: string; details?: string; hint?: string }

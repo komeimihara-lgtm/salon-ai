@@ -157,11 +157,12 @@ export async function fetchCustomerTickets(customerId?: string): Promise<Custome
 export async function addCustomerTicket(
   customerId: string,
   customerName: string,
-  plan: TicketPlan
+  plan: TicketPlan,
+  options?: { purchasedAt?: string; paymentMethod?: 'cash' | 'card' | 'online' | 'loan' }
 ): Promise<CustomerTicket> {
-  const purchasedAt = new Date().toISOString().slice(0, 10)
+  const purchasedAt = options?.purchasedAt ?? new Date().toISOString().slice(0, 10)
   const expiryDays = plan.expiryDays ?? 180
-  const expiry = new Date()
+  const expiry = new Date(purchasedAt)
   expiry.setDate(expiry.getDate() + expiryDays)
   const expiryDate = expiry.toISOString().slice(0, 10)
 
@@ -180,6 +181,8 @@ export async function addCustomerTicket(
       unit_price: unitPrice,
       purchased_at: purchasedAt,
       expiry_date: expiryDate,
+      payment_method: options?.paymentMethod ?? 'card',
+      record_sale: true,
     }),
   })
   const json = await res.json()
