@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
-  Users, Search, Plus, Upload, ChevronLeft, ChevronRight,
+  Users, Search, Plus, Upload, Image, ChevronLeft, ChevronRight,
   AlertTriangle, Crown, Phone, X, Check, Loader2, Ticket, Minus, Repeat
 } from 'lucide-react'
 import { Customer } from '@/types'
@@ -591,120 +591,6 @@ function NewCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   )
 }
 
-// CSVインポートモーダル
-function ImportModal({ onClose, onImported }: { onClose: () => void; onImported: (count: number) => void }) {
-  const [file, setFile] = useState<File | null>(null)
-  const [importing, setImporting] = useState(false)
-  const [result, setResult] = useState<{ imported: number; message: string } | null>(null)
-  const [error, setError] = useState('')
-
-  async function handleImport() {
-    if (!file) return
-    setImporting(true)
-    setError('')
-
-    try {
-      const text = await file.text()
-      const lines = text.split('\n').filter(l => l.trim())
-      if (lines.length < 2) { setError('データが空です'); return }
-
-      // CSVパース（ヘッダー行 + データ行）
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-      const rows = lines.slice(1).map(line => {
-        const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
-        return Object.fromEntries(headers.map((h, i) => [h, values[i] || '']))
-      })
-
-      const res = await fetch('/api/customers/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-
-      setResult(data)
-      onImported(data.imported)
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'インポートに失敗しました')
-    } finally {
-      setImporting(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-5 border-b border-[#BAE6FD]">
-          <h2 className="text-base font-bold text-[#1A202C]">ペンギン CSVインポート</h2>
-          <button onClick={onClose} className="text-[#4A5568] hover:text-[#1A202C]"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="p-5 space-y-4">
-          {!result ? (
-            <>
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
-                <p className="text-xs text-blue-300">
-                  ペンギン（サロンズソリューション）から書き出したCSVファイルを選択してください。
-                  氏名・電話番号・来店回数などが自動でマッピングされます。
-                </p>
-              </div>
-              <div
-                className="border-2 border-dashed border-[#BAE6FD] rounded-xl p-8 text-center cursor-pointer hover:border-[#0891B2] transition-colors"
-                onClick={() => document.getElementById('csv-input')?.click()}
-              >
-                <Upload className="w-8 h-8 text-[#4A5568] mx-auto mb-2" />
-                {file ? (
-                  <p className="text-sm text-[#0891B2] font-medium">{file.name}</p>
-                ) : (
-                  <p className="text-sm text-[#4A5568]">CSVファイルを選択</p>
-                )}
-                <input
-                  id="csv-input"
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={e => setFile(e.target.files?.[0] || null)}
-                />
-              </div>
-              {error && (
-                <p className="text-sm text-red-600 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                  {error}
-                </p>
-              )}
-            </>
-          ) : (
-            <div className="text-center py-4">
-              <div className="w-14 h-14 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                <Check className="w-7 h-7 text-emerald-400" />
-              </div>
-              <p className="text-lg font-bold text-[#1A202C] mb-1">{result.imported}件 インポート完了</p>
-              <p className="text-sm text-[#4A5568]">{result.message}</p>
-            </div>
-          )}
-        </div>
-        <div className="flex gap-3 p-5 border-t border-[#BAE6FD]">
-          <button
-            onClick={onClose}
-            className="flex-1 bg-white border border-[#BAE6FD] text-[#4A5568] rounded-xl py-2.5 text-sm hover:text-[#1A202C] transition-colors"
-          >
-            {result ? '閉じる' : 'キャンセル'}
-          </button>
-          {!result && (
-            <button
-              onClick={handleImport}
-              disabled={!file || importing}
-              className="flex-1 bg-gradient-to-r from-[#0891B2] to-[#0e7490] text-white rounded-xl py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              {importing ? 'インポート中...' : 'インポート開始'}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ============================================================
 // メインページ
 // ============================================================
@@ -717,7 +603,6 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [showNewModal, setShowNewModal] = useState(false)
-  const [showImportModal, setShowImportModal] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
   const fetchCustomers = useCallback(async () => {
@@ -766,13 +651,20 @@ export default function CustomersPage() {
         <div className="flex items-center justify-between">
           <span className="text-sm text-text-sub">{total.toLocaleString()}名</span>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowImportModal(true)}
+            <Link
+              href="/customers/import"
               className="flex items-center gap-1.5 bg-white border border-gray-200 hover:border-rose text-text-main rounded-lg px-3 py-1.5 text-xs transition-all"
             >
               <Upload className="w-3.5 h-3.5" />
               CSVインポート
-            </button>
+            </Link>
+            <Link
+              href="/customers/import?tab=image"
+              className="flex items-center gap-1.5 bg-white border border-gray-200 hover:border-rose text-text-main rounded-lg px-3 py-1.5 text-xs transition-all"
+            >
+              <Image className="w-3.5 h-3.5" />
+              画像から読み取り
+            </Link>
             <button
               onClick={() => setShowNewModal(true)}
               className="flex items-center gap-1.5 bg-gradient-to-r from-rose to-lavender text-white rounded-lg px-3 py-1.5 text-xs font-bold hover:opacity-90 transition-opacity"
@@ -864,12 +756,12 @@ export default function CustomersPage() {
             </p>
             {!search && !statusFilter && (
               <div className="flex gap-3 justify-center mt-4">
-                <button
-                  onClick={() => setShowImportModal(true)}
+                <Link
+                  href="/customers/import"
                   className="text-sm text-blue-400 hover:text-blue-300 underline"
                 >
                   CSVでインポートする
-                </button>
+                </Link>
                 <span className="text-[#4A5568]">or</span>
                 <button
                   onClick={() => setShowNewModal(true)}
@@ -920,12 +812,6 @@ export default function CustomersPage() {
         <NewCustomerModal
           onClose={() => setShowNewModal(false)}
           onSaved={fetchCustomers}
-        />
-      )}
-      {showImportModal && (
-        <ImportModal
-          onClose={() => setShowImportModal(false)}
-          onImported={() => fetchCustomers()}
         />
       )}
       {selectedCustomer && (
