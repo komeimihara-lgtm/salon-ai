@@ -100,6 +100,9 @@ export async function POST(req: NextRequest) {
       if (fileList.length === 0) {
         return NextResponse.json({ error: 'ファイルを選択してください' }, { status: 400 })
       }
+      if (fileList.length > 20) {
+        return NextResponse.json({ error: '画像は最大20枚までアップロードできます' }, { status: 400 })
+      }
       const blocks: Array<{ type: 'image' | 'document'; source: { type: 'base64'; media_type: string; data: string } } | { type: 'text'; text: string }> = []
       for (const f of fileList) {
         const bytes = await f.arrayBuffer()

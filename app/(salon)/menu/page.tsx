@@ -21,6 +21,7 @@ function ImportModal({ onClose, onImport }: {
   const [mode, setMode] = useState<'image' | 'pdf' | 'url'>('image')
   const [url, setUrl] = useState('')
   const [files, setFiles] = useState<File[]>([])
+  const [filesOverflowWarning, setFilesOverflowWarning] = useState(false)
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState<{ menus: ImportMenuItem[], categories: string[] } | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -38,7 +39,7 @@ function ImportModal({ onClose, onImport }: {
       if (mode === 'url') {
         formData.append('url', url)
       } else {
-        const toSend = files.length > 0 ? files : []
+        const toSend = files.length > 0 ? files.slice(0, 20) : []
         toSend.forEach(f => formData.append('files', f))
         if (toSend.length === 0) throw new Error('ファイルを選択してください')
       }
@@ -126,16 +127,30 @@ function ImportModal({ onClose, onImport }: {
               <div className="mb-4 shrink-0">
                 <label className="block w-full border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-rose transition-all">
                   <input type="file" accept={mode === 'pdf' ? '.pdf' : 'image/*'} className="hidden" multiple
-                    onChange={e => setFiles(Array.from(e.target.files || []))} />
+                    onChange={e => {
+                      const selected = Array.from(e.target.files || [])
+                      if (selected.length > 20) {
+                        setFiles(selected.slice(0, 20))
+                        setFilesOverflowWarning(true)
+                      } else {
+                        setFiles(selected)
+                        setFilesOverflowWarning(false)
+                      }
+                    }} />
                   {files.length > 0 ? (
-                    <p className="text-sm text-text-main font-medium">{files.length}件のファイルを選択</p>
+                    <p className="text-sm text-text-main font-medium">{files.length}件のファイルを選択（最大20枚まで）</p>
                   ) : (
                     <>
                       <p className="text-2xl mb-2">{mode === 'pdf' ? '📄' : '📷'}</p>
-                      <p className="text-sm text-text-sub">{mode === 'pdf' ? 'PDFファイルをアップロード（複数可）' : 'メニュー表の画像をアップロード（複数可）'}</p>
+                      <p className="text-sm text-text-sub">{mode === 'pdf' ? 'PDFファイルをアップロード（最大20枚まで）' : 'メニュー表の画像をアップロード（最大20枚まで）'}</p>
                     </>
                   )}
                 </label>
+                {filesOverflowWarning && (
+                  <p className="mt-2 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    20枚を超えたため、先頭20枚のみ処理します
+                  </p>
+                )}
               </div>
             )}
 
