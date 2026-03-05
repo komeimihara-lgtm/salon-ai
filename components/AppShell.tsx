@@ -25,6 +25,7 @@ import {
   FileText,
   BarChart2,
   BookOpen,
+  Package,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -43,6 +44,7 @@ const NAV_ITEMS = [
   { href: '/daily-report', icon: BookOpen, label: 'AI日報' },
   { href: '/marketing', icon: Megaphone, label: 'AI集客' },
   { href: '/menu', icon: List, label: 'メニュー設定' },
+  { href: '/products', icon: Package, label: '商品管理' },
   { href: '/courses', icon: Ticket, label: '回数券管理' },
   { href: '/subscriptions', icon: Repeat, label: 'サブスク管理' },
   { href: '/staff', icon: Clock, label: 'スタッフ管理' },
