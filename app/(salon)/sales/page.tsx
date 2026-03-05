@@ -5,7 +5,7 @@ import {
   ShoppingCart, Receipt, Plus, Trash2, Pencil, X,
   ChevronLeft, ChevronRight, Loader2, Tag, AlertCircle,
 } from 'lucide-react'
-import { getMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, type Campaign } from '@/lib/menus'
+import { getMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, type MenuItem, type Campaign } from '@/lib/menus'
 import { getStaffList } from '@/lib/staff-management'
 
 const PAYMENTS = [
@@ -88,7 +88,12 @@ export default function SalesPage() {
   useEffect(() => {
     const m = getMenus()
     const c = getCategories()
-    setMenus(m)
+    // メニューにcategoryがない古いデータに対応
+    const migratedMenus = m.map((menu: MenuItem) => ({
+      ...menu,
+      category: menu.category || c[0] || 'フェイシャル'
+    }))
+    setMenus(migratedMenus)
     setCategories(c)
     setSelectedCategory(c[0] ?? '')
     setStaffList(getStaffList())
@@ -215,11 +220,10 @@ export default function SalesPage() {
           <div className="grid md:grid-cols-2 gap-6">
             {/* 左: メニュー選択 */}
             <div>
-              <h3 className="text-sm font-bold text-text-main mb-3">大分類</h3>
               <div className="flex flex-wrap gap-2 mb-4">
                 {categories.map(cat => (
                   <button key={cat} onClick={() => setSelectedCategory(cat)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${selectedCategory === cat ? 'bg-gradient-to-r from-rose to-lavender text-white' : 'bg-light-lav text-text-sub hover:text-text-main'}`}>
+                    className={`px-4 py-2.5 rounded-xl text-base font-bold transition-all ${selectedCategory === cat ? 'bg-gradient-to-r from-rose to-lavender text-white shadow' : 'bg-light-lav text-text-sub hover:text-text-main'}`}>
                     {cat}
                   </button>
                 ))}
