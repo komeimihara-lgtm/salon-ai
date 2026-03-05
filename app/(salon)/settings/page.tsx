@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Plus, Trash2, Save } from 'lucide-react'
+import { Plus, Trash2, Save, Pencil, X } from 'lucide-react'
 import { getSalonSettings, setSalonSettings, type SalonSettings } from '@/lib/salon-settings'
 
 // 営業開始: 6:00〜13:00（30分刻み）
@@ -33,6 +33,8 @@ export default function SettingsPage() {
   const [newStaffName, setNewStaffName] = useState('')
   const [newStaffColor, setNewStaffColor] = useState('#C4728A')
   const [saved, setSaved] = useState(false)
+  const [bedsEditing, setBedsEditing] = useState(false)
+  const [editingBedNames, setEditingBedNames] = useState<Record<number, string>>({})
 
   useEffect(() => {
     setSettings(getSalonSettings())
@@ -44,15 +46,40 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
+  const saveBeds = (newBeds: string[]) => {
+    const next = { ...settings, beds: newBeds }
+    setSettings(next)
+    setSalonSettings(next)
+  }
+
   const addBed = () => {
     if (newBed.trim()) {
-      setSettings(s => ({ ...s, beds: [...s.beds, newBed.trim()] }))
+      const newBeds = [...settings.beds, newBed.trim()]
+      saveBeds(newBeds)
       setNewBed('')
     }
   }
 
   const removeBed = (idx: number) => {
-    setSettings(s => ({ ...s, beds: s.beds.filter((_, i) => i !== idx) }))
+    const newBeds = settings.beds.filter((_, i) => i !== idx)
+    saveBeds(newBeds)
+    setEditingBedNames(newBeds.reduce<Record<number, string>>((acc, b, i) => ({ ...acc, [i]: b }), {}))
+  }
+
+  const updateBed = (idx: number, name: string) => {
+    const next = [...settings.beds]
+    next[idx] = name.trim() || next[idx]
+    saveBeds(next)
+  }
+
+  const startBedsEdit = () => {
+    setBedsEditing(true)
+    setEditingBedNames(settings.beds.reduce<Record<number, string>>((acc, b, i) => ({ ...acc, [i]: b }), {}))
+  }
+
+  const cancelBedsEdit = () => {
+    setBedsEditing(false)
+    setEditingBedNames({})
   }
 
   const addStaff = () => {
@@ -188,22 +215,66 @@ export default function SettingsPage() {
 
       {/* ベッド設定 */}
       <section>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="gradient-line rounded-full" />
-          <span className="section-label font-dm-sans">ベッド設定</span>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-3">
+            <div className="gradient-line rounded-full" />
+            <span className="section-label font-dm-sans">ベッド設定</span>
+          </div>
+          {!bedsEditing ? (
+            <button
+              type="button"
+              onClick={startBedsEdit}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-rose border border-rose/50 rounded-lg hover:bg-rose/5"
+            >
+              <Pencil className="w-4 h-4" />
+              ベッドを編集
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={cancelBedsEdit}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-text-sub border border-gray-200 rounded-lg hover:bg-gray-50"
+            >
+              <X className="w-4 h-4" />
+              キャンセル
+            </button>
+          )}
         </div>
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
           <div className="space-y-3">
             {settings.beds.map((bed, i) => (
-              <div key={bed} className="flex items-center justify-between py-2 px-4 bg-light-lav/50 rounded-xl">
-                <span className="font-medium text-text-main">ベッド {bed}</span>
-                <button
-                  onClick={() => removeBed(i)}
-                  className="p-2 text-text-sub hover:text-red-600 rounded-lg hover:bg-red-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              <div key={`${bed}-${i}`} className="flex items-center justify-between gap-2 py-2 px-4 bg-light-lav/50 rounded-xl">
+                {bedsEditing ? (
+                  <>
+                    <input
+                      type="text"
+                      value={editingBedNames[i] ?? bed}
+                      onChange={(e) => setEditingBedNames(prev => ({ ...prev, [i]: e.target.value }))}
+                      onBlur={(e) => {
+                        const v = e.target.value.trim()
+                        if (v && v !== bed) updateBed(i, v)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const v = (editingBedNames[i] ?? bed).trim()
+                          if (v && v !== bed) updateBed(i, v)
+                        }
+                      }}
+                      className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 focus:border-rose outline-none text-sm"
+                      placeholder="ベッド名"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeBed(i)}
+                      className="p-2 text-text-sub hover:text-red-600 rounded-lg hover:bg-red-50 shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <span className="font-medium text-text-main">ベッド {bed}</span>
+                )}
               </div>
             ))}
             <div className="flex gap-2">
@@ -213,8 +284,10 @@ export default function SettingsPage() {
                 onChange={(e) => setNewBed(e.target.value)}
                 placeholder="新規ベッド名（例: C）"
                 className="flex-1 px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none"
+                onKeyDown={(e) => e.key === 'Enter' && addBed()}
               />
               <button
+                type="button"
                 onClick={addBed}
                 className="px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium hover:opacity-90 flex items-center gap-2"
               >

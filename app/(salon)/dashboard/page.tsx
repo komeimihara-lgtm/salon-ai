@@ -231,6 +231,14 @@ export default function DashboardPage() {
   const [detailModal, setDetailModal] = useState<'cash' | 'consume' | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; start: string; end: string; bed: string } | null>(null)
   const [showReservationModal, setShowReservationModal] = useState(false)
+  const [beds, setBeds] = useState<string[]>(() => getSalonSettings().beds?.length ? getSalonSettings().beds : ['A', 'B'])
+
+  useEffect(() => {
+    const refresh = () => setBeds(getSalonSettings().beds?.length ? getSalonSettings().beds : ['A', 'B'])
+    refresh()
+    window.addEventListener('salon-settings-updated', refresh)
+    return () => window.removeEventListener('salon-settings-updated', refresh)
+  }, [])
 
   useEffect(() => {
     fetch('/api/tickets/check-expiry', { method: 'POST' }).catch(() => {})
@@ -576,7 +584,7 @@ export default function DashboardPage() {
         </div>
         <TimelineSchedule
           today={today}
-          beds={getSalonSettings().beds.length > 0 ? getSalonSettings().beds : ['A', 'B']}
+          beds={beds}
           reservations={todayReservations}
           loading={reservationsLoading}
           openTime={getSalonSettings().businessHours.openTime}
@@ -798,7 +806,7 @@ export default function DashboardPage() {
             return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
           })()}
           defaultBed={selectedSlot.bed}
-          beds={getSalonSettings().beds.length > 0 ? getSalonSettings().beds : ['A', 'B']}
+          beds={beds}
           onClose={() => { setShowReservationModal(false); setSelectedSlot(null) }}
           onSaved={() => { setShowReservationModal(false); setSelectedSlot(null); refresh() }}
         />
