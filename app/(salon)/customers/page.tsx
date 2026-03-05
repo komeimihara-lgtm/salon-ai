@@ -8,14 +8,15 @@ import {
 } from 'lucide-react'
 import { Customer } from '@/types'
 import {
-  fetchCustomerCourses,
-  getCoursePacks,
-  addCustomerCourse,
-  consumeCourse,
-  isExpired,
-  daysUntilExpiry,
-  type CustomerCourse,
-} from '@/lib/courses'
+  fetchCustomerTickets,
+  fetchTicketPlans,
+  addCustomerTicket,
+  consumeTicket,
+  isTicketExpired,
+  daysUntilTicketExpiry,
+  type CustomerTicket,
+  type TicketPlan,
+} from '@/lib/tickets'
 import {
   fetchCustomerSubscriptions,
   getSubscriptionPlans,
@@ -56,11 +57,11 @@ function CustomerDetailModal({
   onClose: () => void
   onCourseUpdated?: () => void
 }) {
-  const [courses, setCourses] = useState<CustomerCourse[]>([])
-  const [packs, setPacks] = useState<ReturnType<typeof getCoursePacks>>([])
+  const [tickets, setTickets] = useState<CustomerTicket[]>([])
+  const [packs, setPacks] = useState<TicketPlan[]>([])
   const [purchaseOpen, setPurchaseOpen] = useState(false)
-  const [selectedPack, setSelectedPack] = useState<ReturnType<typeof getCoursePacks>[0] | null>(null)
-  const [consumeTarget, setConsumeTarget] = useState<CustomerCourse | null>(null)
+  const [selectedPack, setSelectedPack] = useState<TicketPlan | null>(null)
+  const [consumeTarget, setConsumeTarget] = useState<CustomerTicket | null>(null)
 
   const [subs, setSubs] = useState<CustomerSubscription[]>([])
   const [subPlans, setSubPlans] = useState<ReturnType<typeof getSubscriptionPlans>>([])
@@ -69,13 +70,14 @@ function CustomerDetailModal({
   const [subUseTarget, setSubUseTarget] = useState<CustomerSubscription | null>(null)
 
   const refresh = useCallback(async () => {
-    const [coursesData, subsData] = await Promise.all([
-      fetchCustomerCourses(customer.id),
+    const [ticketsData, packsData, subsData] = await Promise.all([
+      fetchCustomerTickets(customer.id),
+      fetchTicketPlans(),
       fetchCustomerSubscriptions(customer.id),
     ])
-    setCourses(coursesData)
+    setTickets(ticketsData)
+    setPacks(packsData)
     setSubs(subsData.map(s => ensureBillingPeriodCurrent(s)))
-    setPacks(getCoursePacks())
     setSubPlans(getSubscriptionPlans())
     onCourseUpdated?.()
   }, [customer.id, onCourseUpdated])
@@ -83,10 +85,10 @@ function CustomerDetailModal({
   useEffect(() => {
     refresh()
     const handler = () => refresh()
-    window.addEventListener('customer-courses-updated', handler)
+    window.addEventListener('customer-tickets-updated', handler)
     window.addEventListener('customer-subscriptions-updated', handler)
     return () => {
-      window.removeEventListener('customer-courses-updated', handler)
+      window.removeEventListener('customer-tickets-updated', handler)
       window.removeEventListener('customer-subscriptions-updated', handler)
     }
   }, [refresh])
@@ -94,7 +96,7 @@ function CustomerDetailModal({
   const handlePurchase = async () => {
     if (!selectedPack) return
     try {
-      await addCustomerCourse(customer.id, customer.name, selectedPack)
+      await addCustomerTicket(customer.id, customer.name, selectedPack)
       refresh()
       setPurchaseOpen(false)
       setSelectedPack(null)
@@ -103,8 +105,8 @@ function CustomerDetailModal({
     }
   }
 
-  const handleConsume = async (c: CustomerCourse) => {
-    const ok = await consumeCourse(c.id)
+  const handleConsume = async (c: CustomerTicket) => {
+    const ok = await consumeTicket(c.id)
     if (ok) refresh()
     setConsumeTarget(null)
   }
@@ -161,22 +163,22 @@ function CustomerDetailModal({
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-bold text-[#1A202C] flex items-center gap-2">
                 <Ticket className="w-4 h-4" />
-                保有コース
+                保有回数券
               </h3>
-              <button
-                onClick={() => setPurchaseOpen(true)}
-                className="text-xs font-semibold text-rose hover:underline"
-              >
-                + 購入
-              </button>
+                <button
+                  onClick={() => setPurchaseOpen(true)}
+                  className="text-xs font-semibold text-rose hover:underline"
+                >
+                  + 回数券購入
+                </button>
             </div>
-            {courses.length === 0 ? (
-              <p className="text-sm text-[#4A5568] py-2">保有コースはありません</p>
+            {tickets.length === 0 ? (
+              <p className="text-sm text-[#4A5568] py-2">保有回数券はありません</p>
             ) : (
               <div className="space-y-2">
-                {courses.map(c => {
-                  const expired = isExpired(c)
-                  const days = daysUntilExpiry(c)
+                {tickets.map(c => {
+                  const expired = isTicketExpired(c)
+                  const days = daysUntilTicketExpiry(c)
                   return (
                     <div
                       key={c.id}
@@ -185,9 +187,9 @@ function CustomerDetailModal({
                       }`}
                     >
                       <div>
-                        <p className="text-sm font-medium text-[#1A202C]">{c.courseName}</p>
+                        <p className="text-sm font-medium text-[#1A202C]">{c.planName}</p>
                         <p className="text-xs text-[#4A5568]">
-                          残り{c.remainingSessions}/{c.totalSessions}回 · 期限{c.expiryDate}
+                          残り{c.remainingSessions}/{c.totalSessions}回 · 期限{c.expiryDate ?? '—'}
                           {!expired && c.remainingSessions > 0 && ` (残${days}日)`}
                         </p>
                       </div>
@@ -255,7 +257,7 @@ function CustomerDetailModal({
 
         {purchaseOpen && (
           <div className="p-5 border-t border-[#BAE6FD] bg-white/50 rounded-b-2xl">
-            <p className="text-sm font-medium text-[#1A202C] mb-2">コースを選択</p>
+            <p className="text-sm font-medium text-[#1A202C] mb-2">回数券を選択</p>
             <div className="space-y-2 mb-4">
               {packs.map(p => (
                 <button
@@ -267,7 +269,8 @@ function CustomerDetailModal({
                 >
                   <p className="text-sm font-medium">{p.name}</p>
                   <p className="text-xs text-[#4A5568]">
-                    ¥{p.price.toLocaleString()} · {p.totalSessions}回 · 有効{p.expiryMonths}ヶ月
+                    ¥{p.price.toLocaleString()} · {p.totalSessions}回
+                    {p.expiryDays ? ` · 有効${p.expiryDays}日` : ''}
                   </p>
                 </button>
               ))}
@@ -331,7 +334,7 @@ function CustomerDetailModal({
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
             <div className="bg-white rounded-xl p-5 max-w-sm w-full">
               <p className="text-sm mb-4">
-                {consumeTarget.courseName} を1回消化しますか？
+                {consumeTarget.planName} を1回消化しますか？
               </p>
               <div className="flex gap-2">
                 <button

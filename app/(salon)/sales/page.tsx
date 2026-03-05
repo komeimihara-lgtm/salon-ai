@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { getMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, type MenuItem, type Campaign } from '@/lib/menus'
 import { getStaffList } from '@/lib/staff-management'
+import { fetchTicketPlans, addCustomerTicket, type TicketPlan } from '@/lib/tickets'
 
 const PAYMENTS = [
   { value: 'cash', label: '現金' },
@@ -68,6 +69,8 @@ export default function SalesPage() {
   const [confirmModal, setConfirmModal] = useState<{ type: 'card' | 'loan' } | null>(null)
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
   const [editSale, setEditSale] = useState<Sale | null>(null)
+  const [ticketPlans, setTicketPlans] = useState<TicketPlan[]>([])
+  const [ticketPurchasing, setTicketPurchasing] = useState(false)
 
   const fetchSales = useCallback(async () => {
     try {
@@ -100,11 +103,28 @@ export default function SalesPage() {
     setTaxSettingsState(getTaxSettings())
     setCampaignsState(getCampaigns())
     fetchCustomers()
+    fetchTicketPlans().then(setTicketPlans).catch(() => [])
   }, [fetchCustomers])
 
   useEffect(() => { setLoading(true); fetchSales() }, [fetchSales])
 
   const filteredMenus = selectedCategory ? menus.filter(m => m.category === selectedCategory) : menus
+
+  const handleTicketPurchase = async (plan: TicketPlan) => {
+    if (!selectedCustomer) {
+      alert('先に顧客を選択してください')
+      return
+    }
+    setTicketPurchasing(true)
+    try {
+      await addCustomerTicket(selectedCustomer.id, selectedCustomer.name, plan)
+      alert(`${plan.name} を購入登録しました`)
+    } catch {
+      alert('登録に失敗しました')
+    } finally {
+      setTicketPurchasing(false)
+    }
+  }
 
   const addToCart = (menu: { id: string; name: string; price: number; category: string }) => {
     setCart(prev => {
@@ -229,7 +249,7 @@ export default function SalesPage() {
                 ))}
               </div>
               <h3 className="text-sm font-bold text-text-main mb-3">メニュー</h3>
-              <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
                 {filteredMenus.map(m => (
                   <button key={m.id} onClick={() => addToCart(m)}
                     className="p-3 rounded-xl border border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all">
@@ -238,6 +258,24 @@ export default function SalesPage() {
                     <p className="text-xs text-text-sub">{m.duration}分</p>
                   </button>
                 ))}
+              </div>
+              <h3 className="text-sm font-bold text-text-main mb-2 mt-4">回数券</h3>
+              <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                {ticketPlans.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleTicketPurchase(p)}
+                    disabled={!selectedCustomer || ticketPurchasing}
+                    className="p-3 rounded-xl border border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <p className="font-medium text-text-main text-sm">{p.name}</p>
+                    <p className="text-sm text-rose font-bold">¥{p.price.toLocaleString()}</p>
+                    <p className="text-xs text-text-sub">{p.totalSessions}回</p>
+                  </button>
+                ))}
+                {ticketPlans.length === 0 && (
+                  <p className="col-span-2 text-xs text-text-sub py-2">メニュー設定で回数券を登録してください</p>
+                )}
               </div>
             </div>
 

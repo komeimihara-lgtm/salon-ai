@@ -39,7 +39,7 @@ const NAV_ITEMS = [
   { href: '/kpi', icon: TrendingUp, label: '売上分析' },
   { href: '/marketing', icon: Megaphone, label: 'AI集客' },
   { href: '/menu', icon: List, label: 'メニュー設定' },
-  { href: '/courses', icon: Ticket, label: 'コース管理' },
+  { href: '/courses', icon: Ticket, label: '回数券管理' },
   { href: '/subscriptions', icon: Repeat, label: 'サブスク管理' },
   { href: '/staff', icon: Clock, label: 'スタッフ管理' },
   { href: '/settings', icon: Settings, label: 'サロン設定' },

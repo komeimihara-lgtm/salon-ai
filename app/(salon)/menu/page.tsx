@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, Pencil, X, Ticket, Repeat, Tag, Settings2, Loader2 } from 'lucide-react'
-import { getCoursePacks, setCoursePacks, type CoursePack } from '@/lib/courses'
+import { fetchTicketPlans, createTicketPlan, deleteTicketPlan, type TicketPlan } from '@/lib/tickets'
 import { getSubscriptionPlans, setSubscriptionPlans, type SubscriptionPlan } from '@/lib/subscriptions'
 import {
   getMenus, setMenus, getCategories, setCategories,
@@ -124,7 +124,8 @@ export default function MenuSettingsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [taxSettings, setTaxSettingsState] = useState<TaxSettings>({ taxType: 'included', taxRate: 10 })
   const [campaigns, setCampaignsState] = useState<Campaign[]>([])
-  const [coursePacks, setCoursePacksState] = useState<CoursePack[]>([])
+  const [ticketPlans, setTicketPlansState] = useState<TicketPlan[]>([])
+  const [ticketPlansLoading, setTicketPlansLoading] = useState(true)
   const [subPlans, setSubPlansState] = useState<SubscriptionPlan[]>([])
 
   // メニュー追加フォーム
@@ -153,7 +154,7 @@ export default function MenuSettingsPage() {
   const [courseMenuName, setCourseMenuName] = useState('')
   const [courseSessions, setCourseSessions] = useState(5)
   const [coursePrice, setCoursePrice] = useState(40000)
-  const [courseExpiryMonths, setCourseExpiryMonths] = useState(6)
+  const [courseExpiryDays, setCourseExpiryDays] = useState(180)
   const [subName, setSubName] = useState('')
   const [subMenuName, setSubMenuName] = useState('')
   const [subPrice, setSubPrice] = useState(8000)
@@ -170,10 +171,11 @@ export default function MenuSettingsPage() {
     setNewCategory(c[0] ?? '')
     setTaxSettingsState(getTaxSettings())
     setCampaignsState(getCampaigns())
-    setCoursePacksState(getCoursePacks())
     setSubPlansState(getSubscriptionPlans())
     setCourseMenuName(m[0]?.name ?? '')
     setSubMenuName(m[0]?.name ?? '')
+    setTicketPlansLoading(true)
+    fetchTicketPlans().then(p => { setTicketPlansState(p) }).catch(() => {}).finally(() => setTicketPlansLoading(false))
   }, [])
 
   const filteredMenus = selectedCategory
@@ -267,20 +269,21 @@ export default function MenuSettingsPage() {
     setCampaigns(next)
   }
 
-  const addCoursePack = () => {
+  const addTicketPlan = async () => {
     if (!courseName.trim()) return
-    const pack: CoursePack = {
-      id: Date.now().toString(),
-      name: courseName.trim(),
-      menuName: courseMenuName,
-      totalSessions: courseSessions,
-      price: coursePrice,
-      expiryMonths: courseExpiryMonths,
+    try {
+      const plan = await createTicketPlan({
+        name: courseName.trim(),
+        menuName: courseMenuName,
+        totalSessions: courseSessions,
+        price: coursePrice,
+        expiryDays: courseExpiryDays,
+      })
+      setTicketPlansState(prev => [...prev, plan])
+      setCourseName('')
+    } catch {
+      alert('登録に失敗しました')
     }
-    const next = [...coursePacks, pack]
-    setCoursePacksState(next)
-    setCoursePacks(next)
-    setCourseName('')
   }
 
   const addSubPlan = () => {
@@ -492,39 +495,60 @@ export default function MenuSettingsPage() {
       {activeTab === 'courses' && (
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
-          <div className="space-y-3 mb-4">
-            {coursePacks.map(p => (
-              <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
-                <div>
-                  <p className="font-medium text-text-main">{p.name}</p>
-                  <p className="text-xs text-text-sub">{p.menuName} · {p.totalSessions}回 · ¥{p.price.toLocaleString()} · 有効{p.expiryMonths}ヶ月</p>
-                </div>
-                <button onClick={() => { const next = coursePacks.filter(x => x.id !== p.id); setCoursePacksState(next); setCoursePacks(next) }}
-                  className="p-2 text-text-sub hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+          {ticketPlansLoading ? (
+            <p className="text-sm text-text-sub py-4">読み込み中...</p>
+          ) : (
+            <>
+              <div className="space-y-3 mb-4">
+                {ticketPlans.map(p => (
+                  <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
+                    <div>
+                      <p className="font-medium text-text-main">{p.name}</p>
+                      <p className="text-xs text-text-sub">
+                        {p.menuName} · {p.totalSessions}回 · ¥{p.price.toLocaleString()}
+                        {p.expiryDays ? ` · 有効${p.expiryDays}日` : ''}
+                      </p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (!confirm('削除しますか？')) return
+                        try {
+                          await deleteTicketPlan(p.id)
+                          setTicketPlansState(prev => prev.filter(x => x.id !== p.id))
+                        } catch {
+                          alert('削除に失敗しました')
+                        }
+                      }}
+                      className="p-2 text-text-sub hover:text-red-600 rounded-lg"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="flex gap-2 flex-wrap border-t border-gray-100 pt-4">
-            <input type="text" value={courseName} onChange={e => setCourseName(e.target.value)}
-              placeholder="例: フェイシャル5回券" className="px-4 py-2 rounded-xl border border-gray-200 outline-none min-w-48 flex-1" />
-            <select value={courseMenuName} onChange={e => setCourseMenuName(e.target.value)}
-              className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
-              {menus.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-            </select>
-            <input type="number" value={courseSessions} onChange={e => setCourseSessions(Number(e.target.value))}
-              min={2} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-20" />
-            <span className="self-center text-text-sub text-sm">回</span>
-            <input type="number" value={coursePrice} onChange={e => setCoursePrice(Number(e.target.value))}
-              className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-28" />
-            <span className="self-center text-text-sub text-sm">円</span>
-            <input type="number" value={courseExpiryMonths} onChange={e => setCourseExpiryMonths(Number(e.target.value))}
-              min={1} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-20" />
-            <span className="self-center text-text-sub text-sm">ヶ月</span>
-            <button onClick={addCoursePack}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium">
-              <Plus className="w-4 h-4" />追加
-            </button>
-          </div>
+              <div className="flex gap-2 flex-wrap border-t border-gray-100 pt-4">
+                <input type="text" value={courseName} onChange={e => setCourseName(e.target.value)}
+                  placeholder="例: フェイシャル5回券" className="px-4 py-2 rounded-xl border border-gray-200 outline-none min-w-48 flex-1" />
+                <select value={courseMenuName} onChange={e => setCourseMenuName(e.target.value)}
+                  className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
+                  {menus.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                </select>
+                <input type="number" value={courseSessions} onChange={e => setCourseSessions(Number(e.target.value))}
+                  min={2} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-20" />
+                <span className="self-center text-text-sub text-sm">回</span>
+                <input type="number" value={coursePrice} onChange={e => setCoursePrice(Number(e.target.value))}
+                  className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-28" />
+                <span className="self-center text-text-sub text-sm">円</span>
+                <input type="number" value={courseExpiryDays} onChange={e => setCourseExpiryDays(Number(e.target.value))}
+                  min={1} placeholder="日数" className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-24" />
+                <span className="self-center text-text-sub text-sm">日</span>
+                <button onClick={addTicketPlan}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium">
+                  <Plus className="w-4 h-4" />追加
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

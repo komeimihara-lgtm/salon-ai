@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, Pencil, X, Ticket, Repeat } from 'lucide-react'
-import { getCoursePacks, setCoursePacks, type CoursePack } from '@/lib/courses'
+import { fetchTicketPlans, createTicketPlan, deleteTicketPlan, type TicketPlan } from '@/lib/tickets'
 import { getSubscriptionPlans, setSubscriptionPlans, type SubscriptionPlan } from '@/lib/subscriptions'
 
 const STORAGE_KEY = 'sola_menus'
@@ -47,7 +47,8 @@ export default function MenuSettingsPage() {
   const [editDuration, setEditDuration] = useState(60)
   const [editPrice, setEditPrice] = useState(0)
 
-  const [coursePacks, setCoursePacksState] = useState<CoursePack[]>([])
+  const [ticketPlans, setTicketPlansState] = useState<TicketPlan[]>([])
+  const [ticketPlansLoading, setTicketPlansLoading] = useState(true)
   const [courseName, setCourseName] = useState('')
   const [courseMenuName, setCourseMenuName] = useState(() => {
     if (typeof window === 'undefined') return ''
@@ -56,7 +57,7 @@ export default function MenuSettingsPage() {
   })
   const [courseSessions, setCourseSessions] = useState(5)
   const [coursePrice, setCoursePrice] = useState(40000)
-  const [courseExpiryMonths, setCourseExpiryMonths] = useState(6)
+  const [courseExpiryDays, setCourseExpiryDays] = useState(180)
 
   const [subPlans, setSubPlansState] = useState<SubscriptionPlan[]>([])
   const [subName, setSubName] = useState('')
@@ -70,9 +71,10 @@ export default function MenuSettingsPage() {
   const [subBillingDay, setSubBillingDay] = useState(1)
 
   useEffect(() => {
-    setCoursePacksState(getCoursePacks())
     setSubPlansState(getSubscriptionPlans())
     if (!subMenuName && menus.length > 0) setSubMenuName(menus[0].name)
+    setTicketPlansLoading(true)
+    fetchTicketPlans().then(p => { setTicketPlansState(p) }).catch(() => {}).finally(() => setTicketPlansLoading(false))
   }, [])
 
   const addMenu = () => {
@@ -117,30 +119,34 @@ export default function MenuSettingsPage() {
     setEditingId(null)
   }
 
-  const addCoursePack = () => {
+  const addTicketPlan = async () => {
     if (!courseName.trim() || !courseMenuName.trim()) return
-    const pack: CoursePack = {
-      id: Date.now().toString(),
-      name: courseName.trim(),
-      menuName: courseMenuName.trim(),
-      totalSessions: courseSessions,
-      price: coursePrice,
-      expiryMonths: courseExpiryMonths,
+    try {
+      const plan = await createTicketPlan({
+        name: courseName.trim(),
+        menuName: courseMenuName.trim(),
+        totalSessions: courseSessions,
+        price: coursePrice,
+        expiryDays: courseExpiryDays,
+      })
+      setTicketPlansState(prev => [...prev, plan])
+      setCourseName('')
+      setCourseMenuName(menus[0]?.name ?? '')
+      setCourseSessions(5)
+      setCoursePrice(40000)
+      setCourseExpiryDays(180)
+    } catch {
+      alert('登録に失敗しました')
     }
-    const next = [...coursePacks, pack]
-    setCoursePacksState(next)
-    setCoursePacks(next)
-    setCourseName('')
-    setCourseMenuName(menus[0]?.name ?? '')
-    setCourseSessions(5)
-    setCoursePrice(40000)
-    setCourseExpiryMonths(6)
   }
 
-  const removeCoursePack = (id: string) => {
-    const next = coursePacks.filter(p => p.id !== id)
-    setCoursePacksState(next)
-    setCoursePacks(next)
+  const removeTicketPlan = async (id: string) => {
+    try {
+      await deleteTicketPlan(id)
+      setTicketPlansState(prev => prev.filter(p => p.id !== id))
+    } catch {
+      alert('削除に失敗しました')
+    }
   }
 
   const addSubPlan = () => {
@@ -280,7 +286,7 @@ export default function MenuSettingsPage() {
           <div className="gradient-line rounded-full" />
           <span className="section-label font-dm-sans flex items-center gap-2">
             <Ticket className="w-4 h-4" />
-            コース（回数券）
+            回数券
           </span>
         </div>
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
@@ -288,72 +294,78 @@ export default function MenuSettingsPage() {
           <p className="text-xs text-text-sub mb-4">
             回数券の種類を登録します。顧客が購入したら消化・期限を管理画面で管理できます。
           </p>
-          <div className="space-y-3">
-            {coursePacks.map((p) => (
-              <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
-                <div>
-                  <p className="font-medium text-text-main">{p.name}</p>
-                  <p className="text-xs text-text-sub">
-                    {p.menuName} · {p.totalSessions}回 · ¥{p.price.toLocaleString()} · 有効{p.expiryMonths}ヶ月
-                  </p>
+          {ticketPlansLoading ? (
+            <p className="text-sm text-text-sub py-4">読み込み中...</p>
+          ) : (
+            <div className="space-y-3">
+              {ticketPlans.map((p) => (
+                <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
+                  <div>
+                    <p className="font-medium text-text-main">{p.name}</p>
+                    <p className="text-xs text-text-sub">
+                      {p.menuName} · {p.totalSessions}回 · ¥{p.price.toLocaleString()}
+                      {p.expiryDays ? ` · 有効${p.expiryDays}日` : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeTicketPlan(p.id)}
+                    className="p-2 text-text-sub hover:text-red-600 rounded-lg hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => removeCoursePack(p.id)}
-                  className="p-2 text-text-sub hover:text-red-600 rounded-lg hover:bg-red-50"
+              ))}
+              <div className="flex gap-2 flex-wrap pt-4 border-t border-gray-100">
+                <input
+                  type="text"
+                  value={courseName}
+                  onChange={e => setCourseName(e.target.value)}
+                  placeholder="例: フェイシャル5回券"
+                  className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-40"
+                />
+                <select
+                  value={courseMenuName}
+                  onChange={e => setCourseMenuName(e.target.value)}
+                  className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  {menus.map(m => (
+                    <option key={m.id} value={m.name}>{m.name}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={courseSessions}
+                  onChange={e => setCourseSessions(Number(e.target.value))}
+                  min={2}
+                  className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-20"
+                />
+                <span className="self-center text-text-sub text-sm">回</span>
+                <input
+                  type="number"
+                  value={coursePrice}
+                  onChange={e => setCoursePrice(Number(e.target.value))}
+                  className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-28"
+                />
+                <span className="self-center text-text-sub text-sm">円</span>
+                <input
+                  type="number"
+                  value={courseExpiryDays}
+                  onChange={e => setCourseExpiryDays(Number(e.target.value))}
+                  min={1}
+                  placeholder="日数"
+                  className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-24"
+                />
+                <span className="self-center text-text-sub text-sm">日</span>
+                <button
+                  onClick={addTicketPlan}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium hover:opacity-90"
+                >
+                  <Plus className="w-4 h-4" />
+                  追加
                 </button>
               </div>
-            ))}
-            <div className="flex gap-2 flex-wrap pt-4 border-t border-gray-100">
-              <input
-                type="text"
-                value={courseName}
-                onChange={e => setCourseName(e.target.value)}
-                placeholder="例: フェイシャル5回券"
-                className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-40"
-              />
-              <select
-                value={courseMenuName}
-                onChange={e => setCourseMenuName(e.target.value)}
-                className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
-              >
-                {menus.map(m => (
-                  <option key={m.id} value={m.name}>{m.name}</option>
-                ))}
-              </select>
-              <input
-                type="number"
-                value={courseSessions}
-                onChange={e => setCourseSessions(Number(e.target.value))}
-                min={2}
-                className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-20"
-              />
-              <span className="self-center text-text-sub text-sm">回</span>
-              <input
-                type="number"
-                value={coursePrice}
-                onChange={e => setCoursePrice(Number(e.target.value))}
-                className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-28"
-              />
-              <span className="self-center text-text-sub text-sm">円</span>
-              <input
-                type="number"
-                value={courseExpiryMonths}
-                onChange={e => setCourseExpiryMonths(Number(e.target.value))}
-                min={1}
-                className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-20"
-              />
-              <span className="self-center text-text-sub text-sm">ヶ月</span>
-              <button
-                onClick={addCoursePack}
-                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium hover:opacity-90"
-              >
-                <Plus className="w-4 h-4" />
-                追加
-              </button>
             </div>
-          </div>
+          )}
         </div>
       </section>
 

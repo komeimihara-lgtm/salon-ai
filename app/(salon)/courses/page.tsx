@@ -13,57 +13,56 @@ import {
   Calendar,
 } from 'lucide-react'
 import {
-  getCoursePacks,
-  fetchCustomerCourses,
-  addCustomerCourse,
-  consumeCourse,
-  fetchExpiringSoon,
-  fetchExpired,
-  isExpired,
-  daysUntilExpiry,
-  type CustomerCourse,
-  type CoursePack,
-} from '@/lib/courses'
+  fetchTicketPlans,
+  fetchCustomerTickets,
+  addCustomerTicket,
+  consumeTicket,
+  fetchExpiringSoonTickets,
+  fetchExpiredTickets,
+  isTicketExpired,
+  daysUntilTicketExpiry,
+  type CustomerTicket,
+  type TicketPlan,
+} from '@/lib/tickets'
 import { Customer } from '@/types'
 
 export default function CoursesPage() {
-  const [courses, setCourses] = useState<CustomerCourse[]>([])
-  const [packs, setPacks] = useState<CoursePack[]>([])
-  const [expiringSoon, setExpiringSoon] = useState<CustomerCourse[]>([])
+  const [tickets, setTickets] = useState<CustomerTicket[]>([])
+  const [packs, setPacks] = useState<TicketPlan[]>([])
+  const [expiringSoon, setExpiringSoon] = useState<CustomerTicket[]>([])
   const [expiredCount, setExpiredCount] = useState(0)
   const [filter, setFilter] = useState<'all' | 'active' | 'expiring'>('all')
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false)
-  const [consumeModalOpen, setConsumeModalOpen] = useState<CustomerCourse | null>(null)
+  const [consumeModalOpen, setConsumeModalOpen] = useState<CustomerTicket | null>(null)
 
   const refresh = useCallback(async () => {
-    const [coursesData, expiringData, expiredData] = await Promise.all([
-      fetchCustomerCourses(),
-      fetchExpiringSoon(30),
-      fetchExpired(),
+    const [ticketsData, expiringData, expiredData, packsData] = await Promise.all([
+      fetchCustomerTickets(),
+      fetchExpiringSoonTickets(30),
+      fetchExpiredTickets(),
+      fetchTicketPlans(),
     ])
-    setCourses(coursesData)
+    setTickets(ticketsData)
     setExpiringSoon(expiringData)
     setExpiredCount(expiredData.length)
-    setPacks(getCoursePacks())
+    setPacks(packsData)
   }, [])
 
   useEffect(() => {
     refresh()
     const handler = () => refresh()
-    window.addEventListener('customer-courses-updated', handler)
-    window.addEventListener('course-packs-updated', () => setPacks(getCoursePacks()))
+    window.addEventListener('customer-tickets-updated', handler)
     return () => {
-      window.removeEventListener('customer-courses-updated', handler)
-      window.removeEventListener('course-packs-updated', () => {})
+      window.removeEventListener('customer-tickets-updated', handler)
     }
   }, [refresh])
 
-  const displayCourses =
+  const displayTickets =
     filter === 'expiring'
       ? expiringSoon
       : filter === 'active'
-        ? courses.filter(c => c.remainingSessions > 0 && !isExpired(c))
-        : courses
+        ? tickets.filter(c => c.remainingSessions > 0 && !isTicketExpired(c))
+        : tickets
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -79,7 +78,7 @@ export default function CoursesPage() {
                 <AlertTriangle className="w-4 h-4 text-red-600" />
                 <p className="text-sm text-red-700">
                   <span className="font-bold">期限切れ：</span>
-                  {expiredCount}件のコースが残り回数ありで期限切れです
+                  {expiredCount}件の回数券が残り回数ありで期限切れです
                 </p>
               </div>
             </Link>
@@ -90,7 +89,7 @@ export default function CoursesPage() {
                 <Calendar className="w-4 h-4 text-amber-600" />
                 <p className="text-sm text-amber-800">
                   <span className="font-bold">30日以内に期限：</span>
-                  {expiringSoon.length}件
+                  {expiringSoon.length}件の回数券
                 </p>
               </div>
             </div>
@@ -102,7 +101,7 @@ export default function CoursesPage() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-3">
             <div className="gradient-line rounded-full" />
-            <span className="section-label font-dm-sans">コース（回数券）管理</span>
+            <span className="section-label font-dm-sans">回数券管理</span>
           </div>
           <select
             value={filter}
@@ -130,29 +129,29 @@ export default function CoursesPage() {
             <thead>
               <tr className="bg-light-lav/50">
                 <th className="text-left p-3 text-text-sub font-medium">お客様</th>
-                <th className="text-left p-3 text-text-sub font-medium">コース</th>
+                <th className="text-left p-3 text-text-sub font-medium">回数券</th>
                 <th className="text-left p-3 text-text-sub font-medium">残り</th>
                 <th className="text-left p-3 text-text-sub font-medium">期限</th>
                 <th className="text-left p-3 text-text-sub font-medium w-24">操作</th>
               </tr>
             </thead>
             <tbody>
-              {displayCourses.length === 0 ? (
+              {displayTickets.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="p-8 text-center text-text-sub">
                     {filter === 'expiring'
-                      ? '30日以内に期限のコースはありません'
-                      : 'コースの購入登録がありません'}
+                      ? '30日以内に期限の回数券はありません'
+                      : '回数券の購入登録がありません'}
                     <br />
                     <span className="text-xs">
-                      メニュー設定でコースを登録し、購入登録から顧客に紐づけてください
+                      メニュー設定で回数券を登録し、購入登録から顧客に紐づけてください
                     </span>
                   </td>
                 </tr>
               ) : (
-                displayCourses.map((c) => {
-                  const days = daysUntilExpiry(c)
-                  const expired = isExpired(c)
+                displayTickets.map((c) => {
+                  const days = daysUntilTicketExpiry(c)
+                  const expired = isTicketExpired(c)
                   return (
                     <tr
                       key={c.id}
@@ -161,7 +160,7 @@ export default function CoursesPage() {
                       }`}
                     >
                       <td className="p-3 font-medium text-text-main">{c.customerName}</td>
-                      <td className="p-3 text-text-main">{c.courseName}</td>
+                      <td className="p-3 text-text-main">{c.planName}</td>
                       <td className="p-3">
                         <span
                           className={
@@ -185,7 +184,7 @@ export default function CoursesPage() {
                                 : 'text-text-sub'
                           }
                         >
-                          {c.expiryDate}
+                          {c.expiryDate ?? '—'}
                           {!expired && c.remainingSessions > 0 && (
                             <span className="ml-1 text-xs">(残{days}日)</span>
                           )}
@@ -215,7 +214,7 @@ export default function CoursesPage() {
         <Link href="/menu" className="text-rose hover:underline">
           メニュー設定
         </Link>
-        でコース（回数券）の種類を登録できます
+        で回数券の種類を登録できます
       </p>
 
       {/* 購入登録モーダル */}
@@ -233,7 +232,7 @@ export default function CoursesPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
             <h3 className="font-semibold text-text-main mb-2">1回消化しますか？</h3>
             <p className="text-sm text-text-sub mb-4">
-              {consumeModalOpen.customerName} 様の {consumeModalOpen.courseName}
+              {consumeModalOpen.customerName} 様の {consumeModalOpen.planName}
               <br />
               残り {consumeModalOpen.remainingSessions}回 → {consumeModalOpen.remainingSessions - 1}回
             </p>
@@ -246,7 +245,7 @@ export default function CoursesPage() {
               </button>
               <button
                 onClick={async () => {
-                  await consumeCourse(consumeModalOpen.id)
+                  await consumeTicket(consumeModalOpen.id)
                   refresh()
                   setConsumeModalOpen(null)
                 }}
@@ -267,7 +266,7 @@ function PurchaseModal({
   onClose,
   onSaved,
 }: {
-  packs: CoursePack[]
+  packs: TicketPlan[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -276,7 +275,7 @@ function PurchaseModal({
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [selectedPack, setSelectedPack] = useState<CoursePack | null>(null)
+  const [selectedPack, setSelectedPack] = useState<TicketPlan | null>(null)
   const [customerName, setCustomerName] = useState('')
   const [customerId, setCustomerId] = useState('')
 
@@ -335,7 +334,7 @@ function PurchaseModal({
       return
     }
     try {
-      await addCustomerCourse(cid, cname, selectedPack)
+      await addCustomerTicket(cid, cname, selectedPack)
       onSaved()
       onClose()
     } catch (e) {
@@ -348,7 +347,7 @@ function PurchaseModal({
       <div className="bg-white rounded-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-text-main">
-            {step === 'customer' ? '顧客を選択' : 'コースを選択'}
+            {step === 'customer' ? '顧客を選択' : '回数券を選択'}
           </h3>
           <button onClick={onClose} className="p-2 text-text-sub hover:text-text-main rounded-lg">
             <X className="w-5 h-5" />
@@ -432,14 +431,15 @@ function PurchaseModal({
                 >
                   <p className="font-medium text-text-main">{p.name}</p>
                   <p className="text-xs text-text-sub">
-                    ¥{p.price.toLocaleString()} · {p.totalSessions}回 · 有効{p.expiryMonths}ヶ月
+                    ¥{p.price.toLocaleString()} · {p.totalSessions}回
+                    {p.expiryDays ? ` · 有効${p.expiryDays}日` : ''}
                   </p>
                 </button>
               ))}
             </div>
             {packs.length === 0 && (
               <p className="text-sm text-text-sub">
-                メニュー設定でコースを登録してください
+                メニュー設定で回数券を登録してください
               </p>
             )}
             <div className="flex gap-2 pt-4">

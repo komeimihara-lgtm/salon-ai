@@ -14,14 +14,15 @@ import {
   Repeat,
 } from 'lucide-react'
 import {
-  fetchCustomerCourses,
-  getCoursePacks,
-  addCustomerCourse,
-  consumeCourse,
-  isExpired,
-  daysUntilExpiry,
-  type CustomerCourse,
-} from '@/lib/courses'
+  fetchCustomerTickets,
+  fetchTicketPlans,
+  addCustomerTicket,
+  consumeTicket,
+  isTicketExpired,
+  daysUntilTicketExpiry,
+  type CustomerTicket,
+  type TicketPlan,
+} from '@/lib/tickets'
 import {
   fetchCustomerSubscriptions,
   getSubscriptionPlans,
@@ -47,14 +48,14 @@ export default function CustomerDetailPage() {
   const id = params.id as string
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [loading, setLoading] = useState(true)
-  const [courses, setCourses] = useState<CustomerCourse[]>([])
+  const [tickets, setTickets] = useState<CustomerTicket[]>([])
   const [subs, setSubs] = useState<CustomerSubscription[]>([])
-  const [coursesLoading, setCoursesLoading] = useState(true)
-  const [packs, setPacks] = useState<ReturnType<typeof getCoursePacks>>([])
+  const [ticketsLoading, setTicketsLoading] = useState(true)
+  const [packs, setPacks] = useState<TicketPlan[]>([])
   const [subPlans, setSubPlans] = useState<ReturnType<typeof getSubscriptionPlans>>([])
   const [purchaseOpen, setPurchaseOpen] = useState(false)
-  const [selectedPack, setSelectedPack] = useState<ReturnType<typeof getCoursePacks>[0] | null>(null)
-  const [consumeTarget, setConsumeTarget] = useState<CustomerCourse | null>(null)
+  const [selectedPack, setSelectedPack] = useState<TicketPlan | null>(null)
+  const [consumeTarget, setConsumeTarget] = useState<CustomerTicket | null>(null)
   const [subPurchaseOpen, setSubPurchaseOpen] = useState(false)
   const [selectedSubPlan, setSelectedSubPlan] = useState<ReturnType<typeof getSubscriptionPlans>[0] | null>(null)
   const [subUseTarget, setSubUseTarget] = useState<CustomerSubscription | null>(null)
@@ -62,21 +63,22 @@ export default function CustomerDetailPage() {
 
   const refresh = useCallback(async () => {
     if (!id) return
-    setCoursesLoading(true)
+    setTicketsLoading(true)
     try {
-      const [coursesData, subsData] = await Promise.all([
-        fetchCustomerCourses(id),
+      const [ticketsData, packsData, subsData] = await Promise.all([
+        fetchCustomerTickets(id),
+        fetchTicketPlans(),
         fetchCustomerSubscriptions(id),
       ])
-      setCourses(coursesData)
+      setTickets(ticketsData)
+      setPacks(packsData)
       setSubs(subsData.map(s => ensureBillingPeriodCurrent(s)))
-      setPacks(getCoursePacks())
       setSubPlans(getSubscriptionPlans())
     } catch {
-      setCourses([])
+      setTickets([])
       setSubs([])
     } finally {
-      setCoursesLoading(false)
+      setTicketsLoading(false)
     }
   }, [id])
 
@@ -101,7 +103,7 @@ export default function CustomerDetailPage() {
     if (!selectedPack || !customer) return
     setActionLoading(true)
     try {
-      await addCustomerCourse(customer.id, customer.name, selectedPack)
+      await addCustomerTicket(customer.id, customer.name, selectedPack)
       await refresh()
       setPurchaseOpen(false)
       setSelectedPack(null)
@@ -112,10 +114,10 @@ export default function CustomerDetailPage() {
     }
   }
 
-  const handleConsume = async (c: CustomerCourse) => {
+  const handleConsume = async (c: CustomerTicket) => {
     setActionLoading(true)
     try {
-      const ok = await consumeCourse(c.id)
+      const ok = await consumeTicket(c.id)
       if (ok) await refresh()
       setConsumeTarget(null)
     } finally {
@@ -214,7 +216,7 @@ export default function CustomerDetailPage() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-text-main flex items-center gap-2">
             <Ticket className="w-4 h-4 text-rose" />
-            保有コース
+            保有回数券
           </h2>
           <button
             onClick={() => setPurchaseOpen(true)}
@@ -223,17 +225,17 @@ export default function CustomerDetailPage() {
             + 購入
           </button>
         </div>
-        {coursesLoading ? (
+        {ticketsLoading ? (
           <p className="text-sm text-text-sub py-4 flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> 読み込み中...
           </p>
-        ) : courses.length === 0 ? (
-          <p className="text-sm text-[#4A5568] py-2">保有コースはありません</p>
+        ) : tickets.length === 0 ? (
+          <p className="text-sm text-[#4A5568] py-2">保有回数券はありません</p>
         ) : (
           <div className="space-y-2">
-            {courses.map(c => {
-              const expired = isExpired(c)
-              const days = daysUntilExpiry(c)
+            {tickets.map(c => {
+              const expired = isTicketExpired(c)
+              const days = daysUntilTicketExpiry(c)
               return (
                 <div
                   key={c.id}
@@ -242,9 +244,9 @@ export default function CustomerDetailPage() {
                   }`}
                 >
                   <div>
-                    <p className="text-sm font-medium text-[#1A202C]">{c.courseName}</p>
+                    <p className="text-sm font-medium text-[#1A202C]">{c.planName}</p>
                     <p className="text-xs text-[#4A5568]">
-                      残り{c.remainingSessions}/{c.totalSessions}回 · 期限{c.expiryDate}
+                      残り{c.remainingSessions}/{c.totalSessions}回 · 期限{c.expiryDate ?? '—'}
                       {!expired && c.remainingSessions > 0 && ` (残${days}日)`}
                     </p>
                   </div>
@@ -278,7 +280,7 @@ export default function CustomerDetailPage() {
             + 加入
           </button>
         </div>
-        {coursesLoading ? (
+        {ticketsLoading ? (
           <p className="text-sm text-text-sub py-4 flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> 読み込み中...
           </p>
@@ -337,7 +339,8 @@ export default function CustomerDetailPage() {
                 >
                   <p className="text-sm font-medium">{p.name}</p>
                   <p className="text-xs text-[#4A5568]">
-                    ¥{p.price.toLocaleString()} · {p.totalSessions}回 · 有効{p.expiryMonths}ヶ月
+                    ¥{p.price.toLocaleString()} · {p.totalSessions}回
+                    {p.expiryDays ? ` · 有効${p.expiryDays}日` : ''}
                   </p>
                 </button>
               ))}
@@ -410,7 +413,7 @@ export default function CustomerDetailPage() {
       {consumeTarget && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
           <div className="bg-white rounded-xl p-5 max-w-sm w-full">
-            <p className="text-sm mb-4">{consumeTarget.courseName} を1回消化しますか？</p>
+            <p className="text-sm mb-4">{consumeTarget.planName} を1回消化しますか？</p>
             <div className="flex gap-2">
               <button
                 onClick={() => setConsumeTarget(null)}

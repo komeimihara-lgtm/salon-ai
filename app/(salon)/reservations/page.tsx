@@ -7,7 +7,7 @@ import {
   User, Check, X, AlertCircle, Loader2, Phone
 } from 'lucide-react'
 import { Reservation, Customer } from '@/types'
-import { fetchCustomerCourses, consumeCourse, isExpired } from '@/lib/courses'
+import { fetchCustomerTickets, consumeTicket, isTicketExpired } from '@/lib/tickets'
 import {
   fetchCustomerSubscriptions,
   useSubscriptionSession,
@@ -398,23 +398,23 @@ export default function ReservationsPage() {
         const customerName = reservation.customer_name
         const menu = reservation.menu
 
-        const [allCourses, allSubsRaw] = await Promise.all([
-          fetchCustomerCourses(customerId || undefined),
+        const [allTickets, allSubsRaw] = await Promise.all([
+          fetchCustomerTickets(customerId || undefined),
           fetchCustomerSubscriptions(customerId || undefined),
         ])
         const allSubs = allSubsRaw
           .filter(s => s.status === 'active')
           .map(s => ensureBillingPeriodCurrent(s))
 
-        const matchingCourse = allCourses.find(
+        const matchingTicket = allTickets.find(
           c =>
             (c.customerId === customerId || c.customerName === customerName) &&
             c.menuName === menu &&
             c.remainingSessions > 0 &&
-            !isExpired(c)
+            !isTicketExpired(c)
         )
-        if (matchingCourse) {
-          await consumeCourse(matchingCourse.id)
+        if (matchingTicket) {
+          await consumeTicket(matchingTicket.id)
         } else {
           const matchingSub = allSubs.find(
             s =>

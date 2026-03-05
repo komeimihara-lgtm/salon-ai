@@ -22,12 +22,12 @@ import {
 } from '@/lib/dashboard-reservations'
 import { getSalonSettings } from '@/lib/salon-settings'
 import {
-  fetchExpiringSoon,
-  fetchExpired,
-  fetchCustomerCourses,
-  consumeCourse,
-  isExpired,
-} from '@/lib/courses'
+  fetchExpiringSoonTickets,
+  fetchExpiredTickets,
+  fetchCustomerTickets,
+  consumeTicket,
+  isTicketExpired,
+} from '@/lib/tickets'
 import {
   fetchCustomerSubscriptions,
   useSubscriptionSession,
@@ -118,13 +118,13 @@ export default function DashboardPage() {
     setMenus(loadMenus().map(m => ({ id: m.id, name: m.name })))
     setStaff(s.staff.map(x => ({ name: x.name })))
     setBeds(s.beds.length > 0 ? s.beds : ['A', 'B'])
-    Promise.all([fetchExpiringSoon(14), fetchExpired()]).then(([expiring, expired]) => {
+    Promise.all([fetchExpiringSoonTickets(14), fetchExpiredTickets()]).then(([expiring, expired]) => {
       const alerts: { id: string; type: string; text: string; action: string }[] = []
       if (expired.length > 0) {
         alerts.push({
           id: 'course-expired',
           type: 'alert',
-          text: `${expired.length}件のコースが期限切れ（残り回数あり）`,
+          text: `${expired.length}件の回数券が期限切れ（残り回数あり）`,
           action: '確認する',
         })
       }
@@ -132,7 +132,7 @@ export default function DashboardPage() {
         alerts.push({
           id: 'course-expiring',
           type: 'alert',
-          text: `${expiring.length}件のコースが14日以内に期限`,
+          text: `${expiring.length}件の回数券が14日以内に期限`,
           action: '確認する',
         })
       }
@@ -660,22 +660,22 @@ function ReservationDetailContent({
   onRemove: () => void
   onConsumed: () => void
 }) {
-  const [matchingCourse, setMatchingCourse] = useState<import('@/lib/courses').CustomerCourse | null>(null)
+  const [matchingCourse, setMatchingCourse] = useState<import('@/lib/tickets').CustomerTicket | null>(null)
   const [matchingSub, setMatchingSub] = useState<import('@/lib/subscriptions').CustomerSubscription | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    Promise.all([fetchCustomerCourses(), fetchCustomerSubscriptions()])
-      .then(([courses, subs]) => {
+    Promise.all([fetchCustomerTickets(), fetchCustomerSubscriptions()])
+      .then(([tickets, subs]) => {
         if (cancelled) return
-        const course = courses.find(
+        const course = tickets.find(
           c =>
             c.customerName === reservation.name &&
             c.menuName === reservation.menu &&
             c.remainingSessions > 0 &&
-            !isExpired(c)
+            !isTicketExpired(c)
         )
         const activeSubs = subs
           .filter(s => s.status === 'active')
@@ -696,7 +696,7 @@ function ReservationDetailContent({
 
   const handleConsume = async () => {
     if (!matchingCourse) return
-    await consumeCourse(matchingCourse.id)
+    await consumeTicket(matchingCourse.id)
     onConsumed()
   }
 

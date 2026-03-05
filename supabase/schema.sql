@@ -220,6 +220,42 @@ CREATE TABLE IF NOT EXISTS customer_coupons (
 
 CREATE INDEX IF NOT EXISTS idx_customer_courses_customer_id ON customer_courses(customer_id);
 CREATE INDEX IF NOT EXISTS idx_customer_courses_salon_id ON customer_courses(salon_id);
+
+-- ============================================================
+-- 回数券マスタ（サロンが設定する商品）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS ticket_plans (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  menu_name TEXT NOT NULL,
+  total_sessions INTEGER NOT NULL,
+  price INTEGER NOT NULL,
+  expiry_days INTEGER,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 顧客の保有回数券
+-- ============================================================
+CREATE TABLE IF NOT EXISTS customer_tickets (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
+  customer_id UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  ticket_plan_id UUID REFERENCES ticket_plans(id),
+  plan_name TEXT NOT NULL,
+  menu_name TEXT NOT NULL,
+  total_sessions INTEGER NOT NULL,
+  remaining_sessions INTEGER NOT NULL,
+  purchased_at TIMESTAMPTZ DEFAULT NOW(),
+  expiry_date TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ticket_plans_salon_id ON ticket_plans(salon_id);
+CREATE INDEX IF NOT EXISTS idx_customer_tickets_customer_id ON customer_tickets(customer_id);
+CREATE INDEX IF NOT EXISTS idx_customer_tickets_salon_id ON customer_tickets(salon_id);
 CREATE INDEX IF NOT EXISTS idx_customer_subscriptions_customer_id ON customer_subscriptions(customer_id);
 CREATE INDEX IF NOT EXISTS idx_customer_subscriptions_salon_id ON customer_subscriptions(salon_id);
 CREATE INDEX IF NOT EXISTS idx_customer_coupons_customer_id ON customer_coupons(customer_id);
