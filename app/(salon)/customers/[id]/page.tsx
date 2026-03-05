@@ -75,9 +75,12 @@ export default function CustomerDetailPage() {
       setPacks(packsData)
       setSubs(subsData.map(s => ensureBillingPeriodCurrent(s)))
       setSubPlans(plansData)
-    } catch {
+    } catch (err) {
+      console.error('回数券・サブスク取得エラー:', err)
       setTickets([])
+      setPacks([])
       setSubs([])
+      setSubPlans([])
     } finally {
       setTicketsLoading(false)
     }
