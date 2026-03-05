@@ -76,7 +76,7 @@ export default function DashboardPage() {
   const [rescheduleTarget, setRescheduleTarget] = useState<Reservation | null>(null)
   const [editTarget, setEditTarget] = useState<Reservation | null>(null)
   const [detailModal, setDetailModal] = useState<'cash' | 'consume' | null>(null)
-  const [newReservationSlot, setNewReservationSlot] = useState<{ date: string; start: string; end: string } | null>(null)
+  const [selectedTime, setSelectedTime] = useState<{ date: string; start: string; end: string } | null>(null)
 
   useEffect(() => {
     const s = getSalonSettings()
@@ -417,34 +417,39 @@ export default function DashboardPage() {
         </div>
         <div className="bg-white rounded-2xl overflow-hidden card-shadow overflow-x-auto">
           <div className="min-w-[800px]">
-            <div className="grid grid-cols-[60px_repeat(20,1fr)] bg-light-lav border-b border-gray-200">
+            <div className="grid grid-cols-[60px_repeat(40,1fr)] bg-light-lav border-b border-gray-200">
               <div className="p-2 text-xs font-dm-sans text-text-sub" />
-              {Array.from({ length: 20 }, (_, i) => 10 + i * 0.5).map((h) => (
-                <div key={h} className="p-2 text-center text-xs font-dm-sans text-text-sub border-l border-gray-200">
-                  {Math.floor(h)}:{(h % 1 ? '30' : '00')}
-                </div>
-              ))}
+              {Array.from({ length: 40 }, (_, i) => {
+                const h = 10 + Math.floor(i / 4)
+                const m = (i % 4) * 15
+                return (
+                  <div key={i} className="p-2 text-center text-xs font-dm-sans text-text-sub border-l border-gray-200">
+                    {h}:{m.toString().padStart(2, '0')}
+                  </div>
+                )
+              })}
             </div>
-            <div className="grid grid-cols-[60px_repeat(20,1fr)] border-b border-gray-100">
+            <div className="grid grid-cols-[60px_repeat(40,1fr)] border-b border-gray-100">
               <div className="p-3 bg-deep text-white text-sm font-medium flex items-center justify-center">
                 今日の予約
               </div>
-              <div className="col-span-20 flex relative min-h-[60px]">
-                {/* 空き枠クリック用グリッド（各30分枠） */}
-                {!reservationsLoading && Array.from({ length: 20 }, (_, i) => {
-                  const h = 10 + Math.floor(i / 2)
-                  const m = (i % 2) * 30
+              <div className="col-span-40 flex relative min-h-[60px]">
+                {/* 空き枠クリック用グリッド（各15分枠） */}
+                {!reservationsLoading && Array.from({ length: 40 }, (_, i) => {
+                  const h = 10 + Math.floor(i / 4)
+                  const m = (i % 4) * 15
                   const startTime = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
-                  const endH = m === 30 ? h + 1 : h
-                  const endM = m === 30 ? 0 : 30
+                  const m2 = m + 15
+                  const endH = m2 >= 60 ? h + 1 : h
+                  const endM = m2 >= 60 ? m2 - 60 : m2
                   const endTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`
                   return (
                     <button
                       key={`slot-${i}`}
                       type="button"
-                      onClick={() => setNewReservationSlot({ date: today, start: startTime, end: endTime })}
+                      onClick={() => setSelectedTime({ date: today, start: startTime, end: endTime })}
                       className="absolute top-0 bottom-0 hover:bg-rose/5 transition-colors cursor-pointer z-0"
-                      style={{ left: `${i * 5}%`, width: '5%' }}
+                      style={{ left: `${i * 2.5}%`, width: '2.5%' }}
                       title={`${startTime}〜 予約を追加`}
                     />
                   )
@@ -459,16 +464,20 @@ export default function DashboardPage() {
                       .filter(r => r.status === 'confirmed' || r.status === 'rescheduled' || r.status === 'visited')
                       .map((r) => {
                         const [h = 10, m = 0] = (r.start_time || '10:00').slice(0, 5).split(':').map(Number)
-                        const col = (h - 10) * 2 + (m || 0) / 30
-                        const colIdx = Math.max(0, Math.min(col, 19))
+                        const col = (h - 10) * 4 + (m || 0) / 15
+                        const colIdx = Math.max(0, Math.min(Math.floor(col), 39))
+                        const [eh = 11, em = 0] = (r.end_time || '11:00').slice(0, 5).split(':').map(Number)
+                        const endCol = (eh - 10) * 4 + (em || 0) / 15
+                        const colSpan = Math.max(1, Math.floor(endCol - col))
+                        const width = (colSpan / 40) * 100
                         return (
                           <div
                             key={r.id}
                             onClick={() => setReservationDetailModal(r)}
                             className="absolute rounded-lg px-2 py-1 text-white text-xs font-medium shadow-sm cursor-pointer hover:ring-2 hover:ring-rose/50 z-10"
                             style={{
-                              left: `${colIdx * 5}%`,
-                              width: '10%',
+                              left: `${colIdx * 2.5}%`,
+                              width: `${width}%`,
                               minWidth: 48,
                               background: 'linear-gradient(135deg, #C4728A, #9B8EC4)',
                             }}
@@ -661,13 +670,13 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {newReservationSlot && (
+      {selectedTime && (
         <ReservationFormModal
-          defaultDate={newReservationSlot.date}
-          defaultStartTime={newReservationSlot.start}
-          defaultEndTime={newReservationSlot.end}
-          onClose={() => setNewReservationSlot(null)}
-          onSaved={() => { refresh(); setNewReservationSlot(null) }}
+          defaultDate={selectedTime.date}
+          defaultStartTime={selectedTime.start}
+          defaultEndTime={selectedTime.end}
+          onClose={() => setSelectedTime(null)}
+          onSaved={() => { refresh(); setSelectedTime(null) }}
         />
       )}
       {rescheduleTarget && (
