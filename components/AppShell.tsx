@@ -60,6 +60,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // ルートのリダイレクト時はシェルを表示しない
   if (pathname === '/') return <>{children}</>
 
+  // レジ画面は全画面（サイドバー非表示）
+  if (pathname === '/sales') {
+    return (
+      <div className="min-h-screen flex flex-col bg-off-white">
+        {children}
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen flex">
       {/* サイドバー - PC */}

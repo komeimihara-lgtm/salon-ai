@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import {
   ShoppingCart, Receipt, Plus, Trash2, Pencil, X,
-  ChevronLeft, ChevronRight, Loader2, Tag, AlertCircle,
+  ChevronLeft, ChevronRight, Loader2, Tag, AlertCircle, ArrowLeft,
 } from 'lucide-react'
 import { getMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, type MenuItem, type Campaign } from '@/lib/menus'
 import { DEMO_SALON_ID } from '@/lib/supabase'
@@ -105,7 +106,6 @@ export default function SalesPage() {
   useEffect(() => {
     const m = getMenus()
     const c = getCategories()
-    // メニューにcategoryがない古いデータに対応
     const migratedMenus = m.map((menu: MenuItem) => ({
       ...menu,
       category: menu.category || c[0] || 'フェイシャル'
@@ -124,7 +124,6 @@ export default function SalesPage() {
   useEffect(() => { setLoading(true); fetchSales() }, [fetchSales])
 
   const filteredMenus = selectedCategory ? menus.filter(m => m.category === selectedCategory) : menus
-  // categoryが空('')の回数券は全カテゴリに表示、一致するカテゴリも表示
   const filteredTicketPlans = selectedCategory
     ? ticketPlans.filter(p => {
         const cat = (p.category || '').trim()
@@ -139,10 +138,7 @@ export default function SalesPage() {
     : subPlans
 
   const addTicketToCart = (plan: TicketPlan) => {
-    if (!selectedCustomer) {
-      setError('先に顧客を選択してください')
-      return
-    }
+    if (!selectedCustomer) { setError('先に顧客を選択してください'); return }
     setError('')
     setCart(prev => {
       const found = prev.find(c => c.type === 'ticket' && c.menuId === plan.id)
@@ -152,10 +148,7 @@ export default function SalesPage() {
   }
 
   const addSubToCart = (plan: SubscriptionPlan) => {
-    if (!selectedCustomer) {
-      setError('先に顧客を選択してください')
-      return
-    }
+    if (!selectedCustomer) { setError('先に顧客を選択してください'); return }
     setError('')
     setCart(prev => {
       const found = prev.find(c => c.type === 'subscription' && c.menuId === plan.id)
@@ -172,18 +165,14 @@ export default function SalesPage() {
     })
   }
 
-  const removeFromCart = (menuId: string) => {
-    setCart(prev => prev.filter(c => c.menuId !== menuId))
-  }
+  const removeFromCart = (menuId: string) => setCart(prev => prev.filter(c => c.menuId !== menuId))
   const updateCartQty = (menuId: string, qty: number) => {
     if (qty < 1) return removeFromCart(menuId)
     setCart(prev => prev.map(c => c.menuId === menuId ? { ...c, qty } : c))
   }
 
   const subtotal = cart.reduce((sum, c) => sum + c.price * c.qty, 0)
-  const discountAmount = discountType === 'percent'
-    ? Math.round(subtotal * discountValue / 100)
-    : discountType === 'amount' ? discountValue : 0
+  const discountAmount = discountType === 'percent' ? Math.round(subtotal * discountValue / 100) : discountType === 'amount' ? discountValue : 0
   const discountedSubtotal = subtotal - discountAmount
   const taxAmount = calcTaxAmount(discountedSubtotal, taxSettings)
   const total = calcTotalWithTax(discountedSubtotal, taxSettings)
@@ -191,11 +180,8 @@ export default function SalesPage() {
   const handlePaymentSelect = (method: string) => {
     setPaymentMethod(method)
     setPaymentConfirmed(false)
-    if (method === 'card' || method === 'online') {
-      setConfirmModal({ type: 'card' })
-    } else if (method === 'loan') {
-      setConfirmModal({ type: 'loan' })
-    }
+    if (method === 'card' || method === 'online') setConfirmModal({ type: 'card' })
+    else if (method === 'loan') setConfirmModal({ type: 'loan' })
   }
 
   const applyCampaign = (camp: Campaign) => {
@@ -206,18 +192,12 @@ export default function SalesPage() {
 
   const handleRegister = async () => {
     if (cart.length === 0) { setError('メニュー・回数券・サブスクを追加してください'); return }
-    if (!selectedCustomer) {
-      setError('顧客を選択してください')
-      return
-    }
-    if ((paymentMethod === 'card' || paymentMethod === 'online' || paymentMethod === 'loan') && !paymentConfirmed) {
-      setError('決済確認が必要です'); return
-    }
+    if (!selectedCustomer) { setError('顧客を選択してください'); return }
+    if ((paymentMethod === 'card' || paymentMethod === 'online' || paymentMethod === 'loan') && !paymentConfirmed) { setError('決済確認が必要です'); return }
     setSaving(true); setError('')
     try {
       const hasProduct = cart.some(c => c.category === '物販')
       const salesToCreate: Array<Record<string, unknown>> = []
-
       for (const c of cart) {
         const amt = Math.round(c.price * (1 - (discountType === 'percent' ? discountValue / 100 : 0)))
         const saleBase = {
@@ -242,18 +222,11 @@ export default function SalesPage() {
             salesToCreate.push({ ...saleBase })
           }
         } else {
-          for (let i = 0; i < c.qty; i++) {
-            salesToCreate.push({ ...saleBase })
-          }
+          for (let i = 0; i < c.qty; i++) salesToCreate.push({ ...saleBase })
         }
       }
-
       if (salesToCreate.length > 0) {
-        const res = await fetch('/api/kpi/sales', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sales: salesToCreate }),
-        })
+        const res = await fetch('/api/kpi/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sales: salesToCreate }) })
         if (!res.ok) throw new Error()
       }
       setCart([]); setSelectedCustomer(null); setSelectedStaff(null)
@@ -261,9 +234,8 @@ export default function SalesPage() {
       fetchSales()
       showToast('売上を登録しました')
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '登録に失敗しました'
-      setError(msg)
-      showToast(msg, 'error')
+      setError(e instanceof Error ? e.message : '登録に失敗しました')
+      showToast(e instanceof Error ? e.message : '登録に失敗しました', 'error')
     } finally { setSaving(false) }
   }
 
@@ -273,9 +245,7 @@ export default function SalesPage() {
       if (!res.ok) throw new Error()
       setDeleteTarget(null)
       fetchSales()
-    } catch {
-      showToast('削除に失敗しました', 'error')
-    }
+    } catch { showToast('削除に失敗しました', 'error') }
   }
 
   const prevMonth = () => {
@@ -283,292 +253,253 @@ export default function SalesPage() {
     const d = new Date(y, m - 2)
     setDateRange({ start: new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10), end: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10) })
   }
-
   const nextMonth = () => {
     const [y, m] = dateRange.start.split('-').map(Number)
     const d = new Date(y, m)
     setDateRange({ start: new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10), end: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10) })
   }
-
   const dayTotal = sales.reduce((sum, s) => sum + s.amount, 0)
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="gradient-line rounded-full" />
-        <span className="section-label font-dm-sans text-base font-bold text-text-main">売上管理・レジ</span>
+    <div className="h-screen flex flex-col bg-off-white overflow-hidden">
+      {/* 上部: 顧客選択バー + タブ */}
+      <div className="shrink-0 flex flex-col border-b border-gray-200 bg-white">
+        <div className="flex items-center gap-3 px-4 py-3">
+          <Link href="/dashboard" className="p-2 -ml-2 rounded-xl text-text-sub hover:text-rose hover:bg-light-lav transition-colors" title="ダッシュボードへ">
+            <ArrowLeft className="w-6 h-6" />
+          </Link>
+          <div className="flex-1 min-w-0">
+            <label className="text-xs text-text-sub block mb-0.5">顧客</label>
+            <select
+              value={selectedCustomer?.id ?? ''}
+              onChange={e => { const c = customers.find(x => x.id === e.target.value); setSelectedCustomer(c || null) }}
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-base font-medium text-text-main bg-white"
+            >
+              <option value="">顧客を選択</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name}様</option>)}
+            </select>
+          </div>
+          <div className="w-32">
+            <label className="text-xs text-text-sub block mb-0.5">日付</label>
+            <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base" />
+          </div>
+          <div className="flex gap-2 p-1 bg-light-lav/50 rounded-xl">
+            <button onClick={() => setTab('register')} className={`px-4 py-2.5 rounded-lg text-base font-bold transition-all ${tab === 'register' ? 'bg-white shadow text-rose' : 'text-text-sub'}`}>
+              <ShoppingCart className="w-5 h-5 inline-block mr-1.5 align-middle" />レジ
+            </button>
+            <button onClick={() => setTab('sales')} className={`px-4 py-2.5 rounded-lg text-base font-bold transition-all ${tab === 'sales' ? 'bg-white shadow text-rose' : 'text-text-sub'}`}>
+              <Receipt className="w-5 h-5 inline-block mr-1.5 align-middle" />売上
+            </button>
+          </div>
+        </div>
+        {tab === 'register' && (
+          <div className="px-4 pb-3">
+            <label className="text-xs text-text-sub block mb-2">カテゴリ</label>
+            <div className="flex flex-wrap gap-2">
+              {categories.map(cat => (
+                <button key={cat} onClick={() => setSelectedCategory(cat)}
+                  className={`px-5 py-3 rounded-xl text-lg font-bold transition-all min-h-[48px] ${selectedCategory === cat ? 'bg-gradient-to-r from-rose to-lavender text-white shadow' : 'bg-light-lav text-text-sub hover:text-text-main'}`}>
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="flex gap-2 p-1 bg-light-lav/50 rounded-xl">
-        {[{ id: 'register', label: 'レジ', icon: <ShoppingCart className="w-4 h-4" /> }, { id: 'sales', label: '売上管理', icon: <Receipt className="w-4 h-4" /> }].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id as 'register' | 'sales')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium transition-all ${tab === t.id ? 'bg-white shadow text-rose' : 'text-text-sub hover:text-text-main'}`}>
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
+      {tab === 'register' ? (
+        <div className="flex-1 flex min-h-0">
+          {/* 中央メイン 70%: メニュー・回数券・サブスク */}
+          <div className="flex-[7] min-w-0 p-4 overflow-y-auto">
+            <div className="grid grid-cols-3 md:grid-cols-4 gap-4">
+              {filteredMenus.map(m => (
+                <button key={m.id} onClick={() => addToCart(m)}
+                  className="min-h-[100px] p-4 rounded-2xl border-2 border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all active:scale-[0.98]">
+                  <p className="font-bold text-text-main text-base leading-tight">{m.name}</p>
+                  <p className="text-xl font-bold text-rose mt-1">¥{m.price.toLocaleString()}</p>
+                  <p className="text-sm text-text-sub mt-0.5">{m.duration}分</p>
+                </button>
+              ))}
+              {filteredTicketPlans.map(p => (
+                <button key={p.id} onClick={() => addTicketToCart(p)} disabled={!selectedCustomer}
+                  className="min-h-[100px] p-4 rounded-2xl border-2 border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
+                  <p className="font-bold text-text-main text-base leading-tight">{p.name}</p>
+                  <p className="text-xl font-bold text-rose mt-1">¥{p.price.toLocaleString()}</p>
+                  <p className="text-sm text-text-sub mt-0.5">回数券 {p.totalSessions}回</p>
+                </button>
+              ))}
+              {filteredSubPlans.map(p => (
+                <button key={p.id} onClick={() => addSubToCart(p)} disabled={!selectedCustomer}
+                  className="min-h-[100px] p-4 rounded-2xl border-2 border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed">
+                  <p className="font-bold text-text-main text-base leading-tight">{p.name}</p>
+                  <p className="text-xl font-bold text-rose mt-1">¥{p.price.toLocaleString()}/月</p>
+                  <p className="text-sm text-text-sub mt-0.5">サブスク {p.sessionsPerMonth}回/月</p>
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {tab === 'register' && (
-        <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
-          <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* 左: メニュー選択 */}
-            <div>
-              <div className="flex flex-wrap gap-2 mb-4">
-                {categories.map(cat => (
-                  <button key={cat} onClick={() => setSelectedCategory(cat)}
-                    className={`px-4 py-2.5 rounded-xl text-base font-bold transition-all ${selectedCategory === cat ? 'bg-gradient-to-r from-rose to-lavender text-white shadow' : 'bg-light-lav text-text-sub hover:text-text-main'}`}>
-                    {cat}
-                  </button>
-                ))}
-              </div>
-              <h3 className="text-sm font-bold text-text-main mb-3">メニュー</h3>
-              <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
-                {filteredMenus.map(m => (
-                  <button key={m.id} onClick={() => addToCart(m)}
-                    className="p-3 rounded-xl border border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all">
-                    <p className="font-medium text-text-main text-sm">{m.name}</p>
-                    <p className="text-sm text-rose font-bold">¥{m.price.toLocaleString()}</p>
-                    <p className="text-xs text-text-sub">{m.duration}分</p>
-                  </button>
-                ))}
-              </div>
-              <h3 className="text-sm font-bold text-text-main mb-2 mt-4">回数券</h3>
-              <div className="grid grid-cols-2 gap-2 max-h-28 overflow-y-auto">
-                {filteredTicketPlans.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => addTicketToCart(p)}
-                    disabled={!selectedCustomer}
-                    className="p-3 rounded-xl border border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <p className="font-medium text-text-main text-sm">{p.name}</p>
-                    <p className="text-sm text-rose font-bold">¥{p.price.toLocaleString()}</p>
-                    <p className="text-xs text-text-sub">{p.totalSessions}回</p>
-                  </button>
-                ))}
-                {filteredTicketPlans.length === 0 && (
-                  <p className="col-span-2 text-xs text-text-sub py-2">このカテゴリの回数券はありません（顧客選択後にカートへ追加可能）</p>
-                )}
-              </div>
-              <h3 className="text-sm font-bold text-text-main mb-2 mt-4">サブスク</h3>
-              <div className="grid grid-cols-2 gap-2 max-h-28 overflow-y-auto">
-                {filteredSubPlans.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => addSubToCart(p)}
-                    disabled={!selectedCustomer}
-                    className="p-3 rounded-xl border border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <p className="font-medium text-text-main text-sm">{p.name}</p>
-                    <p className="text-sm text-rose font-bold">¥{p.price.toLocaleString()}/月</p>
-                    <p className="text-xs text-text-sub">{p.sessionsPerMonth}回/月</p>
-                  </button>
-                ))}
-                {filteredSubPlans.length === 0 && (
-                  <p className="col-span-2 text-xs text-text-sub py-2">このカテゴリのサブスクはありません（顧客選択後にカートへ追加可能）</p>
-                )}
-              </div>
+          {/* 右パネル 30%: カート */}
+          <div className="flex-[3] min-w-[280px] flex flex-col border-l border-gray-200 bg-white overflow-hidden">
+            <div className="p-4 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-text-main">カート</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {cart.length === 0 ? (
+                <p className="text-base text-text-sub py-8">メニュー・回数券・サブスクを選択</p>
+              ) : cart.map(c => {
+                const typeLabel = c.type === 'menu' ? '通常' : c.type === 'ticket' ? '回数券' : 'サブスク'
+                const lineTotal = c.price * c.qty
+                return (
+                  <div key={`${c.type}-${c.menuId}`} className="flex items-start gap-3 p-3 bg-light-lav/50 rounded-xl">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-text-main text-base">{c.name}</p>
+                      <p className="text-sm text-text-sub mt-0.5">
+                        <span className="px-2 py-0.5 rounded bg-white/80 text-xs">{typeLabel}</span>
+                        <span className="ml-2">¥{lineTotal.toLocaleString()}</span>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => updateCartQty(c.menuId, c.qty - 1)} className="w-9 h-9 rounded-xl bg-white border flex items-center justify-center text-lg font-bold hover:bg-rose/10">−</button>
+                      <span className="w-8 text-center text-base font-bold">{c.qty}</span>
+                      <button onClick={() => updateCartQty(c.menuId, c.qty + 1)} className="w-9 h-9 rounded-xl bg-white border flex items-center justify-center text-lg font-bold hover:bg-rose/10">+</button>
+                      <button onClick={() => removeFromCart(c.menuId)} className="p-2 text-text-sub hover:text-red-600 rounded-xl" title="削除"><X className="w-5 h-5" /></button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
 
-            {/* 右: カート・決済 */}
-            <div>
-              <h3 className="text-sm font-bold text-text-main mb-3">カート</h3>
-              <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
-                {cart.length === 0 ? (
-                  <p className="text-sm text-text-sub py-4">メニュー・回数券・サブスクを選択してください</p>
-                ) : cart.map(c => {
-                  const typeLabel = c.type === 'menu' ? '通常メニュー' : c.type === 'ticket' ? '回数券' : 'サブスク'
-                  const lineTotal = c.price * c.qty
-                  return (
-                    <div key={`${c.type}-${c.menuId}`} className="flex items-start gap-3 p-3 bg-light-lav/50 rounded-xl border border-gray-100">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-text-main text-sm">{c.name}</p>
-                        <p className="text-xs text-text-sub mt-0.5">
-                          <span className="inline-block px-1.5 py-0.5 rounded bg-white/80 text-text-sub mr-1.5">{typeLabel}</span>
-                          ¥{c.price.toLocaleString()} × {c.qty} = ¥{lineTotal.toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button onClick={() => updateCartQty(c.menuId, c.qty - 1)} className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-text-sub hover:text-rose text-sm">−</button>
-                        <span className="w-6 text-center text-sm font-medium">{c.qty}</span>
-                        <button onClick={() => updateCartQty(c.menuId, c.qty + 1)} className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-text-sub hover:text-rose text-sm">+</button>
-                        <button onClick={() => removeFromCart(c.menuId)} className="p-1.5 text-text-sub hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="削除"><X className="w-4 h-4" /></button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* 割引・キャンペーン */}
-              <div className="flex gap-2 mb-3">
+            {/* 割引 */}
+            <div className="p-4 border-t border-gray-100">
+              <div className="flex gap-2 mb-2">
                 <button onClick={() => { setShowDiscountPanel(!showDiscountPanel); setShowCampaignPanel(false) }}
-                  className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-medium border transition-all ${showDiscountPanel ? 'bg-rose text-white border-rose' : 'border-gray-200 text-text-sub hover:border-rose hover:text-rose'}`}>
-                  <Tag className="w-4 h-4" />割引
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-base font-bold border transition-all ${showDiscountPanel ? 'bg-rose text-white border-rose' : 'border-gray-200 text-text-sub'}`}>
+                  <Tag className="w-5 h-5" />割引
                 </button>
                 <button onClick={() => { setShowCampaignPanel(!showCampaignPanel); setShowDiscountPanel(false) }}
-                  className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-medium border transition-all ${showCampaignPanel ? 'bg-rose text-white border-rose' : 'border-gray-200 text-text-sub hover:border-rose hover:text-rose'}`}>
+                  className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-base font-bold border transition-all ${showCampaignPanel ? 'bg-rose text-white border-rose' : 'border-gray-200 text-text-sub'}`}>
                   🎁 キャンペーン
                 </button>
               </div>
-
               {showDiscountPanel && (
                 <div className="bg-light-lav/50 rounded-xl p-3 mb-3 space-y-2">
                   <div className="flex gap-2">
                     {[{ value: 'percent', label: '%OFF' }, { value: 'amount', label: '円引き' }].map(opt => (
                       <button key={opt.value} onClick={() => setDiscountType(opt.value as 'percent' | 'amount')}
-                        className={`flex-1 py-1.5 rounded-lg text-sm font-medium ${discountType === opt.value ? 'bg-rose text-white' : 'bg-white text-text-sub'}`}>
-                        {opt.label}
-                      </button>
+                        className={`flex-1 py-2 rounded-lg text-base font-bold ${discountType === opt.value ? 'bg-rose text-white' : 'bg-white text-text-sub'}`}>{opt.label}</button>
                     ))}
-                    <button onClick={() => { setDiscountType(null); setDiscountValue(0) }} className="px-2 py-1.5 rounded-lg bg-white text-text-sub text-sm">クリア</button>
+                    <button onClick={() => { setDiscountType(null); setDiscountValue(0) }} className="px-3 py-2 rounded-lg bg-white text-text-sub text-sm">クリア</button>
                   </div>
                   {discountType && (
                     <div className="flex items-center gap-2">
-                      <input type="number" value={discountValue} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setDiscountValue(val === '' ? 0 : Number(val)) }} onFocus={e => e.target.select()} min={0}
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-gray-200 text-sm outline-none" />
-                      <span className="text-text-sub text-sm">{discountType === 'percent' ? '%' : '円'}</span>
+                      <input type="number" value={discountValue} onChange={e => setDiscountValue(e.target.value === '' ? 0 : Number(e.target.value))} min={0}
+                        className="flex-1 px-4 py-2 rounded-lg border text-lg" />
+                      <span className="text-text-sub text-lg">{discountType === 'percent' ? '%' : '円'}</span>
                     </div>
                   )}
                 </div>
               )}
-
               {showCampaignPanel && (
-                <div className="bg-light-lav/50 rounded-xl p-3 mb-3 space-y-1">
-                  {campaigns.length === 0 ? <p className="text-xs text-text-sub">キャンペーンがありません</p> :
-                    campaigns.map(c => (
-                      <button key={c.id} onClick={() => applyCampaign(c)}
-                        className="w-full text-left px-3 py-2 rounded-lg hover:bg-white transition-all text-sm">
-                        <span className="font-medium text-text-main">{c.name}</span>
-                        <span className="ml-2 text-rose text-xs">{c.discountType === 'percent' ? `${c.discountValue}%OFF` : `¥${c.discountValue}引き`}</span>
+                <div className="bg-light-lav/50 rounded-xl p-3 mb-3 space-y-2">
+                  {campaigns.length === 0 ? <p className="text-sm text-text-sub">キャンペーンなし</p> :
+                    campaigns.map(camp => (
+                      <button key={camp.id} onClick={() => applyCampaign(camp)}
+                        className="w-full text-left px-4 py-3 rounded-xl hover:bg-white text-base font-medium">
+                        {camp.name} <span className="text-rose">{camp.discountType === 'percent' ? `${camp.discountValue}%OFF` : `¥${camp.discountValue}引き`}</span>
                       </button>
                     ))
                   }
                 </div>
               )}
 
-              {/* 顧客・スタッフ */}
-              <div className="space-y-2 mb-3">
-                <div>
-                  <label className="text-xs text-text-sub block mb-1">日付</label>
-                  <input type="date" value={saleDate} onChange={e => setSaleDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
-                </div>
-                <div>
-                  <label className="text-xs text-text-sub block mb-1">顧客</label>
-                  <select value={selectedCustomer?.id ?? ''} onChange={e => { const c = customers.find(x => x.id === e.target.value); setSelectedCustomer(c || null) }}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm">
-                    <option value="">選択なし</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}様</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-text-sub block mb-1">担当スタッフ</label>
-                  <select value={selectedStaff?.id ?? ''} onChange={e => { const s = staffList.find(x => x.id === e.target.value); setSelectedStaff(s || null) }}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm">
-                    <option value="">選択なし</option>
-                    {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-text-sub block mb-1">支払方法</label>
-                  <div className="flex flex-wrap gap-2">
-                    {PAYMENTS.map(p => (
-                      <button key={p.value} onClick={() => handlePaymentSelect(p.value)}
-                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${paymentMethod === p.value ? 'bg-rose text-white' : 'bg-gray-100 text-text-sub hover:bg-gray-200'}`}>
-                        {p.label}
-                        {(p.value === 'card' || p.value === 'online' || p.value === 'loan') && paymentMethod === p.value && paymentConfirmed && <span className="ml-1">✓</span>}
-                      </button>
-                    ))}
-                  </div>
+              {/* 担当スタッフ */}
+              <div className="mb-3">
+                <label className="text-xs text-text-sub block mb-1">担当スタッフ</label>
+                <select value={selectedStaff?.id ?? ''} onChange={e => { const s = staffList.find(x => x.id === e.target.value); setSelectedStaff(s || null) }}
+                  className="w-full px-4 py-2.5 rounded-xl border text-base">
+                  <option value="">選択なし</option>
+                  {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+
+              {/* 支払方法 */}
+              <div className="mb-3">
+                <label className="text-xs text-text-sub block mb-2">支払方法</label>
+                <div className="flex flex-wrap gap-2">
+                  {PAYMENTS.map(p => (
+                    <button key={p.value} onClick={() => handlePaymentSelect(p.value)}
+                      className={`px-4 py-2.5 rounded-xl text-base font-bold transition-all ${paymentMethod === p.value ? 'bg-rose text-white' : 'bg-gray-100 text-text-sub'}`}>
+                      {p.label}{(p.value === 'card' || p.value === 'online' || p.value === 'loan') && paymentMethod === p.value && paymentConfirmed && ' ✓'}
+                    </button>
+                  ))}
                 </div>
               </div>
 
               {/* 合計 */}
-              <div className="bg-light-lav/30 rounded-xl p-4 mb-3 space-y-2 border border-gray-100">
-                <div className="flex justify-between text-sm text-text-sub">
-                  <span>小計</span><span>¥{subtotal.toLocaleString()}</span>
+              <div className="bg-light-lav/30 rounded-2xl p-4 mb-3 border-2 border-rose/20">
+                <div className="flex justify-between text-base text-text-sub mb-1"><span>小計</span><span>¥{subtotal.toLocaleString()}</span></div>
+                {discountAmount > 0 && <div className="flex justify-between text-base text-rose mb-1"><span>割引</span><span>-¥{discountAmount.toLocaleString()}</span></div>}
+                {taxSettings.taxType === 'excluded' && <div className="flex justify-between text-base text-text-sub mb-1"><span>消費税（外税）</span><span>¥{taxAmount.toLocaleString()}</span></div>}
+                {taxSettings.taxType === 'included' && <div className="flex justify-between text-sm text-text-sub mb-1"><span>消費税（内税）</span><span>¥{taxAmount.toLocaleString()}</span></div>}
+                <div className="flex justify-between items-baseline pt-3 mt-2 border-t-2 border-rose/20">
+                  <span className="text-lg font-bold text-text-main">合計</span>
+                  <span className="text-3xl font-bold text-rose">¥{total.toLocaleString()}</span>
                 </div>
-                {discountAmount > 0 && (
-                  <div className="flex justify-between text-sm text-rose">
-                    <span>割引</span><span>-¥{discountAmount.toLocaleString()}</span>
-                  </div>
-                )}
-                {taxSettings.taxType === 'excluded' ? (
-                  <div className="flex justify-between text-sm text-text-sub">
-                    <span>消費税（外税 {taxSettings.taxRate}%）</span><span>¥{taxAmount.toLocaleString()}</span>
-                  </div>
-                ) : (
-                  <div className="flex justify-between text-xs text-text-sub">
-                    <span>消費税（内税 {taxSettings.taxRate}%）</span><span>¥{taxAmount.toLocaleString()}</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-baseline border-t-2 border-rose/20 pt-3 mt-2">
-                  <span className="font-bold text-text-main">合計金額</span>
-                  <span className="text-2xl font-bold text-rose">¥{total.toLocaleString()}</span>
-                </div>
-                {taxSettings.taxType === 'included' && (
-                  <p className="text-xs text-text-sub text-right">税込 ¥{total.toLocaleString()}（うち消費税 ¥{taxAmount.toLocaleString()}）</p>
-                )}
               </div>
 
-              {error && (
-                <div className="mb-3 p-3 rounded-lg bg-red-50 border border-red-200">
-                  <p className="text-sm font-medium text-red-600">{error}</p>
-                </div>
-              )}
+              {error && <div className="mb-3 p-3 rounded-xl bg-red-50 border border-red-200"><p className="text-base font-medium text-red-600">{error}</p></div>}
+
               <button onClick={handleRegister} disabled={saving || cart.length === 0}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-                {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-rose to-lavender text-white text-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]">
+                {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Plus className="w-6 h-6" />}
                 {saving ? '登録中...' : '売上を登録'}
               </button>
             </div>
           </div>
         </div>
-      )}
-
-      {tab === 'sales' && (
-        <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
-          <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-light-lav"><ChevronLeft className="w-5 h-5" /></button>
-              <span className="font-semibold text-text-main">{dateRange.start.slice(0, 7).replace('-', '年')}月</span>
-              <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-light-lav"><ChevronRight className="w-5 h-5" /></button>
+      ) : (
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <button onClick={prevMonth} className="p-3 rounded-xl hover:bg-light-lav"><ChevronLeft className="w-6 h-6" /></button>
+                <span className="text-xl font-bold text-text-main">{dateRange.start.slice(0, 7).replace('-', '年')}月</span>
+                <button onClick={nextMonth} className="p-3 rounded-xl hover:bg-light-lav"><ChevronRight className="w-6 h-6" /></button>
+              </div>
+              <p className="text-xl font-bold text-rose">合計: ¥{dayTotal.toLocaleString()}</p>
             </div>
-            <p className="text-sm font-bold text-rose">合計: ¥{dayTotal.toLocaleString()}</p>
-          </div>
-          {loading ? (
-            <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 text-rose animate-spin" /></div>
-          ) : sales.length === 0 ? (
-            <div className="text-center py-12 text-text-sub">
-              <Receipt className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>この期間の売上はありません</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {sales.map(s => (
-                <div key={s.id} className="flex items-center justify-between p-4 bg-light-lav/50 rounded-xl">
-                  <div>
+            {loading ? (
+              <div className="flex justify-center py-16"><Loader2 className="w-12 h-12 text-rose animate-spin" /></div>
+            ) : sales.length === 0 ? (
+              <div className="text-center py-16 text-text-sub">
+                <Receipt className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <p className="text-lg">この期間の売上はありません</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {sales.map(s => (
+                  <div key={s.id} className="flex items-center justify-between p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                    <div>
+                      <span className="text-2xl font-bold text-text-main">¥{s.amount.toLocaleString()}</span>
+                      {s.menu && <span className="ml-3 text-base text-text-sub">{s.menu}</span>}
+                      <div className="flex gap-3 mt-1 text-sm text-text-sub">
+                        <span>{s.sale_date}</span>
+                        {s.customer_name && <span>{s.customer_name}様</span>}
+                        {s.staff_name && <span>/ {s.staff_name}</span>}
+                      </div>
+                    </div>
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-text-main">¥{s.amount.toLocaleString()}</span>
-                      {s.menu && <span className="text-sm text-text-sub">{s.menu}</span>}
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-text-sub">
-                      <span>{s.sale_date}</span>
-                      {s.customer_name && <span>{s.customer_name}様</span>}
-                      {s.staff_name && <span>/ {s.staff_name}</span>}
+                      <span className="px-3 py-1 rounded-full bg-light-lav text-sm font-medium">{PAYMENTS.find(p => p.value === s.payment_method)?.label ?? s.payment_method}</span>
+                      <button onClick={() => setEditSale(s)} className="p-2 text-text-sub hover:text-rose rounded-xl"><Pencil className="w-5 h-5" /></button>
+                      <button onClick={() => setDeleteTarget(s)} className="p-2 text-text-sub hover:text-red-600 rounded-xl"><Trash2 className="w-5 h-5" /></button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs bg-white rounded-full px-2 py-0.5">{PAYMENTS.find(p => p.value === s.payment_method)?.label ?? s.payment_method}</span>
-                    <button onClick={() => setEditSale(s)} className="p-2 text-text-sub hover:text-rose rounded-lg"><Pencil className="w-4 h-4" /></button>
-                    <button onClick={() => setDeleteTarget(s)} className="p-2 text-text-sub hover:text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -578,24 +509,12 @@ export default function SalesPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm card-shadow">
             <div className="flex items-center gap-3 mb-4">
               <AlertCircle className="w-6 h-6 text-rose" />
-              <h3 className="font-bold text-text-main">
-                {confirmModal.type === 'card' ? '決済確認' : 'ローン承認確認'}
-              </h3>
+              <h3 className="font-bold text-text-main">{confirmModal.type === 'card' ? '決済確認' : 'ローン承認確認'}</h3>
             </div>
-            <p className="text-sm text-text-main mb-6">
-              {confirmModal.type === 'card'
-                ? '決済は完了しましたか？'
-                : 'ローン会社の承認はOKですか？'}
-            </p>
-            <div className="flex gap-2">
-              <button onClick={() => { setConfirmModal(null); setPaymentMethod('cash') }}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-text-main">
-                いいえ
-              </button>
-              <button onClick={() => { setPaymentConfirmed(true); setConfirmModal(null) }}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium">
-                はい、確認しました
-              </button>
+            <p className="text-base text-text-main mb-6">{confirmModal.type === 'card' ? '決済は完了しましたか？' : 'ローン会社の承認はOKですか？'}</p>
+            <div className="flex gap-3">
+              <button onClick={() => { setConfirmModal(null); setPaymentMethod('cash') }} className="flex-1 py-3 rounded-xl border border-gray-200 text-text-main font-bold">いいえ</button>
+              <button onClick={() => { setPaymentConfirmed(true); setConfirmModal(null) }} className="flex-1 py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold">はい</button>
             </div>
           </div>
         </div>
@@ -605,26 +524,19 @@ export default function SalesPage() {
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm card-shadow">
-            <h3 className="font-bold text-text-main mb-2">売上を削除</h3>
-            <p className="text-sm text-text-main mb-6">この売上を削除しますか？</p>
-            <div className="flex gap-2">
-              <button onClick={() => setDeleteTarget(null)}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-text-main">
-                キャンセル
-              </button>
-              <button onClick={() => handleDelete(deleteTarget.id)}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600">
-                削除
-              </button>
+            <h3 className="font-bold text-text-main text-lg mb-2">売上を削除</h3>
+            <p className="text-base text-text-main mb-6">この売上を削除しますか？</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 rounded-xl border border-gray-200 text-text-main font-bold">キャンセル</button>
+              <button onClick={() => handleDelete(deleteTarget.id)} className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold">削除</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* トースト */}
       {toast && (
-        <div className={`fixed bottom-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
-          <span className="text-sm font-medium">{toast.message}</span>
+        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-lg text-lg font-medium ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}>
+          {toast.message}
         </div>
       )}
     </div>
