@@ -27,18 +27,36 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json()
-  const { sales } = body
+  try {
+    const body = await req.json()
+    const { sales } = body
 
-  if (!sales || !Array.isArray(sales)) {
-    return NextResponse.json({ error: 'salesが必要です' }, { status: 400 })
+    if (!sales || !Array.isArray(sales)) {
+      return NextResponse.json({ error: 'salesが必要です' }, { status: 400 })
+    }
+
+    // salon_idを除外してinsert
+    const cleanedSales = sales.map((s: Record<string, unknown>) => ({
+      sale_date: s.sale_date,
+      amount: s.amount,
+      customer_id: s.customer_id || null,
+      customer_name: s.customer_name || null,
+      menu: s.menu || null,
+      staff_name: s.staff_name || null,
+      payment_method: s.payment_method || 'cash',
+      memo: s.memo || null,
+    }))
+
+    const { data, error } = await supabase
+      .from('sales')
+      .insert(cleanedSales)
+      .select()
+
+    if (error) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 500 })
+    }
+    return NextResponse.json({ sales: data })
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
   }
-
-  const { data, error } = await supabase
-    .from('sales')
-    .insert(sales)
-    .select()
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ sales: data })
 }
