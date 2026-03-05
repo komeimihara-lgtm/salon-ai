@@ -10,17 +10,25 @@ import {
   type MenuItem, type TaxSettings, type Campaign
 } from '@/lib/menus'
 
-// インポートモーダルは別コンポーネント
+// インポート用メニュー型（要確認フラグ付き）
+type ImportMenuItem = MenuItem & { needsReview?: boolean }
+
+// インポートモーダル
 function ImportModal({ onClose, onImport }: {
   onClose: () => void
   onImport: (menus: MenuItem[], categories: string[]) => void
 }) {
   const [mode, setMode] = useState<'image' | 'pdf' | 'url'>('image')
   const [url, setUrl] = useState('')
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(false)
-  const [preview, setPreview] = useState<{ menus: MenuItem[], categories: string[] } | null>(null)
+  const [preview, setPreview] = useState<{ menus: ImportMenuItem[], categories: string[] } | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editRow, setEditRow] = useState<Partial<ImportMenuItem>>({})
   const [error, setError] = useState('')
+
+  const CATEGORIES = ['フェイシャル', 'ボディ', '脱毛', 'オプション', '物販', 'キャンペーン', 'クーポン']
 
   const handleExtract = async () => {
     setLoading(true); setError(''); setPreview(null)
@@ -29,86 +37,191 @@ function ImportModal({ onClose, onImport }: {
       formData.append('type', mode)
       if (mode === 'url') {
         formData.append('url', url)
-      } else if (file) {
-        formData.append('file', file)
+      } else {
+        const toSend = files.length > 0 ? files : []
+        toSend.forEach(f => formData.append('files', f))
+        if (toSend.length === 0) throw new Error('ファイルを選択してください')
       }
       const res = await fetch('/api/menu/import', { method: 'POST', body: formData })
       const json = await res.json()
       if (json.error) throw new Error(json.error)
-      const menus = (json.menus || []).map((m: MenuItem) => ({ ...m, id: Date.now().toString() + Math.random() }))
-      setPreview({ menus, categories: json.categories || [] })
+      const menus: ImportMenuItem[] = (json.menus || []).map((m: ImportMenuItem) => ({
+        ...m,
+        id: `imp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        category: m.category || 'フェイシャル',
+        duration: m.duration ?? 60,
+        price: m.price ?? 0,
+      }))
+      setPreview({ menus, categories: json.categories || CATEGORIES })
+      setSelectedIds(new Set(menus.map(m => m.id)))
     } catch (e) {
-      setError('読み取りに失敗しました。別の画像やURLをお試しください。')
+      setError(e instanceof Error ? e.message : '読み取りに失敗しました。別の画像やURLをお試しください。')
     } finally {
       setLoading(false)
     }
   }
 
+  const updatePreviewMenu = (id: string, updates: Partial<ImportMenuItem>) => {
+    if (!preview) return
+    setPreview({
+      ...preview,
+      menus: preview.menus.map(m => m.id === id ? { ...m, ...updates } : m),
+    })
+    setEditingId(null)
+    setEditRow({})
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (!preview) return
+    if (selectedIds.size === preview.menus.length) setSelectedIds(new Set())
+    else setSelectedIds(new Set(preview.menus.map(m => m.id)))
+  }
+
+  const handleImport = () => {
+    if (!preview) return
+    const toImport = preview.menus.filter(m => selectedIds.has(m.id))
+    onImport(toImport, preview.categories)
+    onClose()
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between mb-4 shrink-0">
           <h3 className="font-bold text-text-main text-lg">メニューを自動インポート</h3>
           <button onClick={onClose} className="p-2 text-text-sub hover:text-text-main"><X className="w-5 h-5" /></button>
         </div>
 
-        {/* モード選択 */}
-        <div className="flex gap-2 mb-4">
-          {[{ id: 'image', label: '📷 画像' }, { id: 'pdf', label: '📄 PDF' }, { id: 'url', label: '🌐 URL' }].map(m => (
-            <button key={m.id} onClick={() => setMode(m.id as typeof mode)}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${mode === m.id ? 'bg-gradient-to-r from-rose to-lavender text-white' : 'bg-light-lav text-text-sub'}`}>
-              {m.label}
-            </button>
-          ))}
-        </div>
-
-        {mode === 'url' ? (
-          <input type="text" value={url} onChange={e => setUrl(e.target.value)}
-            placeholder="https://beauty.hotpepper.jp/..."
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-rose outline-none text-sm mb-4" />
-        ) : (
-          <div className="mb-4">
-            <label className="block w-full border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-rose transition-all">
-              <input type="file" accept={mode === 'pdf' ? '.pdf' : 'image/*'} className="hidden"
-                onChange={e => setFile(e.target.files?.[0] || null)} />
-              {file ? (
-                <p className="text-sm text-text-main font-medium">{file.name}</p>
-              ) : (
-                <>
-                  <p className="text-2xl mb-2">{mode === 'pdf' ? '📄' : '📷'}</p>
-                  <p className="text-sm text-text-sub">{mode === 'pdf' ? 'PDFファイルをアップロード' : 'メニュー表の画像をアップロード'}</p>
-                </>
-              )}
-            </label>
-          </div>
-        )}
-
-        {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
-
         {!preview ? (
-          <button onClick={handleExtract} disabled={loading || (mode === 'url' ? !url : !file)}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-            {loading ? <><Loader2 className="w-5 h-5 animate-spin" />読み取り中...</> : '✨ AIで読み取る'}
-          </button>
-        ) : (
-          <div>
-            <h4 className="font-bold text-text-main mb-3">読み取り結果（{preview.menus.length}件）</h4>
-            <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-              {preview.menus.map((m, i) => (
-                <div key={i} className="flex items-center justify-between py-2 px-3 bg-light-lav/50 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium text-text-main">{m.name}</p>
-                    <p className="text-xs text-text-sub">{m.category} · {m.duration}分 · ¥{m.price.toLocaleString()}</p>
-                  </div>
-                </div>
+          <>
+            <p className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4 shrink-0">
+              💡 URLより画像の方が精度が高いです。メニュー表のスクショをアップロードすることをおすすめします。
+            </p>
+            <div className="flex gap-2 mb-4 shrink-0">
+              {[{ id: 'image', label: '📷 画像' }, { id: 'pdf', label: '📄 PDF' }, { id: 'url', label: '🌐 URL' }].map(m => (
+                <button key={m.id} onClick={() => setMode(m.id as typeof mode)}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${mode === m.id ? 'bg-gradient-to-r from-rose to-lavender text-white' : 'bg-light-lav text-text-sub'}`}>
+                  {m.label}
+                </button>
               ))}
             </div>
-            <div className="flex gap-2">
-              <button onClick={() => setPreview(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm">やり直す</button>
-              <button onClick={() => onImport(preview.menus, preview.categories)}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold text-sm">
-                追加する
-              </button>
+
+            {mode === 'url' ? (
+              <div className="mb-4 shrink-0">
+                <p className="text-xs text-text-sub mb-2">URLが読み込めない場合はスクショをお試しください。（JavaScriptで動的に読み込まれるページは取得できない場合があります）</p>
+                <input type="text" value={url} onChange={e => setUrl(e.target.value)}
+                  placeholder="https://beauty.hotpepper.jp/..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-rose outline-none text-sm" />
+              </div>
+            ) : (
+              <div className="mb-4 shrink-0">
+                <label className="block w-full border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-rose transition-all">
+                  <input type="file" accept={mode === 'pdf' ? '.pdf' : 'image/*'} className="hidden" multiple
+                    onChange={e => setFiles(Array.from(e.target.files || []))} />
+                  {files.length > 0 ? (
+                    <p className="text-sm text-text-main font-medium">{files.length}件のファイルを選択</p>
+                  ) : (
+                    <>
+                      <p className="text-2xl mb-2">{mode === 'pdf' ? '📄' : '📷'}</p>
+                      <p className="text-sm text-text-sub">{mode === 'pdf' ? 'PDFファイルをアップロード（複数可）' : 'メニュー表の画像をアップロード（複数可）'}</p>
+                    </>
+                  )}
+                </label>
+              </div>
+            )}
+
+            {error && <p className="text-sm text-red-400 mb-3 shrink-0">{error}</p>}
+
+            <button onClick={handleExtract} disabled={loading || (mode === 'url' ? !url.trim() : files.length === 0)}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50 shrink-0">
+              {loading ? <><Loader2 className="w-5 h-5 animate-spin" />読み取り中...</> : '✨ AIで読み取る'}
+            </button>
+          </>
+        ) : (
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between mb-3 shrink-0">
+              <h4 className="font-bold text-text-main">読み取り結果（{preview.menus.length}件）</h4>
+              <div className="flex gap-2">
+                <button onClick={() => setPreview(null)} className="py-2 px-4 rounded-xl border border-gray-200 text-sm">やり直す</button>
+                <button onClick={handleImport} disabled={selectedIds.size === 0}
+                  className="py-2 px-4 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold text-sm disabled:opacity-50">
+                  選択した項目をインポート（{selectedIds.size}件）
+                </button>
+              </div>
+            </div>
+            <div className="border border-gray-200 rounded-xl overflow-auto flex-1 min-h-0">
+              <table className="w-full text-sm">
+                <thead className="bg-light-lav/50 sticky top-0">
+                  <tr>
+                    <th className="p-2 text-left">
+                      <input type="checkbox" checked={selectedIds.size === preview.menus.length} onChange={toggleSelectAll}
+                        className="rounded border-gray-300" />
+                    </th>
+                    <th className="p-2 text-left text-text-sub font-medium">施術名</th>
+                    <th className="p-2 text-left text-text-sub font-medium">カテゴリ</th>
+                    <th className="p-2 text-left text-text-sub font-medium">所要時間</th>
+                    <th className="p-2 text-left text-text-sub font-medium">価格</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {preview.menus.map((m) => (
+                    <tr key={m.id} className={`border-t border-gray-100 ${m.needsReview ? 'bg-orange-50' : ''}`}>
+                      <td className="p-2">
+                        <input type="checkbox" checked={selectedIds.has(m.id)} onChange={() => toggleSelect(m.id)}
+                          className="rounded border-gray-300" />
+                      </td>
+                      <td className="p-2">
+                        {editingId === m.id ? (
+                          <input value={editRow.name ?? m.name} onChange={e => setEditRow(r => ({ ...r, name: e.target.value }))}
+                            className="w-full px-2 py-1 border rounded text-sm" onBlur={() => updatePreviewMenu(m.id, { name: editRow.name ?? m.name })} autoFocus />
+                        ) : (
+                          <span className="font-medium text-text-main cursor-pointer hover:bg-gray-100 rounded px-1" onClick={() => { setEditingId(m.id); setEditRow({ name: m.name, category: m.category, duration: m.duration, price: m.price }) }}>{m.name || '（未入力）'}</span>
+                        )}
+                        {m.needsReview && <span className="ml-1 text-xs text-orange-600 font-medium">要確認</span>}
+                      </td>
+                      <td className="p-2">
+                        {editingId === m.id ? (
+                          <select value={editRow.category ?? m.category} onChange={e => setEditRow(r => ({ ...r, category: e.target.value }))}
+                            className="px-2 py-1 border rounded text-sm" onBlur={() => updatePreviewMenu(m.id, { category: editRow.category ?? m.category })}>
+                            {(preview.categories.length ? preview.categories : CATEGORIES).map(c => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="cursor-pointer hover:bg-gray-100 rounded px-1" onClick={() => { setEditingId(m.id); setEditRow({ name: m.name, category: m.category, duration: m.duration, price: m.price }) }}>{m.category}</span>
+                        )}
+                      </td>
+                      <td className="p-2">
+                        {editingId === m.id ? (
+                          <input type="number" value={editRow.duration ?? m.duration} onChange={e => { const v = e.target.value.replace(/^0+(?=\d)/, ''); setEditRow(r => ({ ...r, duration: v === '' ? 0 : Number(v) })) }}
+                            onBlur={() => updatePreviewMenu(m.id, { duration: editRow.duration ?? m.duration })}
+                            className="w-16 px-2 py-1 border rounded text-sm" />
+                        ) : (
+                          <span className="cursor-pointer hover:bg-gray-100 rounded px-1" onClick={() => { setEditingId(m.id); setEditRow({ name: m.name, category: m.category, duration: m.duration, price: m.price }) }}>{m.duration}分</span>
+                        )}
+                      </td>
+                      <td className="p-2">
+                        {editingId === m.id ? (
+                          <input type="number" value={editRow.price ?? m.price} onChange={e => { const v = e.target.value.replace(/^0+(?=\d)/, ''); setEditRow(r => ({ ...r, price: v === '' ? 0 : Number(v) })) }}
+                            onBlur={() => updatePreviewMenu(m.id, { price: editRow.price ?? m.price })}
+                            className="w-24 px-2 py-1 border rounded text-sm" />
+                        ) : (
+                          <span className="cursor-pointer hover:bg-gray-100 rounded px-1" onClick={() => { setEditingId(m.id); setEditRow({ name: m.name, category: m.category, duration: m.duration, price: m.price }) }}>¥{(m.price ?? 0).toLocaleString()}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
