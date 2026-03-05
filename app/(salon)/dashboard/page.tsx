@@ -88,17 +88,20 @@ export default function DashboardPage() {
   const [staff, setStaff] = useState<{ name: string }[]>([])
   const [beds, setBeds] = useState<string[]>(['A', 'B'])
   const [courseAlerts, setCourseAlerts] = useState<{ id: string; type: string; text: string; action: string }[]>([])
+  const [salesSummary, setSalesSummary] = useState<{ cashSales: number; consumeSales: number; serviceLiability: number } | null>(null)
 
   useEffect(() => {
     const s = getSalonSettings()
-    // Supabaseから今月の売上を取得
     const now = new Date()
     const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
     const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
-    fetch(`/api/kpi/sales?start=${start}&end=${end}`)
-      .then(r => r.json())
-      .then(json => {
-        const sales = json.sales || []
+    Promise.all([
+      fetch(`/api/kpi/sales?start=${start}&end=${end}`),
+      fetch(`/api/kpi/summary?start=${start}&end=${end}`),
+    ])
+      .then(([salesRes, summaryRes]) => Promise.all([salesRes.json(), summaryRes.json()]))
+      .then(([salesJson, summaryJson]) => {
+        const sales = salesJson.sales || []
         const totalSales = sales.reduce((sum: number, sale: { amount: number }) => sum + sale.amount, 0)
         const visits = sales.length
         const avgPrice = visits > 0 ? Math.round(totalSales / visits) : 0
@@ -111,6 +114,11 @@ export default function DashboardPage() {
           { label: '客単価', value: `¥${avgPrice.toLocaleString()}`, sub: `目標 ¥${s.targets.avgPrice.toLocaleString()}`, rate: avgRate, diff: 0, diffUp: true },
           { label: '再来店率', value: '68%', sub: '目標 75%', rate: 91, diff: 5, diffUp: true },
         ])
+        setSalesSummary(summaryJson.cashSales != null ? {
+          cashSales: summaryJson.cashSales ?? 0,
+          consumeSales: summaryJson.consumeSales ?? 0,
+          serviceLiability: summaryJson.serviceLiability ?? 0,
+        } : null)
       })
       .catch(() => {})
     setManualTasksState(getManualTasks())
@@ -271,6 +279,25 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
+        {salesSummary && (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl p-4 card-shadow border border-[#BAE6FD]">
+              <p className="text-xs text-text-sub mb-1">💰 着金売上</p>
+              <p className="text-lg font-bold text-[#1A202C]">¥{salesSummary.cashSales.toLocaleString()}</p>
+              <p className="text-xs text-text-sub mt-0.5">現金・カード等の入金</p>
+            </div>
+            <div className="bg-white rounded-xl p-4 card-shadow border border-[#BAE6FD]">
+              <p className="text-xs text-text-sub mb-1">✅ 消化売上</p>
+              <p className="text-lg font-bold text-rose">¥{salesSummary.consumeSales.toLocaleString()}</p>
+              <p className="text-xs text-text-sub mt-0.5">回数券・サブスク消化による売上</p>
+            </div>
+            <div className="bg-white rounded-xl p-4 card-shadow border border-[#BAE6FD]">
+              <p className="text-xs text-text-sub mb-1">📋 役務残（前受金残高）</p>
+              <p className="text-lg font-bold text-lavender">¥{salesSummary.serviceLiability.toLocaleString()}</p>
+              <p className="text-xs text-text-sub mt-0.5">未消化回数券の残価値</p>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ② 今日の日割り目標 + ③ 今日のタスク */}

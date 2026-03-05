@@ -147,19 +147,24 @@ export default function KPIPage() {
   const [month, setMonth] = useState(now.getMonth() + 1)
   const [kpi, setKpi] = useState<KPISummary | null>(null)
   const [sales, setSales] = useState<Sale[]>([])
+  const [salesSummary, setSalesSummary] = useState<{ cashSales: number; consumeSales: number; serviceLiability: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [showSaleModal, setShowSaleModal] = useState(false)
   const [showTargetModal, setShowTargetModal] = useState(false)
 
   const fetchData = useCallback(async () => {
+    const startStr = `${year}-${String(month).padStart(2, '0')}-01`
+    const endStr = new Date(year, month, 0).toISOString().split('T')[0]
     setLoading(true)
     try {
-      const [kpiRes, salesRes] = await Promise.all([
+      const [summaryRes, salesRes] = await Promise.all([
         fetch(`/api/kpi/summary?year=${year}&month=${month}`),
-        fetch(`/api/kpi/sales?start=${year}-${String(month).padStart(2, '0')}-01&end=${new Date(year, month, 0).toISOString().split('T')[0]}`),
+        fetch(`/api/kpi/sales?start=${startStr}&end=${endStr}`),
       ])
-      setKpi(await kpiRes.json())
+      const summaryJson = await summaryRes.json()
+      setKpi(summaryJson.error ? null : summaryJson)
       setSales((await salesRes.json()).sales || [])
+      setSalesSummary(summaryJson.cashSales != null ? { cashSales: summaryJson.cashSales ?? 0, consumeSales: summaryJson.consumeSales ?? 0, serviceLiability: summaryJson.serviceLiability ?? 0 } : null)
     } catch (err) { console.error(err) } finally { setLoading(false) }
   }, [year, month])
 
@@ -212,6 +217,22 @@ export default function KPIPage() {
                 </div>
               </div>
             </div>
+            {salesSummary && (
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-white border border-[#BAE6FD] rounded-xl p-3">
+                  <p className="text-xs text-[#4A5568] mb-0.5">💰 着金売上</p>
+                  <p className="text-base font-bold text-[#1A202C]">¥{salesSummary.cashSales.toLocaleString()}</p>
+                </div>
+                <div className="bg-white border border-[#BAE6FD] rounded-xl p-3">
+                  <p className="text-xs text-[#4A5568] mb-0.5">✅ 消化売上</p>
+                  <p className="text-base font-bold text-rose">¥{salesSummary.consumeSales.toLocaleString()}</p>
+                </div>
+                <div className="bg-white border border-[#BAE6FD] rounded-xl p-3">
+                  <p className="text-xs text-[#4A5568] mb-0.5">📋 役務残（前受金残高）</p>
+                  <p className="text-base font-bold text-purple-400">¥{salesSummary.serviceLiability.toLocaleString()}</p>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               {[
                 { icon: Users, label: 'アクティブ顧客', value: `${kpi.customer_count}名`, color: 'text-blue-400' },

@@ -12,6 +12,7 @@ export interface TicketPlan {
   menuName: string
   totalSessions: number
   price: number
+  unitPrice: number
   expiryDays: number | null
   isActive?: boolean
   createdAt?: string
@@ -27,18 +28,23 @@ export interface CustomerTicket {
   menuName: string
   totalSessions: number
   remainingSessions: number
+  unitPrice: number | null
   purchasedAt: string
   expiryDate: string | null
 }
 
 // ========== 回数券マスタ（Supabase API） ==========
 function mapRowToPlan(r: Record<string, unknown>): TicketPlan {
+  const price = Number(r.price ?? 0)
+  const totalSessions = Number(r.totalSessions ?? r.total_sessions ?? 0)
+  const unitPrice = r.unitPrice != null ? Number(r.unitPrice) : r.unit_price != null ? Number(r.unit_price) : (totalSessions > 0 ? Math.round(price / totalSessions) : 0)
   return {
     id: String(r.id),
     name: String(r.name ?? ''),
     menuName: String(r.menuName ?? r.menu_name ?? ''),
-    totalSessions: Number(r.totalSessions ?? r.total_sessions ?? 0),
-    price: Number(r.price ?? 0),
+    totalSessions,
+    price,
+    unitPrice,
     expiryDays: r.expiryDays != null ? Number(r.expiryDays) : r.expiry_days != null ? Number(r.expiry_days) : null,
     isActive: Boolean(r.isActive ?? r.is_active ?? true),
     createdAt: r.createdAt != null ? String(r.createdAt) : r.created_at != null ? String(r.created_at) : undefined,
@@ -108,6 +114,7 @@ export async function deleteTicketPlan(id: string): Promise<void> {
 function mapRowToTicket(r: Record<string, unknown>): CustomerTicket {
   const purchasedAt = r.purchasedAt ?? r.purchased_at
   const expiryDate = r.expiryDate ?? r.expiry_date
+  const unitPrice = r.unitPrice != null ? Number(r.unitPrice) : r.unit_price != null ? Number(r.unit_price) : null
   return {
     id: String(r.id),
     customerId: String(r.customerId ?? r.customer_id),
@@ -117,6 +124,7 @@ function mapRowToTicket(r: Record<string, unknown>): CustomerTicket {
     menuName: String(r.menuName ?? r.menu_name ?? ''),
     totalSessions: Number(r.totalSessions ?? r.total_sessions ?? 0),
     remainingSessions: Number(r.remainingSessions ?? r.remaining_sessions ?? 0),
+    unitPrice,
     purchasedAt: purchasedAt ? new Date(purchasedAt as string).toISOString().slice(0, 10) : '',
     expiryDate: expiryDate ? new Date(expiryDate as string).toISOString().slice(0, 10) : null,
   }
@@ -144,6 +152,7 @@ export async function addCustomerTicket(
   expiry.setDate(expiry.getDate() + expiryDays)
   const expiryDate = expiry.toISOString().slice(0, 10)
 
+  const unitPrice = plan.unitPrice ?? (plan.totalSessions > 0 ? Math.round(plan.price / plan.totalSessions) : 0)
   const res = await fetch('/api/customer-tickets', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -155,6 +164,7 @@ export async function addCustomerTicket(
       menu_name: plan.menuName,
       total_sessions: plan.totalSessions,
       remaining_sessions: plan.totalSessions,
+      unit_price: unitPrice,
       purchased_at: purchasedAt,
       expiry_date: expiryDate,
     }),

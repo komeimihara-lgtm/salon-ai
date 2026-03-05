@@ -231,6 +231,7 @@ CREATE TABLE IF NOT EXISTS ticket_plans (
   menu_name TEXT NOT NULL,
   total_sessions INTEGER NOT NULL,
   price INTEGER NOT NULL,
+  unit_price INTEGER,
   expiry_days INTEGER,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -248,6 +249,7 @@ CREATE TABLE IF NOT EXISTS customer_tickets (
   menu_name TEXT NOT NULL,
   total_sessions INTEGER NOT NULL,
   remaining_sessions INTEGER NOT NULL,
+  unit_price INTEGER,
   purchased_at TIMESTAMPTZ DEFAULT NOW(),
   expiry_date TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -260,3 +262,38 @@ CREATE INDEX IF NOT EXISTS idx_customer_subscriptions_customer_id ON customer_su
 CREATE INDEX IF NOT EXISTS idx_customer_subscriptions_salon_id ON customer_subscriptions(salon_id);
 CREATE INDEX IF NOT EXISTS idx_customer_coupons_customer_id ON customer_coupons(customer_id);
 CREATE INDEX IF NOT EXISTS idx_customer_coupons_salon_id ON customer_coupons(salon_id);
+
+-- ============================================================
+-- 売上（sales）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS sales (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  salon_id UUID NOT NULL REFERENCES salons(id) ON DELETE CASCADE,
+  sale_date DATE NOT NULL,
+  amount INTEGER NOT NULL,
+  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  customer_name TEXT,
+  menu TEXT,
+  staff_name TEXT,
+  payment_method TEXT DEFAULT 'cash',
+  memo TEXT,
+  sale_type TEXT DEFAULT 'cash' CHECK (sale_type IN ('cash', 'card', 'online', 'loan', 'ticket_consume', 'subscription_consume')),
+  ticket_id UUID REFERENCES customer_tickets(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sales_salon_id ON sales(salon_id);
+CREATE INDEX IF NOT EXISTS idx_sales_sale_date ON sales(sale_date);
+CREATE INDEX IF NOT EXISTS idx_sales_sale_type ON sales(sale_type);
+
+-- ============================================================
+-- マイグレーション（既存DBで実行する場合）
+-- ============================================================
+-- sales.sale_type, ticket_id:
+--   ALTER TABLE sales ADD COLUMN IF NOT EXISTS sale_type TEXT DEFAULT 'cash';
+--   ALTER TABLE sales ADD CONSTRAINT sales_sale_type_check CHECK (sale_type IN ('cash', 'card', 'online', 'loan', 'ticket_consume', 'subscription_consume'));
+--   ALTER TABLE sales ADD COLUMN IF NOT EXISTS ticket_id uuid;
+--   ALTER TABLE sales ADD CONSTRAINT sales_ticket_id_fkey FOREIGN KEY (ticket_id) REFERENCES customer_tickets(id) ON DELETE SET NULL;
+-- ticket_plans.unit_price（GENERATED から通常カラムへ変更）:
+--   ALTER TABLE ticket_plans DROP COLUMN IF EXISTS unit_price;
+--   ALTER TABLE ticket_plans ADD COLUMN IF NOT EXISTS unit_price INTEGER;
+--   UPDATE ticket_plans SET unit_price = ROUND(price::numeric / NULLIF(total_sessions, 0));

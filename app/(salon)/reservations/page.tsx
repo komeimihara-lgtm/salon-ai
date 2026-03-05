@@ -35,7 +35,7 @@ function toDateStr(d: Date) {
 const DAYS_JP = ['月', '火', '水', '木', '金', '土', '日']
 const STATUS_MAP = {
   confirmed: { label: '確定', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  completed: { label: '完了', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  completed: { label: '来店済み', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
   cancelled: { label: 'キャンセル', color: 'bg-slate-500/20 text-[#4A5568] border-slate-500/30' },
   no_show: { label: '無断キャンセル', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
 }
@@ -100,7 +100,7 @@ function ReservationCard({
             onClick={() => onStatusChange(reservation.id, 'completed')}
             className="flex-1 flex items-center justify-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg py-1.5 text-xs transition-colors"
           >
-            <Check className="w-3 h-3" /> 完了
+            <Check className="w-3 h-3" /> 来店済み
           </button>
           <button
             onClick={() => onStatusChange(reservation.id, 'no_show')}

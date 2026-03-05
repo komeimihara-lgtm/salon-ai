@@ -11,6 +11,7 @@ function toCustomerTicket(row: Record<string, unknown>) {
     menuName: row.menu_name,
     totalSessions: row.total_sessions,
     remainingSessions: row.remaining_sessions,
+    unitPrice: row.unit_price != null ? Number(row.unit_price) : null,
     purchasedAt: row.purchased_at,
     expiryDate: row.expiry_date,
   }
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
 
     let query = getSupabaseAdmin()
       .from('customer_tickets')
-      .select('id, customer_id, customer_name, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, purchased_at, expiry_date')
+      .select('id, customer_id, customer_name, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date')
       .eq('salon_id', DEMO_SALON_ID)
       .order('purchased_at', { ascending: false })
 
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
       menu_name,
       total_sessions,
       remaining_sessions,
+      unit_price,
       purchased_at,
       expiry_date,
     } = body
@@ -61,6 +63,7 @@ export async function POST(req: NextRequest) {
 
     const purchasedAt = purchased_at || new Date().toISOString()
     const expiryDate = expiry_date || null
+    const unitPrice = unit_price != null ? Number(unit_price) : null
 
     const { data, error } = await getSupabaseAdmin()
       .from('customer_tickets')
@@ -73,6 +76,7 @@ export async function POST(req: NextRequest) {
         menu_name,
         total_sessions,
         remaining_sessions,
+        unit_price: unitPrice,
         purchased_at: purchasedAt,
         expiry_date: expiryDate,
       })
