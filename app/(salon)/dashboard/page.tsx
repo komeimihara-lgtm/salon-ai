@@ -20,46 +20,18 @@ import { RescheduleModal, EditReservationModal } from '@/components/ReservationM
 import { useReservations } from '@/hooks/useReservations'
 import { useTodayShifts } from '@/lib/staff-shifts'
 import { getManualTasks, setManualTasks, type ManualTask } from '@/lib/dashboard-tasks'
-import {
-  getDashboardReservations,
-  setDashboardReservations,
-  type DashboardReservation,
-} from '@/lib/dashboard-reservations'
 import { getSalonSettings } from '@/lib/salon-settings'
 import { getAchievementRate, getAchievementColor, getAchievementBgColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
 import {
   fetchExpiringSoonTickets,
   fetchExpiredTickets,
-  fetchCustomerTickets,
-  consumeTicket,
-  isTicketExpired,
 } from '@/lib/tickets'
-import {
-  fetchCustomerSubscriptions,
-  useSubscriptionSession,
-  ensureBillingPeriodCurrent,
-  getRemainingSessions,
-} from '@/lib/subscriptions'
-
-const STORAGE_MENUS = 'sola_menus'
 
 const TASKS_AUTO_BASE = [
   { id: 1, type: 'alert', text: '田中様（92日未来店）に失客防止メッセージを送る', action: '送信する' },
   { id: 2, type: 'birthday', text: '山田様の誕生日まで7日。特典クーポンを送る', action: '送信する' },
   { id: 3, type: 'consult', text: '今月の達成率53%。経営会議に戦略を相談する', action: '相談する' },
 ]
-
-function loadMenus(): { id: string; name: string; duration: number; price: number }[] {
-  if (typeof window === 'undefined') return [{ id: '1', name: 'フェイシャル', duration: 60, price: 8000 }]
-  try {
-    const raw = localStorage.getItem(STORAGE_MENUS)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : [{ id: '1', name: 'フェイシャル', duration: 60, price: 8000 }]
-    }
-  } catch (_) {}
-  return [{ id: '1', name: 'フェイシャル', duration: 60, price: 8000 }]
-}
 
 const VISITORS = [
   { time: '10:00', name: '山田 花子', count: 12, menu: 'フェイシャル', staff: '田中', status: '施術中', task: '施術後フォロー予定' },
@@ -94,15 +66,9 @@ export default function DashboardPage() {
     { label: '再来店率', value: '-%', sub: '目標 75%', rate: 0, diff: 0, diffUp: true },
   ])
   const [manualTasks, setManualTasksState] = useState<ManualTask[]>([])
-  const [reservations, setReservationsState] = useState<DashboardReservation[]>([])
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [newTaskText, setNewTaskText] = useState('')
-  const [reservationModalOpen, setReservationModalOpen] = useState(false)
-  const [selectedSlot, setSelectedSlot] = useState<{ bed: string; time: string } | null>(null)
-  const [reservationDetail, setReservationDetail] = useState<DashboardReservation | null>(null)
-  const [menus, setMenus] = useState<{ id: string; name: string }[]>([])
-  const [staff, setStaff] = useState<{ name: string }[]>([])
-  const [beds, setBeds] = useState<string[]>(['A', 'B'])
+  const [reservationDetailModal, setReservationDetailModal] = useState<Reservation | null>(null)
   const [courseAlerts, setCourseAlerts] = useState<{ id: string; type: string; text: string; action: string }[]>([])
   const [salesSummary, setSalesSummary] = useState<{ cashSales: number; consumeSales: number; serviceLiability: number } | null>(null)
   const [todaySales, setTodaySales] = useState(0)
@@ -146,10 +112,6 @@ export default function DashboardPage() {
       })
       .catch(() => {})
     setManualTasksState(getManualTasks())
-    setReservationsState(getDashboardReservations())
-    setMenus(loadMenus().map(m => ({ id: m.id, name: m.name })))
-    setStaff(s.staff.map(x => ({ name: x.name })))
-    setBeds(s.beds.length > 0 ? s.beds : ['A', 'B'])
     Promise.all([fetchExpiringSoonTickets(14), fetchExpiredTickets()]).then(([expiring, expired]) => {
       const alerts: { id: string; type: string; text: string; action: string }[] = []
       if (expired.length > 0) {
@@ -190,43 +152,6 @@ export default function DashboardPage() {
     setManualTasks(next)
     setNewTaskText('')
     setTaskModalOpen(false)
-  }
-
-  const openAddReservation = (bed: string, time: string) => {
-    setSelectedSlot({ bed, time })
-    setReservationDetail(null)
-    setReservationModalOpen(true)
-  }
-
-  const openReservationDetail = (r: DashboardReservation) => {
-    setReservationDetail(r)
-    setSelectedSlot(null)
-    setReservationModalOpen(true)
-  }
-
-  const saveReservation = (form: { name: string; menu: string; staff: string }) => {
-    if (!selectedSlot || !form.name.trim()) return
-    const r: DashboardReservation = {
-      id: Date.now().toString(),
-      time: selectedSlot.time,
-      bed: selectedSlot.bed,
-      name: form.name.trim(),
-      menu: form.menu || menus[0]?.name || 'フェイシャル',
-      staff: form.staff || staff[0]?.name || '田中',
-    }
-    const next = [...reservations, r]
-    setReservationsState(next)
-    setDashboardReservations(next)
-    setReservationModalOpen(false)
-    setSelectedSlot(null)
-  }
-
-  const removeReservation = (id: string) => {
-    const next = reservations.filter(r => r.id !== id)
-    setReservationsState(next)
-    setDashboardReservations(next)
-    setReservationModalOpen(false)
-    setReservationDetail(null)
   }
 
   const now = new Date()
@@ -481,11 +406,12 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      {/* ④ 今日の予約表 */}
+      {/* ④ 今日の予約表（API連携） */}
       <section>
         <div className="flex items-center gap-3 mb-4">
           <div className="gradient-line rounded-full" />
           <span className="section-label font-dm-sans text-2xl font-bold text-text-main">今日の予約表</span>
+          <Link href="/reservations" className="text-sm text-rose hover:underline ml-auto">予約管理へ →</Link>
         </div>
         <div className="bg-white rounded-2xl overflow-hidden card-shadow overflow-x-auto">
           <div className="min-w-[800px]">
@@ -497,83 +423,48 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-            {beds.map((bed) => (
-              <div key={bed} className="grid grid-cols-[60px_repeat(20,1fr)] border-b border-gray-100 last:border-b-0">
-                <div className="p-3 bg-deep text-white text-sm font-medium flex items-center justify-center">
-                  ベッド{bed}
-                </div>
-                <div className="col-span-20 flex relative min-h-[60px]">
-                  {Array.from({ length: 20 }, (_, i) => {
-                    const time = `${10 + Math.floor(i / 2)}:${i % 2 ? '30' : '00'}`
-                    const existing = reservations.find(r => r.bed === bed && r.time === time)
-                    if (existing) {
-                      const [h, m] = existing.time.split(':').map(Number)
-                      const col = (h - 10) * 2 + (m || 0) / 30
-                      return (
-                        <div
-                          key={`${existing.id}`}
-                          onClick={() => openReservationDetail(existing)}
-                          className="absolute rounded-lg px-2 py-1 text-white text-xs font-medium shadow-sm cursor-pointer hover:ring-2 hover:ring-rose/50 z-10"
-                          style={{
-                            left: `${col * 5}%`,
-                            width: '10%',
-                            minWidth: 48,
-                            background: 'linear-gradient(135deg, #C4728A, #9B8EC4)',
-                          }}
-                        >
-                          <p className="font-semibold truncate">{existing.name}</p>
-                          <p className="text-white/90 truncate">{existing.menu}</p>
-                          <p className="text-white/80 truncate text-[10px]">{existing.staff}</p>
-                        </div>
-                      )
-                    }
-                    return (
-                      <div
-                        key={`${bed}-${time}`}
-                        onClick={() => openAddReservation(bed, time)}
-                        className="absolute rounded border border-dashed border-gray-200 hover:border-rose/50 hover:bg-rose/5 cursor-pointer transition-colors"
-                        style={{
-                          left: `${i * 5}%`,
-                          width: '5%',
-                          height: 'calc(100% - 4px)',
-                          top: 2,
-                        }}
-                        title={`${time} 空き枠をクリックして予約追加`}
-                      />
-                    )
-                  })}
-                </div>
+            <div className="grid grid-cols-[60px_repeat(20,1fr)] border-b border-gray-100">
+              <div className="p-3 bg-deep text-white text-sm font-medium flex items-center justify-center">
+                今日の予約
               </div>
-            ))}
+              <div className="col-span-20 flex relative min-h-[60px]">
+                {reservationsLoading ? (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-rose animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    {todayReservations
+                      .filter(r => r.status === 'confirmed' || r.status === 'rescheduled' || r.status === 'visited')
+                      .map((r) => {
+                        const [h = 10, m = 0] = (r.start_time || '10:00').slice(0, 5).split(':').map(Number)
+                        const col = (h - 10) * 2 + (m || 0) / 30
+                        const colIdx = Math.max(0, Math.min(col, 19))
+                        return (
+                          <div
+                            key={r.id}
+                            onClick={() => setReservationDetailModal(r)}
+                            className="absolute rounded-lg px-2 py-1 text-white text-xs font-medium shadow-sm cursor-pointer hover:ring-2 hover:ring-rose/50 z-10"
+                            style={{
+                              left: `${colIdx * 5}%`,
+                              width: '10%',
+                              minWidth: 48,
+                              background: 'linear-gradient(135deg, #C4728A, #9B8EC4)',
+                            }}
+                            title="クリックで詳細を見る"
+                          >
+                            <p className="font-semibold truncate">{r.customer_name}</p>
+                            <p className="text-white/90 truncate">{r.menu || '-'}</p>
+                            <p className="text-white/80 truncate text-[10px]">{r.staff_name || '-'}</p>
+                          </div>
+                        )
+                      })}
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* 今日の予約一覧（API・4アクション付き） */}
-        {reservationsLoading ? (
-          <div className="mt-4 pt-4 border-t border-gray-200 flex justify-center py-6">
-            <Loader2 className="w-6 h-6 text-rose animate-spin" />
-          </div>
-        ) : todayReservations.length > 0 ? (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-text-main">今日の予約（{todayReservations.length}件）</h3>
-              <Link href="/reservations" className="text-xs text-rose hover:underline">予約管理へ →</Link>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {todayReservations.map(r => (
-                <ReservationActionCard
-                  key={r.id}
-                  reservation={r}
-                  onVisit={handleVisit}
-                  onReschedule={r => setRescheduleTarget(r)}
-                  onNoShow={handleNoShow}
-                  onEdit={r => setEditTarget(r)}
-                  onCancel={id => handleStatusChange(id, 'cancelled')}
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
       </section>
 
       {/* ⑤ 今日の来店客一覧 + ⑥ 出勤スタッフ */}
@@ -719,7 +610,36 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* 予約追加・詳細モーダル */}
+      {/* 予約詳細モーダル（クリックで表示） */}
+      {reservationDetailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md card-shadow max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-text-main">予約詳細</h3>
+              <button onClick={() => setReservationDetailModal(null)} className="p-2 text-text-sub hover:text-text-main rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3 mb-4">
+              <p><span className="text-xs text-text-sub">顧客名</span> <span className="font-medium">{reservationDetailModal.customer_name}</span></p>
+              {reservationDetailModal.customer_phone && <p><span className="text-xs text-text-sub">電話番号</span> {reservationDetailModal.customer_phone}</p>}
+              <p><span className="text-xs text-text-sub">施術メニュー</span> {reservationDetailModal.menu || '-'}</p>
+              <p><span className="text-xs text-text-sub">担当スタッフ</span> {reservationDetailModal.staff_name || '-'}</p>
+              <p><span className="text-xs text-text-sub">予約時間</span> {reservationDetailModal.start_time?.slice(0, 5)}{reservationDetailModal.end_time ? `〜${reservationDetailModal.end_time.slice(0, 5)}` : ''}</p>
+              {reservationDetailModal.memo && <p><span className="text-xs text-text-sub">メモ</span> {reservationDetailModal.memo}</p>}
+            </div>
+            <ReservationActionCard
+              reservation={reservationDetailModal}
+              onVisit={(id) => { handleVisit(id); setReservationDetailModal(null) }}
+              onReschedule={(r) => { setRescheduleTarget(r); setReservationDetailModal(null) }}
+              onNoShow={(id) => { handleNoShow(id); setReservationDetailModal(null) }}
+              onEdit={(r) => { setEditTarget(r); setReservationDetailModal(null) }}
+              onCancel={(id) => { handleStatusChange(id, 'cancelled'); setReservationDetailModal(null) }}
+            />
+          </div>
+        </div>
+      )}
+
       {rescheduleTarget && (
         <RescheduleModal
           reservation={rescheduleTarget}
@@ -734,149 +654,6 @@ export default function DashboardPage() {
           onSaved={() => { refresh(); setEditTarget(null) }}
         />
       )}
-      {reservationModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md card-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-text-main">
-                {reservationDetail ? '予約詳細' : `予約を追加 ${selectedSlot ? `（ベッド${selectedSlot.bed} ${selectedSlot.time}）` : ''}`}
-              </h3>
-              <button
-                onClick={() => {
-                  setReservationModalOpen(false)
-                  setReservationDetail(null)
-                  setSelectedSlot(null)
-                }}
-                className="p-2 text-text-sub hover:text-text-main rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            {reservationDetail ? (
-              <ReservationDetailContent
-                reservation={reservationDetail}
-                onRemove={() => {
-                  removeReservation(reservationDetail.id)
-                }}
-                onConsumed={() => {
-                  setReservationsState(getDashboardReservations())
-                  setReservationModalOpen(false)
-                  setReservationDetail(null)
-                }}
-              />
-            ) : selectedSlot ? (
-              <AddReservationForm
-                slot={selectedSlot}
-                menus={menus}
-                staff={staff}
-                onSave={saveReservation}
-                onCancel={() => {
-                  setReservationModalOpen(false)
-                  setSelectedSlot(null)
-                }}
-              />
-            ) : null}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ReservationDetailContent({
-  reservation,
-  onRemove,
-  onConsumed,
-}: {
-  reservation: DashboardReservation
-  onRemove: () => void
-  onConsumed: () => void
-}) {
-  const [matchingCourse, setMatchingCourse] = useState<import('@/lib/tickets').CustomerTicket | null>(null)
-  const [matchingSub, setMatchingSub] = useState<import('@/lib/subscriptions').CustomerSubscription | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    Promise.all([fetchCustomerTickets(), fetchCustomerSubscriptions()])
-      .then(([tickets, subs]) => {
-        if (cancelled) return
-        const course = tickets.find(
-          c =>
-            c.customerName === reservation.name &&
-            c.menuName === reservation.menu &&
-            c.remainingSessions > 0 &&
-            !isTicketExpired(c)
-        )
-        const activeSubs = subs
-          .filter(s => s.status === 'active')
-          .map(s => ensureBillingPeriodCurrent(s))
-        const sub = activeSubs.find(
-          s =>
-            s.customerName === reservation.name &&
-            s.menuName === reservation.menu &&
-            getRemainingSessions(s) > 0
-        )
-        setMatchingCourse(course ?? null)
-        setMatchingSub(sub ?? null)
-      })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [reservation.name, reservation.menu])
-
-  const handleConsume = async () => {
-    if (!matchingCourse) return
-    await consumeTicket(matchingCourse.id)
-    onConsumed()
-  }
-
-  const handleSubUse = async () => {
-    if (!matchingSub) return
-    await useSubscriptionSession(matchingSub.id)
-    onConsumed()
-  }
-
-  return (
-    <div className="space-y-3">
-      <p>
-        <span className="text-text-sub text-sm">顧客名</span>{' '}
-        <Link href={`/chart?name=${encodeURIComponent(reservation.name)}`} className="font-medium text-rose hover:underline">
-          {reservation.name}
-        </Link>
-      </p>
-      <p><span className="text-text-sub text-sm">メニュー</span> {reservation.menu}</p>
-      <p><span className="text-text-sub text-sm">担当</span> {reservation.staff}</p>
-      <p><span className="text-text-sub text-sm">時間</span> {reservation.time} ベッド{reservation.bed}</p>
-      {loading ? (
-        <p className="text-sm text-text-sub">回数券・サブスクを確認中...</p>
-      ) : (
-        <>
-          {matchingCourse && (
-            <button
-              onClick={handleConsume}
-              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium"
-            >
-              回数券で1回消化（{matchingCourse.planName} 残{matchingCourse.remainingSessions}回）
-            </button>
-          )}
-          {matchingSub && (
-            <button
-              onClick={handleSubUse}
-              className="w-full py-2.5 rounded-xl bg-lavender text-white font-medium"
-            >
-              サブスクで1回利用（{matchingSub.planName} 残{getRemainingSessions(matchingSub)}回）
-            </button>
-          )}
-        </>
-      )}
-      <button
-        onClick={onRemove}
-        className="w-full py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50"
-      >
-        予約を削除
-      </button>
     </div>
   )
 }
@@ -1010,74 +787,3 @@ function SalesDetailModal({ type, onClose }: { type: 'cash' | 'consume'; onClose
   )
 }
 
-function AddReservationForm({
-  slot,
-  menus,
-  staff,
-  onSave,
-  onCancel,
-}: {
-  slot: { bed: string; time: string }
-  menus: { id: string; name: string }[]
-  staff: { name: string }[]
-  onSave: (form: { name: string; menu: string; staff: string }) => void
-  onCancel: () => void
-}) {
-  const [name, setName] = useState('')
-  const [menu, setMenu] = useState(menus[0]?.name ?? '')
-  const [staffName, setStaffName] = useState(staff[0]?.name ?? '')
-  useEffect(() => {
-    setMenu(menus[0]?.name ?? '')
-    setStaffName(staff[0]?.name ?? '')
-  }, [menus, staff])
-  return (
-    <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-text-main mb-1">顧客名</label>
-        <input
-          type="text"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="山田 花子"
-          className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-text-main mb-1">メニュー</label>
-        <select
-          value={menu}
-          onChange={e => setMenu(e.target.value)}
-          className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
-        >
-          {menus.map(m => (
-            <option key={m.id} value={m.name}>{m.name}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-text-main mb-1">担当スタッフ</label>
-        <select
-          value={staffName}
-          onChange={e => setStaffName(e.target.value)}
-          className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
-        >
-          {staff.map(s => (
-            <option key={s.name} value={s.name}>{s.name}</option>
-          ))}
-        </select>
-      </div>
-      <div className="flex gap-2 mt-6">
-        <button onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-text-main hover:bg-gray-50">
-          キャンセル
-        </button>
-        <button
-          onClick={() => onSave({ name, menu, staff: staffName })}
-          disabled={!name.trim()}
-          className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium hover:opacity-90 disabled:opacity-50"
-        >
-          追加
-        </button>
-      </div>
-    </div>
-  )
-}
