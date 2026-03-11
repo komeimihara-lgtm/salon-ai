@@ -20,7 +20,6 @@ import { RescheduleModal, EditReservationModal } from '@/components/ReservationM
 import ReservationFormModal from '@/components/ReservationFormModal'
 import { useReservations } from '@/hooks/useReservations'
 import { fetchTasks, addTask, toggleTask, deleteTask, type ManualTask } from '@/lib/dashboard-tasks'
-import { getSalonSettings } from '@/lib/salon-settings'
 import { getAchievementRate, getAchievementColor, getAchievementBgColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
 import {
   fetchExpiringSoonTickets,
@@ -232,7 +231,7 @@ export default function DashboardPage() {
     handleVisit,
     handleNoShow,
     handleStatusChange,
-  } = useReservations({ date: today })
+  } = useReservations({ start: today, end: today })
 
   const [kpiData, setKpiData] = useState<KpiItem[]>([
     { label: '今月売上', value: '¥-', sub: '目標 ¥-', rate: 0, diff: 0, diffUp: true },
@@ -255,11 +254,17 @@ export default function DashboardPage() {
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; start: string; end: string; bed: string } | null>(null)
   const [showReservationModal, setShowReservationModal] = useState(false)
   const [beds, setBeds] = useState<string[]>(['A', 'B'])
+  const [businessHours, setBusinessHours] = useState({ openTime: '10:00', closeTime: '21:00' })
+  const [targets, setTargets] = useState({ sales: 600000, visits: 60, avgPrice: 10000 })
 
   useEffect(() => {
     fetch('/api/settings/salon')
       .then(r => r.json())
-      .then(j => setBeds(j.beds || ['A', 'B']))
+      .then(j => {
+        setBeds(j.beds || ['A', 'B'])
+        if (j.businessHours) setBusinessHours(j.businessHours)
+        if (j.targets) setTargets(j.targets)
+      })
   }, [])
 
   useEffect(() => {
@@ -267,31 +272,39 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    const s = getSalonSettings()
     const now = new Date()
     const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
     const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10)
-    const today = now.toISOString().slice(0, 10)
+    const todayStr = now.toISOString().slice(0, 10)
     Promise.all([
       fetch(`/api/kpi/sales?start=${start}&end=${end}`),
       fetch(`/api/kpi/summary?start=${start}&end=${end}`),
-      fetch(`/api/kpi/sales?start=${today}&end=${today}`),
+      fetch(`/api/kpi/sales?start=${todayStr}&end=${todayStr}`),
+      fetch('/api/settings/salon'),
     ])
-      .then(([salesRes, summaryRes, todayRes]) => Promise.all([salesRes.json(), summaryRes.json(), todayRes.json()]))
-      .then(([salesJson, summaryJson, todayJson]) => {
+      .then(([salesRes, summaryRes, todayRes, salonRes]) => Promise.all([
+        salesRes.json(),
+        summaryRes.json(),
+        todayRes.json(),
+        salonRes.json(),
+      ]))
+      .then(([salesJson, summaryJson, todayJson, salonJson]) => {
         const sales = salesJson.sales || []
         const todaySalesList = todayJson.sales || []
         setTodaySales(todaySalesList.reduce((sum: number, s: { amount: number }) => sum + s.amount, 0))
         const totalSales = sales.reduce((sum: number, sale: { amount: number }) => sum + sale.amount, 0)
         const visits = sales.length
         const avgPrice = visits > 0 ? Math.round(totalSales / visits) : 0
-        const salesRate = getAchievementRate(totalSales, s.targets.sales)
-        const visitsRate = getAchievementRate(visits, s.targets.visits)
-        const avgRate = getAchievementRate(avgPrice, s.targets.avgPrice)
+        const t = salonJson.targets || {}
+        const sTargets = { sales: t.sales ?? 600000, visits: t.visits ?? 60, avgPrice: t.avgPrice ?? 10000 }
+        setTargets(sTargets)
+        const salesRate = getAchievementRate(totalSales, sTargets.sales)
+        const visitsRate = getAchievementRate(visits, sTargets.visits)
+        const avgRate = getAchievementRate(avgPrice, sTargets.avgPrice)
         setKpiData([
-          { label: '今月売上', value: `¥${totalSales.toLocaleString()}`, sub: `目標 ¥${s.targets.sales.toLocaleString()}`, rate: salesRate, diff: 0, diffUp: true },
-          { label: '来店数', value: `${visits}名`, sub: `目標 ${s.targets.visits}名`, rate: visitsRate, diff: 0, diffUp: true },
-          { label: '客単価', value: `¥${avgPrice.toLocaleString()}`, sub: `目標 ¥${s.targets.avgPrice.toLocaleString()}`, rate: avgRate, diff: 0, diffUp: true },
+          { label: '今月売上', value: `¥${totalSales.toLocaleString()}`, sub: `目標 ¥${sTargets.sales.toLocaleString()}`, rate: salesRate, diff: 0, diffUp: true },
+          { label: '来店数', value: `${visits}名`, sub: `目標 ${sTargets.visits}名`, rate: visitsRate, diff: 0, diffUp: true },
+          { label: '客単価', value: `¥${avgPrice.toLocaleString()}`, sub: `目標 ¥${sTargets.avgPrice.toLocaleString()}`, rate: avgRate, diff: 0, diffUp: true },
           { label: '再来店率', value: '68%', sub: '目標 75%', rate: 91, diff: 5, diffUp: true },
         ])
         setSalesSummary(summaryJson.cashSales != null ? {
@@ -357,7 +370,7 @@ export default function DashboardPage() {
   const year = now.getFullYear()
   const month = now.getMonth() + 1
   const workingDays = getWorkingDaysInMonth(year, month)
-  const dailyTarget = getDailyTarget(getSalonSettings().targets.sales, workingDays)
+  const dailyTarget = getDailyTarget(targets.sales, workingDays)
   const dailyRate = getAchievementRate(todaySales, dailyTarget)
 
   const staffShifts = todayStaff.map(s => ({
@@ -625,8 +638,8 @@ export default function DashboardPage() {
           beds={beds}
           reservations={todayReservations}
           loading={reservationsLoading}
-          openTime={getSalonSettings().businessHours.openTime}
-          closeTime={getSalonSettings().businessHours.closeTime}
+          openTime={businessHours.openTime}
+          closeTime={businessHours.closeTime}
           onSlotClick={(slot) => { setSelectedSlot(slot); setShowReservationModal(true) }}
           onReservationClick={(r) => setReservationDetailModal(r)}
         />

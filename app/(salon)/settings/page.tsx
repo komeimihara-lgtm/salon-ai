@@ -42,7 +42,16 @@ export default function SettingsPage() {
   const [lineToast, setLineToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
-    setSettings(getSalonSettings())
+    const s = getSalonSettings()
+    setSettings(prev => ({ ...prev, ...s, beds: [] }))
+    fetch('/api/settings/salon')
+      .then(r => r.json())
+      .then(j => setSettings(prev => ({
+        ...prev,
+        beds: j.beds || ['A', 'B'],
+        ...(j.businessHours && { businessHours: j.businessHours }),
+        ...(j.targets && { targets: { ...prev.targets, ...j.targets } }),
+      })))
   }, [])
 
   useEffect(() => {
@@ -59,16 +68,36 @@ export default function SettingsPage() {
     }
   }, [lineToast])
 
-  const save = () => {
-    setSalonSettings(settings)
+  const save = async () => {
+    const { beds, ...rest } = settings
+    setSalonSettings({ ...rest, beds: [] })
+    try {
+      await fetch('/api/settings/salon', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          business_hours: settings.businessHours,
+          targets: settings.targets,
+        }),
+      })
+    } catch (e) {
+      console.error('Failed to save settings:', e)
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const saveBeds = (newBeds: string[]) => {
-    const next = { ...settings, beds: newBeds }
-    setSettings(next)
-    setSalonSettings(next)
+  const saveBeds = async (newBeds: string[]) => {
+    setSettings(prev => ({ ...prev, beds: newBeds }))
+    try {
+      await fetch('/api/settings/salon', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beds: newBeds }),
+      })
+    } catch (e) {
+      console.error('Failed to save beds:', e)
+    }
   }
 
   const addBed = () => {

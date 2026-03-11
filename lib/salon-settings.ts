@@ -90,3 +90,9 @@ export function setSalonSettings(settings: SalonSettings) {
     window.dispatchEvent(new Event('salon-settings-updated'))
   } catch (_) {}
 }
+
+export async function getBeds(): Promise<string[]> {
+  const res = await fetch('/api/settings/salon')
+  const json = await res.json()
+  return json.beds || ['A', 'B']
+}

@@ -7,6 +7,8 @@ import type { Reservation } from '@/types'
 export interface UseReservationsOptions {
   date?: string // YYYY-MM-DD
   week?: string // YYYY-MM-DD (週の開始日)
+  start?: string // YYYY-MM-DD
+  end?: string // YYYY-MM-DD
   status?: string
 }
 
@@ -25,6 +27,8 @@ export interface UseReservationsResult {
 function buildListUrl(options: UseReservationsOptions): string {
   const params = new URLSearchParams()
   if (options.date) params.set('date', options.date)
+  if (options.start) params.set('start', options.start)
+  if (options.end) params.set('end', options.end)
   if (options.week) params.set('week', options.week)
   if (options.status) params.set('status', options.status)
   const q = params.toString()
@@ -36,7 +40,7 @@ export function useReservations(options: UseReservationsOptions = {}): UseReserv
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const { date, week, status } = options
+  const { date, week, start, end, status } = options
 
   const fetchReservations = useCallback(async () => {
     setLoading(true)
@@ -53,7 +57,7 @@ export function useReservations(options: UseReservationsOptions = {}): UseReserv
     } finally {
       setLoading(false)
     }
-  }, [date, week, status])
+  }, [date, week, start, end, status])
 
   useEffect(() => {
     fetchReservations()

@@ -6,7 +6,7 @@ const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
 const WEEKDAY_COLORS = ['text-text-main', 'text-text-main', 'text-text-main', 'text-text-main', 'text-text-main', 'text-blue-500', 'text-red-500']
 const START_HOUR = 9
 const END_HOUR = 21
-const SLOT_MINUTES = 30
+const SLOT_MINUTES = 15
 const TOTAL_SLOTS = (END_HOUR - START_HOUR) * (60 / SLOT_MINUTES)
 
 interface Staff { id: string; name: string; color: string }
@@ -30,7 +30,7 @@ function toDateStr(d: Date) {
 
 function timeToSlot(time: string, startHour: number) {
   const [h, m] = time.split(':').map(Number)
-  return (h - startHour) * 2 + (m >= 30 ? 1 : 0)
+  return (h - startHour) * (60 / SLOT_MINUTES) + Math.floor(m / SLOT_MINUTES)
 }
 
 function slotToTime(slot: number, startHour: number) {
@@ -89,13 +89,22 @@ export default function StaffPage() {
     try {
       const startDate = toDateStr(weekDates[0])
       const endDate = toDateStr(weekDates[6])
-      const res = await fetch(`/api/reservations?start=${startDate}&end=${endDate}`)
+      const res = await fetch(`/api/reservations/list?start=${startDate}&end=${endDate}`)
       const json = await res.json()
       setReservations(json.reservations || [])
     } catch { }
   }, [toDateStr(weekDates[0]), toDateStr(weekDates[6])])
 
+  const fetchClosedDays = useCallback(async () => {
+    try {
+      const res = await fetch('/api/settings/salon')
+      const json = await res.json()
+      setClosedDays(Array.isArray(json.closed_weekdays) ? json.closed_weekdays : [])
+    } catch { }
+  }, [])
+
   useEffect(() => { fetchStaff() }, [fetchStaff])
+  useEffect(() => { fetchClosedDays() }, [fetchClosedDays])
   useEffect(() => { fetchShifts(); fetchReservations() }, [fetchShifts, fetchReservations])
 
   const getShift = (staffId: string, dateStr: string) =>
@@ -488,7 +497,19 @@ export default function StaffPage() {
             <div className="flex gap-2">
               <button onClick={() => setShowClosedDayModal(false)}
                 className="flex-1 py-2.5 rounded-xl bg-gray-100 text-text-sub text-sm font-bold">閉じる</button>
-              <button onClick={() => { setShowClosedDayModal(false); showToast('定休日を設定しました') }}
+              <button onClick={async () => {
+                try {
+                  const res = await fetch('/api/settings/salon', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ closed_weekdays: closedDays }),
+                  })
+                  if (res.ok) {
+                    setShowClosedDayModal(false)
+                    showToast('定休日を設定しました')
+                  }
+                } catch { showToast('保存に失敗しました') }
+              }}
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-bold">保存</button>
             </div>
           </div>
