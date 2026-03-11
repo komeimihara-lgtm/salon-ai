@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   Calendar, ChevronLeft, ChevronRight, Plus, X, Loader2
@@ -10,7 +10,6 @@ import ReservationActionCard from '@/components/ReservationActionCard'
 import { RescheduleModal, EditReservationModal } from '@/components/ReservationModals'
 import ReservationFormModal from '@/components/ReservationFormModal'
 import { useReservations } from '@/hooks/useReservations'
-import { getSalonSettings } from '@/lib/salon-settings'
 
 // 週の日付配列を生成
 function getWeekDates(baseDate: Date): Date[] {
@@ -41,6 +40,13 @@ export default function ReservationsPage() {
   const [showNewModal, setShowNewModal] = useState(false)
   const [rescheduleTarget, setRescheduleTarget] = useState<Reservation | null>(null)
   const [editTarget, setEditTarget] = useState<Reservation | null>(null)
+  const [beds, setBeds] = useState<string[]>(['A', 'B'])
+
+  useEffect(() => {
+    fetch('/api/settings/salon')
+      .then(r => r.json())
+      .then(j => setBeds(j.beds || ['A', 'B']))
+  }, [])
 
   const weekDates = getWeekDates(currentWeek)
   const weekStart = toDateStr(weekDates[0])
@@ -186,8 +192,7 @@ export default function ReservationsPage() {
       {showNewModal && (
         <ReservationFormModal
           defaultDate={selectedDate}
-          staffList={getSalonSettings().staff?.length ? getSalonSettings().staff : undefined}
-          beds={getSalonSettings().beds.length > 0 ? getSalonSettings().beds : ['A', 'B']}
+          beds={beds}
           onClose={() => setShowNewModal(false)}
           onSaved={refresh}
         />

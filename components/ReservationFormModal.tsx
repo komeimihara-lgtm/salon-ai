@@ -1,12 +1,25 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { X, Plus, Loader2 } from 'lucide-react'
 import type { Customer } from '@/types'
 import { fetchMenus, getCategories, type MenuItem } from '@/lib/menus'
 
-// 10:00〜21:00 を15分刻み（予約表と一致）
-function buildTimeOptions(): string[] {
+type ShiftItem = { staff_id: string; staff_name?: string; date: string; start_time: string; end_time: string; staff?: { id: string; name: string; color: string } | { id: string; name: string; color: string }[] | null }
+
+function timeToMinutes(time: string): number {
+  const [h = 0, m = 0] = time.slice(0, 5).split(':').map(Number)
+  return h * 60 + m
+}
+
+function minutesToTime(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+// 10:00〜21:00 を15分刻み（シフトがない場合のデフォルト）
+function buildDefaultTimeOptions(): string[] {
   const opts: string[] = []
   for (let h = 10; h <= 21; h++) {
     for (let m = 0; m < 60; m += 15) {
@@ -16,7 +29,6 @@ function buildTimeOptions(): string[] {
   }
   return opts
 }
-const TIMES = buildTimeOptions()
 
 function calculateEndTime(start: string, minutes: number): string {
   const [h = 10, m = 0] = start.slice(0, 5).split(':').map(Number)
@@ -24,11 +36,6 @@ function calculateEndTime(start: string, minutes: number): string {
   const endH = Math.floor(total / 60)
   const endM = total % 60
   return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
-}
-
-function parseTimeToMinutes(t: string): number {
-  const [h = 0, m = 0] = t.slice(0, 5).split(':').map(Number)
-  return h * 60 + m
 }
 
 export type CustomerMode = 'existing' | 'temporary' | 'name_only'
@@ -55,7 +62,7 @@ export default function ReservationFormModal({
   defaultStartTime = '10:00',
   defaultEndTime,
   defaultBed,
-  beds = ['A', 'B'],
+  beds: bedsProp = ['A', 'B'],
   staffList: staffListProp,
   onClose,
   onSaved,
@@ -64,6 +71,10 @@ export default function ReservationFormModal({
   const [categories, setCategories] = useState<string[]>([])
   const [menuCategory, setMenuCategory] = useState<string>('')
   const [mode, setMode] = useState<CustomerMode>('existing')
+  const [shifts, setShifts] = useState<ShiftItem[]>([])
+  const [beds, setBedsState] = useState<string[]>(bedsProp)
+  const [holidays, setHolidays] = useState<string[]>([])
+  const [toast, setToast] = useState<string | null>(null)
   const [form, setForm] = useState({
     customer_name: '',
     customer_phone: '',
@@ -71,7 +82,7 @@ export default function ReservationFormModal({
     reservation_date: defaultDate,
     start_time: defaultStartTime,
     end_time: defaultEndTime ?? calculateEndTime(defaultStartTime, 60),
-    bed_id: defaultBed || beds[0] || 'A',
+    bed_id: defaultBed || bedsProp[0] || 'A',
     menu: '',
     staff_name: '',
     price: '',
@@ -87,12 +98,91 @@ export default function ReservationFormModal({
   const dropdownRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // シフト・ベッド・定休日を取得
+  useEffect(() => {
+    fetch('/api/settings/salon')
+      .then(r => r.json())
+      .then(j => {
+        const newBeds = j.beds || bedsProp
+        setBedsState(newBeds)
+        setForm(p => {
+          if (newBeds.length > 0 && !newBeds.includes(p.bed_id)) {
+            return { ...p, bed_id: newBeds[0] }
+          }
+          return p
+        })
+      })
+
+    const month = new Date().toISOString().slice(0, 7)
+    fetch(`/api/shifts?month=${month}`)
+      .then(r => r.json())
+      .then(j => setShifts(j.shifts || []))
+
+    fetch(`/api/holidays?month=${month}`)
+      .then(r => r.json())
+      .then(j => setHolidays((j.holidays || []).map((h: { date: string }) => h.date)))
+  }, [bedsProp])
+
   // メニュー管理と連動: モーダルが開くたびに最新のメニュー・カテゴリを取得
   useEffect(() => {
     fetchMenus().then(setMenus)
     setCategories(getCategories())
     setMenuCategory('')
   }, [defaultDate, defaultStartTime, defaultBed])
+
+  function getStaffNameFromShift(s: ShiftItem): string {
+    const staff = Array.isArray(s.staff) ? s.staff[0] : s.staff
+    return staff?.name ?? ''
+  }
+
+  const buildTimeOptions = useCallback(() => {
+    if (!form.reservation_date) return []
+    if (holidays.includes(form.reservation_date)) return []
+    const dayShifts = shifts.filter(s => s.date === form.reservation_date)
+    if (dayShifts.length === 0) return buildDefaultTimeOptions()
+    const allStarts = dayShifts.map(s => timeToMinutes(s.start_time))
+    const allEnds = dayShifts.map(s => timeToMinutes(s.end_time))
+    const earliest = Math.min(...allStarts)
+    const latest = Math.max(...allEnds)
+    const options: string[] = []
+    for (let t = earliest; t <= latest; t += 15) {
+      options.push(minutesToTime(t))
+    }
+    return options
+  }, [form.reservation_date, shifts, holidays])
+
+  const getStaffTimeOptions = useCallback((staffName: string) => {
+    if (!form.reservation_date || !staffName) return buildTimeOptions()
+    const staffShift = shifts.find(s =>
+      s.date === form.reservation_date && getStaffNameFromShift(s) === staffName
+    )
+    if (!staffShift) return buildTimeOptions()
+    const options: string[] = []
+    const start = timeToMinutes(staffShift.start_time)
+    const end = timeToMinutes(staffShift.end_time)
+    for (let t = start; t <= end; t += 15) {
+      options.push(minutesToTime(t))
+    }
+    return options
+  }, [form.reservation_date, shifts, buildTimeOptions])
+
+  const timeOptions = form.staff_name ? getStaffTimeOptions(form.staff_name) : buildTimeOptions()
+  const startTimeOptions = timeOptions.length > 0 ? timeOptions : buildDefaultTimeOptions()
+  const endTimeOptions = timeOptions.length > 0 ? timeOptions : buildDefaultTimeOptions()
+
+  // 開始・終了時間がオプションに含まれない場合に調整
+  useEffect(() => {
+    if (startTimeOptions.length === 0) return
+    const startValid = startTimeOptions.includes(form.start_time)
+    const endValid = endTimeOptions.includes(form.end_time)
+    if (!startValid || !endValid) {
+      setForm(p => ({
+        ...p,
+        start_time: startValid ? p.start_time : startTimeOptions[0],
+        end_time: endValid ? p.end_time : (startValid ? calculateEndTime(p.start_time, 60) : calculateEndTime(startTimeOptions[0], 60)),
+      }))
+    }
+  }, [startTimeOptions, endTimeOptions])
 
   const filteredMenus = menuCategory
     ? menus.filter(m => (m.category || '').trim() === menuCategory)
@@ -218,7 +308,7 @@ export default function ReservationFormModal({
       setError('仮登録の場合は電話番号も入力してください')
       return
     }
-    const durationMinutes = Math.max(1, parseTimeToMinutes(form.end_time) - parseTimeToMinutes(form.start_time))
+    const durationMinutes = Math.max(1, timeToMinutes(form.end_time) - timeToMinutes(form.start_time))
     setSaving(true)
     try {
       let customerId: string | undefined = form.customer_id || undefined
@@ -285,8 +375,21 @@ export default function ReservationFormModal({
           {/* 1. 日付 */}
           <div>
             <label className="text-xs text-[#4A5568] mb-1 block">予約日</label>
-            <input type="date" value={form.reservation_date} onChange={e => setForm(p => ({ ...p, reservation_date: e.target.value }))}
-              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]" />
+            <input
+              type="date"
+              value={form.reservation_date}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={e => {
+                const value = e.target.value
+                if (holidays.includes(value)) {
+                  setToast('この日は定休日です')
+                  setTimeout(() => setToast(null), 3000)
+                  return
+                }
+                setForm(p => ({ ...p, reservation_date: value }))
+              }}
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+            />
           </div>
 
           {/* 2. 開始時間 */}
@@ -294,7 +397,7 @@ export default function ReservationFormModal({
             <label className="text-xs text-[#4A5568] mb-1 block">開始時間</label>
             <select value={form.start_time} onChange={e => setForm(p => ({ ...p, start_time: e.target.value }))}
               className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
-              {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+              {startTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
 
@@ -303,7 +406,7 @@ export default function ReservationFormModal({
             <label className="text-xs text-[#4A5568] mb-1 block">終了時間</label>
             <select value={form.end_time} onChange={e => setForm(p => ({ ...p, end_time: e.target.value }))}
               className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
-              {TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+              {endTimeOptions.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
 
@@ -444,7 +547,25 @@ export default function ReservationFormModal({
                   <button
                     key={s.name}
                     type="button"
-                    onClick={() => setForm(p => ({ ...p, staff_name: p.staff_name === s.name ? '' : s.name }))}
+                    onClick={() => {
+                      const staffName = form.staff_name === s.name ? '' : s.name
+                      setForm(p => {
+                        const next = { ...p, staff_name: staffName }
+                        if (!staffName || !form.reservation_date) return next
+                        const staffShift = shifts.find(sh =>
+                          sh.date === form.reservation_date && getStaffNameFromShift(sh) === staffName
+                        )
+                        if (staffShift) {
+                          const currentStart = timeToMinutes(p.start_time)
+                          const shiftStart = timeToMinutes(staffShift.start_time)
+                          const shiftEnd = timeToMinutes(staffShift.end_time)
+                          if (currentStart < shiftStart || currentStart >= shiftEnd) {
+                            next.start_time = staffShift.start_time
+                          }
+                        }
+                        return next
+                      })
+                    }}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       form.staff_name === s.name
                         ? 'text-white ring-2 ring-[#0891B2]'
@@ -467,7 +588,9 @@ export default function ReservationFormModal({
               <label className="text-xs text-[#4A5568] mb-1 block">ベッド</label>
               <select value={form.bed_id} onChange={e => setForm(p => ({ ...p, bed_id: e.target.value }))}
                 className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
-                {beds.map(b => <option key={b} value={b}>ベッド {b}</option>)}
+                {beds.map(bed => (
+                  <option key={bed} value={bed}>{bed}</option>
+                ))}
               </select>
             </div>
           )}
@@ -480,6 +603,11 @@ export default function ReservationFormModal({
               placeholder="アレルギーや注意事項など" />
           </div>
         </div>
+        {toast && (
+          <div className="px-5 py-2 bg-amber-500/10 border-t border-amber-500/20 text-amber-700 text-sm">
+            {toast}
+          </div>
+        )}
         <div className="flex gap-3 p-5 border-t border-[#BAE6FD] shrink-0">
           <button onClick={onClose} className="flex-1 bg-white border border-[#BAE6FD] text-[#4A5568] rounded-xl py-2.5 text-sm hover:text-[#1A202C] transition-colors">
             キャンセル

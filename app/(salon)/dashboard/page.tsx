@@ -19,7 +19,6 @@ import ReservationActionCard from '@/components/ReservationActionCard'
 import { RescheduleModal, EditReservationModal } from '@/components/ReservationModals'
 import ReservationFormModal from '@/components/ReservationFormModal'
 import { useReservations } from '@/hooks/useReservations'
-import { useTodayShifts } from '@/lib/staff-shifts'
 import { fetchTasks, addTask, toggleTask, deleteTask, type ManualTask } from '@/lib/dashboard-tasks'
 import { getSalonSettings } from '@/lib/salon-settings'
 import { getAchievementRate, getAchievementColor, getAchievementBgColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
@@ -67,6 +66,10 @@ function getDurationSlots(start: string, end: string): number {
   const s = timeToMinutes(start)
   const e = timeToMinutes(end)
   return Math.max(1, Math.floor((e - s) / 15))
+}
+
+function toDateStr(d: Date): string {
+  return d.toISOString().split('T')[0]
 }
 
 function TimelineSchedule({
@@ -202,8 +205,26 @@ function TimelineSchedule({
 type KpiItem = { label: string; value: string; sub: string; rate: number; diff: number; diffUp: boolean }
 
 export default function DashboardPage() {
-  const todayShifts = useTodayShifts()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toDateStr(new Date())
+  const [todayStaff, setTodayStaff] = useState<{ id: string; name: string; color: string; start_time: string; end_time: string }[]>([])
+
+  useEffect(() => {
+    fetch(`/api/shifts?date=${today}`)
+      .then(r => r.json())
+      .then(j => {
+        const todayShifts = j.shifts || []
+        setTodayStaff(todayShifts.map((s: { staff?: { id: string; name: string; color: string } | { id: string; name: string; color: string }[]; start_time: string; end_time: string }) => {
+          const staff = Array.isArray(s.staff) ? s.staff[0] : s.staff
+          return {
+            id: staff?.id ?? '',
+            name: staff?.name ?? '',
+            color: staff?.color ?? '#C4728A',
+            start_time: s.start_time?.slice(0, 5) ?? '09:00',
+            end_time: s.end_time?.slice(0, 5) ?? '18:00',
+          }
+        }))
+      })
+  }, [today])
   const {
     reservations: todayReservations,
     loading: reservationsLoading,
@@ -340,14 +361,14 @@ export default function DashboardPage() {
   const dailyTarget = getDailyTarget(getSalonSettings().targets.sales, workingDays)
   const dailyRate = getAchievementRate(todaySales, dailyTarget)
 
-  const staffShifts = todayShifts.map(s => ({
-    name: s.staffName,
-    initial: s.staffName[0],
-    color: s.staffColor,
-    start: s.start,
-    end: s.end,
-    bookings: s.bookings ?? 0,
-    free: s.freeSlots ?? '-',
+  const staffShifts = todayStaff.map(s => ({
+    name: s.name,
+    initial: s.name[0] || '',
+    color: s.color,
+    start: s.start_time,
+    end: s.end_time,
+    bookings: 0,
+    free: '-',
   }))
 
   // 顧客管理に存在する予約のみ（customer_id あり）、開始時刻でソート
@@ -834,7 +855,7 @@ export default function DashboardPage() {
         <ReservationFormModal
           defaultDate={selectedSlot.date}
           defaultStartTime={selectedSlot.start}
-          staffList={todayShifts.map(s => ({ name: s.staffName, color: s.staffColor }))}
+          staffList={todayStaff.map(s => ({ name: s.name, color: s.color }))}
           defaultEndTime={(() => {
             const [h = 10, m = 0] = selectedSlot.start.slice(0, 5).split(':').map(Number)
             const total = h * 60 + m + 60
