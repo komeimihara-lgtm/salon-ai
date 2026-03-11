@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { Plus, Trash2, Save, Pencil, X, Loader2 } from 'lucide-react'
 import { getSalonSettings, setSalonSettings, type SalonSettings } from '@/lib/salon-settings'
 
+type BedsState = string[]
+
 // 営業開始: 6:00〜13:00（30分刻み）
 const OPEN_TIME_OPTIONS = Array.from({ length: 15 }, (_, i) => {
   const h = 6 + Math.floor(i / 2)
@@ -29,6 +31,7 @@ export default function SettingsPage() {
     targets: { sales: 600000, visits: 60, avgPrice: 10000, productSales: 50000, newCustomers: 10, newReservations: 15 },
     externalUrls: { hotpepper: '', salonHp: '' },
   })
+  const [beds, setBeds] = useState<BedsState>([])
   const [newBed, setNewBed] = useState('')
   const [newStaffName, setNewStaffName] = useState('')
   const [newStaffColor, setNewStaffColor] = useState('#C4728A')
@@ -43,6 +46,11 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setSettings(getSalonSettings())
+    // ベッドをSupabaseから取得
+    fetch('/api/settings/salon')
+      .then(r => r.json())
+      .then(j => setBeds(j.beds || ['A', 'B']))
+      .catch(() => setBeds(['A', 'B']))
   }, [])
 
   useEffect(() => {
@@ -65,35 +73,39 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const saveBeds = (newBeds: string[]) => {
-    const next = { ...settings, beds: newBeds }
-    setSettings(next)
-    setSalonSettings(next)
+  const saveBeds = async (newBeds: string[]) => {
+    setBeds(newBeds)
+    try {
+      await fetch('/api/settings/salon', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ beds: newBeds }),
+      })
+    } catch {}
   }
 
   const addBed = () => {
     if (newBed.trim()) {
-      const newBeds = [...settings.beds, newBed.trim()]
-      saveBeds(newBeds)
+      saveBeds([...beds, newBed.trim()])
       setNewBed('')
     }
   }
 
   const removeBed = (idx: number) => {
-    const newBeds = settings.beds.filter((_, i) => i !== idx)
+    const newBeds = beds.filter((_, i) => i !== idx)
     saveBeds(newBeds)
     setEditingBedNames(newBeds.reduce<Record<number, string>>((acc, b, i) => ({ ...acc, [i]: b }), {}))
   }
 
   const updateBed = (idx: number, name: string) => {
-    const next = [...settings.beds]
+    const next = [...beds]
     next[idx] = name.trim() || next[idx]
     saveBeds(next)
   }
 
   const startBedsEdit = () => {
     setBedsEditing(true)
-    setEditingBedNames(settings.beds.reduce<Record<number, string>>((acc, b, i) => ({ ...acc, [i]: b }), {}))
+    setEditingBedNames(beds.reduce<Record<number, string>>((acc, b, i) => ({ ...acc, [i]: b }), {}))
   }
 
   const cancelBedsEdit = () => {
@@ -289,7 +301,7 @@ export default function SettingsPage() {
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
           <div className="space-y-3">
-            {settings.beds.map((bed, i) => (
+            {beds.map((bed, i) => (
               <div key={`${bed}-${i}`} className="flex items-center justify-between gap-2 py-2 px-4 bg-light-lav/50 rounded-xl">
                 {bedsEditing ? (
                   <>
