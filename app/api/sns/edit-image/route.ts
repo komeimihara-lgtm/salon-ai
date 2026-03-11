@@ -9,7 +9,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Google APIキーが設定されていません' }, { status: 400 })
     }
 
-    // base64からデータ部分を抽出
     const base64Data = image.replace(/^data:image\/\w+;base64,/, '')
     const mimeType = image.match(/^data:(image\/\w+);base64,/)?.[1] || 'image/jpeg'
 
@@ -21,15 +20,8 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           contents: [{
             parts: [
-              {
-                inlineData: {
-                  mimeType,
-                  data: base64Data
-                }
-              },
-              {
-                text: `この画像を以下の指示通りに編集してください：${instruction}\n\n編集した画像のみを返してください。`
-              }
+              { inlineData: { mimeType, data: base64Data } },
+              { text: `この画像を以下の指示通りに編集してください：${instruction}\n\n編集した画像のみを返してください。` }
             ]
           }],
           generationConfig: { responseModalities: ['image'] }

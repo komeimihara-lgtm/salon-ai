@@ -92,8 +92,8 @@ export default function SnsComposePage() {
     const v = variations[activeTab]
     if (!v) return
     setImageLoading(true)
+    setCurrentImage(null)
     try {
-      // 投稿内容から画像プロンプトを自動生成
       const prompt = `エステサロンのSNS投稿用画像。${v.image_suggestion}。プロフェッショナルで清潔感があり、明るく温かみのある雰囲気。高品質な写真風。`
       const res = await fetch('/api/sns/generate-image', {
         method: 'POST',
@@ -184,88 +184,80 @@ export default function SnsComposePage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      {/* ヘッダー */}
       <div className="flex items-center gap-3">
         <div className="gradient-line rounded-full" />
         <span className="section-label font-dm-sans text-base font-bold text-text-main">AI-SNS生成</span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 左パネル：入力 */}
-        <div className="space-y-5">
-          <div className="bg-white rounded-2xl p-5 card-shadow space-y-4">
-            {/* プラットフォーム */}
-            <div>
-              <p className="text-xs font-bold text-text-sub mb-2">プラットフォーム</p>
-              <div className="grid grid-cols-2 gap-2">
-                {PLATFORMS.map(p => (
-                  <button key={p.key} onClick={() => setPlatform(p.key)}
-                    className={`py-2 px-3 rounded-xl border-2 text-sm font-bold transition-all ${platform === p.key ? p.color : 'bg-gray-50 text-text-sub border-gray-100'}`}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
+        {/* 左パネル */}
+        <div className="bg-white rounded-2xl p-5 card-shadow space-y-4">
+          <div>
+            <p className="text-xs font-bold text-text-sub mb-2">プラットフォーム</p>
+            <div className="grid grid-cols-2 gap-2">
+              {PLATFORMS.map(p => (
+                <button key={p.key} onClick={() => setPlatform(p.key)}
+                  className={`py-2 px-3 rounded-xl border-2 text-sm font-bold transition-all ${platform === p.key ? p.color : 'bg-gray-50 text-text-sub border-gray-100'}`}>
+                  {p.label}
+                </button>
+              ))}
             </div>
-
-            {/* 投稿タイプ */}
-            <div>
-              <p className="text-xs font-bold text-text-sub mb-2">投稿タイプ</p>
-              <div className="grid grid-cols-2 gap-2">
-                {PURPOSES.map(p => (
-                  <button key={p.key} onClick={() => setPurpose(p.key)}
-                    className={`py-2 px-3 rounded-xl border-2 text-sm transition-all text-left ${purpose === p.key ? 'border-rose bg-rose/5 text-rose font-bold' : 'border-gray-100 text-text-sub hover:border-rose/30'}`}>
-                    {p.emoji} {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* トーン */}
-            <div>
-              <p className="text-xs font-bold text-text-sub mb-2">トーン</p>
-              <div className="grid grid-cols-2 gap-2">
-                {TONES.map(t => (
-                  <button key={t.key} onClick={() => setTone(t.key)}
-                    className={`py-2 px-3 rounded-xl border-2 text-sm transition-all ${tone === t.key ? 'border-lavender bg-lavender/10 text-lavender font-bold' : 'border-gray-100 text-text-sub hover:border-lavender/30'}`}>
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold text-text-sub mb-2">メニュー名（任意）</p>
-              <input value={menuName} onChange={e => setMenuName(e.target.value)}
-                placeholder="例：フェイシャルケア、脱毛など"
-                className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm" />
-            </div>
-
-            <div>
-              <p className="text-xs font-bold text-text-sub mb-2">追加情報（任意）</p>
-              <textarea value={details} onChange={e => setDetails(e.target.value)}
-                placeholder="キャンペーン内容、特別オファーなど"
-                rows={3}
-                className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm resize-none" />
-            </div>
-
-            <button onClick={handleGenerate} disabled={loading}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-              {loading ? <><Loader2 className="w-5 h-5 animate-spin" />生成中...</> : <><Sparkles className="w-5 h-5" />AIで投稿を生成</>}
-            </button>
           </div>
+
+          <div>
+            <p className="text-xs font-bold text-text-sub mb-2">投稿タイプ</p>
+            <div className="grid grid-cols-2 gap-2">
+              {PURPOSES.map(p => (
+                <button key={p.key} onClick={() => setPurpose(p.key)}
+                  className={`py-2 px-3 rounded-xl border-2 text-sm transition-all text-left ${purpose === p.key ? 'border-rose bg-rose/5 text-rose font-bold' : 'border-gray-100 text-text-sub hover:border-rose/30'}`}>
+                  {p.emoji} {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-text-sub mb-2">トーン</p>
+            <div className="grid grid-cols-2 gap-2">
+              {TONES.map(t => (
+                <button key={t.key} onClick={() => setTone(t.key)}
+                  className={`py-2 px-3 rounded-xl border-2 text-sm transition-all ${tone === t.key ? 'border-lavender bg-lavender/10 text-lavender font-bold' : 'border-gray-100 text-text-sub hover:border-lavender/30'}`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-text-sub mb-2">メニュー名（任意）</p>
+            <input value={menuName} onChange={e => setMenuName(e.target.value)}
+              placeholder="例：フェイシャルケア、脱毛など"
+              className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm" />
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-text-sub mb-2">追加情報（任意）</p>
+            <textarea value={details} onChange={e => setDetails(e.target.value)}
+              placeholder="キャンペーン内容、特別オファーなど"
+              rows={3}
+              className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm resize-none" />
+          </div>
+
+          <button onClick={handleGenerate} disabled={loading}
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+            {loading ? <><Loader2 className="w-5 h-5 animate-spin" />生成中...</> : <><Sparkles className="w-5 h-5" />AIで投稿を生成</>}
+          </button>
         </div>
 
-        {/* 右パネル：結果 */}
+        {/* 右パネル */}
         <div className="space-y-4">
           {error && <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-red-600 text-sm">{error}</div>}
 
           {!loading && variations.length === 0 && !error && (
             <div className="bg-white rounded-2xl p-8 card-shadow flex flex-col items-center justify-center text-center gap-4 min-h-64">
               <Sparkles className="w-12 h-12 text-rose/30" />
-              <div>
-                <p className="font-bold text-text-main">投稿を生成しましょう</p>
-                <p className="text-xs text-text-sub mt-1">左のフォームを入力して「AIで投稿を生成」をクリック</p>
-              </div>
+              <p className="font-bold text-text-main">投稿を生成しましょう</p>
+              <p className="text-xs text-text-sub">左のフォームを入力して「AIで投稿を生成」をクリック</p>
             </div>
           )}
 
@@ -278,7 +270,6 @@ export default function SnsComposePage() {
 
           {!loading && variations.length > 0 && (
             <div className="bg-white rounded-2xl p-5 card-shadow space-y-4">
-              {/* タブ */}
               <div className="flex gap-2">
                 {variations.map((_, i) => (
                   <button key={i} onClick={() => setActiveTab(i)}
@@ -311,7 +302,6 @@ export default function SnsComposePage() {
                     </div>
                   </div>
 
-                  {/* ボタン */}
                   <div className="flex gap-2">
                     <button onClick={handleCopy}
                       className={`flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${copied ? 'bg-emerald-100 text-emerald-700' : 'bg-light-lav text-text-sub hover:text-rose'}`}>
@@ -323,10 +313,12 @@ export default function SnsComposePage() {
                     </button>
                   </div>
 
-                  {/* 画像生成ボタン */}
+                  {/* 投稿用画像生成ボタン */}
                   <button onClick={handleGenerateImage} disabled={imageLoading}
                     className="w-full py-3 rounded-xl border-2 border-dashed border-rose/30 text-rose text-sm font-bold flex items-center justify-center gap-2 hover:bg-rose/5 transition-all disabled:opacity-50">
-                    {imageLoading ? <><Loader2 className="w-4 h-4 animate-spin" />画像生成中（10〜20秒）...</> : <><ImagePlus className="w-4 h-4" />この投稿用の画像を生成</>}
+                    {imageLoading
+                      ? <><Loader2 className="w-4 h-4 animate-spin" />画像生成中（10〜20秒）...</>
+                      : <><ImagePlus className="w-4 h-4" />この投稿用の画像を生成</>}
                   </button>
                 </div>
               )}
@@ -349,7 +341,6 @@ export default function SnsComposePage() {
               </div>
             </div>
 
-            {/* アップロード */}
             {imageMode === 'upload' && !currentImage && (
               <>
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
@@ -361,14 +352,10 @@ export default function SnsComposePage() {
               </>
             )}
 
-            {/* 画像プレビュー */}
             {currentImage && (
               <div className="space-y-3">
-                <div className="relative rounded-xl overflow-hidden">
-                  <img src={currentImage} alt="投稿画像" className="w-full object-cover rounded-xl" />
-                </div>
+                <img src={currentImage} alt="投稿画像" className="w-full object-cover rounded-xl" />
 
-                {/* プロンプト編集 */}
                 <div className="space-y-2">
                   <p className="text-xs font-bold text-text-sub">✏️ AIに編集を指示</p>
                   <textarea value={editInstruction} onChange={e => setEditInstruction(e.target.value)}
@@ -381,11 +368,10 @@ export default function SnsComposePage() {
                   </button>
                 </div>
 
-                {/* 履歴 */}
                 {imageHistory.length > 1 && (
                   <div>
                     <p className="text-xs text-text-sub mb-2">履歴</p>
-                    <div className="flex gap-2 overflow-x-auto">
+                    <div className="flex gap-2 overflow-x-auto pb-1">
                       {imageHistory.map((img, i) => (
                         <button key={i} onClick={() => setCurrentImage(img)}
                           className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-all ${currentImage === img ? 'border-rose' : 'border-gray-200'}`}>
@@ -403,7 +389,6 @@ export default function SnsComposePage() {
               </div>
             )}
 
-            {/* 空状態（AI生成モードで画像なし） */}
             {imageMode === 'generate' && !currentImage && !imageLoading && (
               <div className="py-8 text-center text-text-sub text-sm">
                 <ImagePlus className="w-10 h-10 mx-auto mb-2 opacity-30" />
