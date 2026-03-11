@@ -1,0 +1,28 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+
+const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const supabase = getSupabaseAdmin()
+
+    const { error } = await supabase
+      .from('announcement_reads')
+      .upsert({
+        announcement_id: id,
+        salon_id: salonId,
+        read_at: new Date().toISOString(),
+      }, { onConflict: 'announcement_id,salon_id' })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    console.error(e)
+    return NextResponse.json({ error: '既読登録失敗' }, { status: 500 })
+  }
+}

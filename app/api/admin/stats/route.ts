@@ -70,7 +70,14 @@ export async function GET(req: NextRequest) {
         .gte('created_at', m.start)
         .lt('created_at', m.end)
 
-      monthlyReservations.push({ month: m.month, count: count || 0 })
+      const { data: revData } = await supabase
+        .from('reservations')
+        .select('price')
+        .gte('reservation_date', m.start.slice(0, 10))
+        .lt('reservation_date', m.end.slice(0, 10))
+
+      const revenue = (revData || []).reduce((sum, r) => sum + (r.price || 0), 0)
+      monthlyReservations.push({ month: m.month, count: count || 0, revenue })
     }
 
     // サロン別の予約数・アクティブ状態・機能エンゲージメント
@@ -113,13 +120,13 @@ export async function GET(req: NextRequest) {
       const isActive = (recentReservations || 0) > 0
       const engagementScore = (counselingCount || 0) + (lineMessageCount || 0) + (snsPostCount || 0) + (recentReservations || 0)
 
-      // 解約リスク判定
+      // 解約リスク判定（理由付き）
       const daysSinceCreation = Math.floor((now.getTime() - new Date(salon.created_at).getTime()) / (1000 * 60 * 60 * 24))
-      const isChurnRisk = !isActive && (
-        (recentReservations || 0) === 0 &&
-        engagementScore <= 1 &&
-        daysSinceCreation >= 90
-      )
+      const riskReasons: string[] = []
+      if ((recentReservations || 0) === 0) riskReasons.push('30日間予約なし')
+      if (engagementScore <= 1) riskReasons.push('機能をほぼ未使用')
+      if (daysSinceCreation >= 90 && !isActive) riskReasons.push('契約90日超で非アクティブ')
+      const isChurnRisk = riskReasons.length >= 2
 
       // 月別売上（導入後6ヶ月分）
       const salonMonthlyRevenue = []
@@ -159,7 +166,9 @@ export async function GET(req: NextRequest) {
         },
         // 解約リスク
         is_churn_risk: isChurnRisk,
+        risk_reasons: riskReasons,
         days_since_creation: daysSinceCreation,
+        mrr_contribution: PLAN_PRICES[salon.plan || 'LITE'] || 0,
         // 月別売上
         monthly_revenue: salonMonthlyRevenue,
       })

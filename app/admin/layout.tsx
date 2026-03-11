@@ -2,11 +2,12 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Menu, X, Bell } from 'lucide-react'
 import { useState } from 'react'
 
 const NAV_ITEMS = [
   { href: '/admin/dashboard', icon: LayoutDashboard, label: 'ダッシュボード' },
+  { href: '/admin/announcements', icon: Bell, label: 'お知らせ管理' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
