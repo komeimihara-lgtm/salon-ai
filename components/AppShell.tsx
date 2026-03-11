@@ -49,6 +49,7 @@ const NAV_ITEMS: NavItem[] = [
   { type: 'link', href: '/customer-delight', icon: Heart, label: '感動体験' },
   { type: 'link', href: '/counseling', icon: MessageSquare, label: 'SOLAカウンセリング' },
   { type: 'link', href: '/leo', icon: MessageCircle, label: '経営会議' },
+  { type: 'link', href: '/messages', icon: MessageSquare, label: 'メッセージ' },
   { type: 'link', href: '/reservations', icon: Calendar, label: '予約管理' },
   { type: 'link', href: '/follow', icon: Send, label: '自動フォロー' },
   { type: 'link', href: '/sales', icon: ShoppingCart, label: '売上・レジ' },

@@ -199,6 +199,17 @@ export async function POST(req: NextRequest) {
             .eq('salon_id', salonId)
             .single()
 
+          // inboundメッセージをline_messagesテーブルに保存
+          await supabase.from('line_messages').insert({
+            salon_id: salonId,
+            customer_id: customer?.id || null,
+            line_user_id: lineUserId,
+            direction: 'inbound',
+            message: text,
+            is_read: false,
+            sent_at: new Date().toISOString(),
+          })
+
           // 「キャンセル」コマンド
           if (text === 'キャンセル') {
             const tomorrow = new Date()
@@ -357,6 +368,18 @@ COUNSELING_COMPLETE:{"collected_data": {...}}`,
           }
 
           await replyMessage(replyToken, replyText, accessToken)
+
+          // outboundメッセージをline_messagesに保存（カウンセリング応答）
+          await supabase.from('line_messages').insert({
+            salon_id: salonId,
+            customer_id: customer?.id || null,
+            line_user_id: lineUserId,
+            direction: 'outbound',
+            message: replyText,
+            auto_type: 'precounseling',
+            is_read: true,
+            sent_at: new Date().toISOString(),
+          })
           break
         }
 
