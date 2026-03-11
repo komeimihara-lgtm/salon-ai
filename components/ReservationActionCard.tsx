@@ -64,7 +64,7 @@ export default function ReservationActionCard({
             )}
           </div>
           {reservation.customer_phone && (
-            <div className="flex items-center gap-1 mt-0.5">
+            <div className={`flex items-center gap-1 mt-0.5 ${isCancelled ? 'line-through' : ''}`}>
               <Phone className="w-3 h-3 text-text-sub" />
               <span className="text-xs text-text-sub">{reservation.customer_phone}</span>
             </div>
@@ -75,7 +75,7 @@ export default function ReservationActionCard({
         }`}>{label}</span>
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-text-sub">
+      <div className={`flex items-center gap-3 text-xs text-text-sub ${isCancelled ? 'line-through' : ''}`}>
         <div className="flex items-center gap-1">
           <Clock className="w-3 h-3" />
           <span>{reservation.start_time?.slice(0, 5)}{reservation.end_time ? `〜${reservation.end_time.slice(0, 5)}` : ''}</span>
@@ -85,7 +85,7 @@ export default function ReservationActionCard({
       </div>
 
       {reservation.price > 0 && (
-        <p className="text-xs text-amber-600 font-semibold">¥{reservation.price.toLocaleString()}</p>
+        <p className={`text-xs text-amber-600 font-semibold ${isCancelled ? 'line-through' : ''}`}>¥{reservation.price.toLocaleString()}</p>
       )}
 
       {canAct && (

@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
             const menu = nextRes.menu || 'メニュー未定'
             const staff = nextRes.staff_name || '未定'
 
-            const msg = `📅 次のご予約\n\n日付：${date}\n時間：${start}〜${end}\nメニュー：${menu}\n担当：${staff}\n\n変更・キャンセルは「キャンセル」と送信してください`
+            const msg = `📅 次のご予約\n日付：${date} 時間：${start}〜${end}\nメニュー：${menu} 担当：${staff}\n変更・キャンセルは「キャンセル」と送信してください`
             await replyMessage(replyToken, msg, accessToken)
             break
           }
