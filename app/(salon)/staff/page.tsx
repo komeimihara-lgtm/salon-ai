@@ -1,590 +1,476 @@
 'use client'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Loader2, Copy, Users, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
 
-import { useState, useEffect, useCallback } from 'react'
-import {
-  Users,
-  Plus,
-  Trash2,
-  Calendar,
-  Target,
-  TrendingUp,
-  CheckSquare,
-  Sparkles,
-  Zap,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-} from 'lucide-react'
-import {
-  fetchStaffList,
-  addStaff,
-  removeStaff,
-  fetchStaffShifts,
-  saveStaffShifts,
-  fetchStaffMonthlyForStaff,
-  saveStaffMonthly,
-  type Staff,
-  type StaffShift,
-  type StaffMonthlyData,
-} from '@/lib/staff-management'
+const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
+const WEEKDAY_COLORS = ['text-text-main', 'text-text-main', 'text-text-main', 'text-text-main', 'text-text-main', 'text-blue-500', 'text-red-500']
 
-const EMPTY_MONTHLY: Omit<StaffMonthlyData, 'staffId' | 'month'> = {
-  personalGoal: '',
-  monthlyKpi: { sales: 0, visits: 0, avgPrice: 0 },
-  importantTasks: ['', '', ''],
-  growthGoals: ['', '', ''],
-  mustDo: '',
+interface Staff { id: string; name: string; color: string }
+interface Shift { id?: string; staff_id: string; date: string; start_time: string; end_time: string; staff?: Staff }
+
+function getWeekDates(baseDate: Date): Date[] {
+  const day = baseDate.getDay()
+  const monday = new Date(baseDate)
+  monday.setDate(baseDate.getDate() - (day === 0 ? 6 : day - 1))
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    return d
+  })
 }
 
-export default function StaffManagementPage() {
-  const [staffList, setStaffListState] = useState<Staff[]>([])
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  })
-  const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
-  const [shifts, setShiftsState] = useState<StaffShift[]>([])
+function toDateStr(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function timeToSlot(time: string) {
+  const [h, m] = (time || '00:00').slice(0, 5).split(':').map(Number)
+  return (h || 0) * 2 + ((m || 0) >= 30 ? 1 : 0)
+}
+
+function slotToTime(slot: number) {
+  const h = Math.floor(slot / 2)
+  const m = slot % 2 === 1 ? '30' : '00'
+  return `${String(h).padStart(2, '0')}:${m}`
+}
+
+export default function StaffPage() {
+  const [staffList, setStaffList] = useState<Staff[]>([])
+  const [shifts, setShifts] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [addStaffOpen, setAddStaffOpen] = useState(false)
-  const [newName, setNewName] = useState('')
-  const [newColor, setNewColor] = useState('#C4728A')
+  const [baseDate, setBaseDate] = useState(new Date())
+  const weekDates = getWeekDates(baseDate)
+  const [toast, setToast] = useState('')
 
-  const refresh = useCallback(async () => {
+  // ドラッグ状態
+  const dragRef = useRef<{ staffId: string; dateStr: string; startSlot: number; currentSlot: number } | null>(null)
+  const [dragState, setDragState] = useState<{ staffId: string; dateStr: string; startSlot: number; currentSlot: number } | null>(null)
+
+  // 定休日設定
+  const [closedDays, setClosedDays] = useState<number[]>([])
+  const [showClosedDayModal, setShowClosedDayModal] = useState(false)
+
+  // スタッフ追加
+  const [showAddStaff, setShowAddStaff] = useState(false)
+  const [newStaffName, setNewStaffName] = useState('')
+  const [newStaffColor, setNewStaffColor] = useState('#C4728A')
+
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(''), 2500)
+  }
+
+  const fetchStaff = useCallback(async () => {
+    const res = await fetch('/api/staff')
+    const json = await res.json()
+    setStaffList(json.staff || [])
+  }, [])
+
+  const fetchShifts = useCallback(async () => {
     setLoading(true)
     try {
-      const [staff, shiftData] = await Promise.all([
-        fetchStaffList(),
-        fetchStaffShifts(selectedMonth),
-      ])
-      setStaffListState(staff)
-      setShiftsState(shiftData)
-      // localStorageからSupabaseへ初回移行
-      if (staff.length === 0 && typeof window !== 'undefined') {
-        const raw = localStorage.getItem('sola_staff_list')
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw)
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              for (const s of parsed) {
-                await addStaff(s.name, s.color || '#C4728A')
-              }
-              const migrated = await fetchStaffList()
-              setStaffListState(migrated)
-              const shiftRaw = localStorage.getItem('sola_staff_shifts')
-              if (shiftRaw) {
-                const shiftParsed = JSON.parse(shiftRaw)
-                if (Array.isArray(shiftParsed) && shiftParsed.length > 0) {
-                  const mapped = shiftParsed
-                    .filter((x: { staffName?: string; date?: string; start?: string; end?: string }) => x.staffName && x.date && (x.start ?? x.end))
-                    .map((x: { staffName: string; staffColor: string; date: string; start?: string; end?: string }) => {
-                      const staffMatch = migrated.find((m: Staff) => m.name === x.staffName)
-                      return staffMatch ? { staffId: staffMatch.id, staffName: staffMatch.name, staffColor: staffMatch.color, date: x.date, start: x.start ?? '09:00', end: x.end ?? '18:00' } : null
-                    })
-                    .filter(Boolean) as StaffShift[]
-                  if (mapped.length > 0) {
-                    await saveStaffShifts(mapped)
-                    const refreshed = await fetchStaffShifts(selectedMonth)
-                    setShiftsState(refreshed)
-                  }
-                }
-              }
-              localStorage.removeItem('sola_staff_list')
-              localStorage.removeItem('sola_staff_shifts')
-              localStorage.removeItem('sola_staff_monthly')
-            }
-          } catch (_) {}
-        }
-      }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoading(false)
-    }
-  }, [selectedMonth])
+      const month = `${weekDates[0].getFullYear()}-${String(weekDates[0].getMonth() + 1).padStart(2, '0')}`
+      const res = await fetch(`/api/shifts?month=${month}`)
+      const json = await res.json()
+      setShifts(json.shifts || [])
+    } catch { }
+    finally { setLoading(false) }
+  }, [weekDates[0].toISOString().slice(0, 7)])
 
   useEffect(() => {
-    refresh()
-  }, [refresh])
+    fetchStaff()
+  }, [fetchStaff])
 
-  const monthShifts = shifts.filter(s => s.date.startsWith(selectedMonth))
-  const [year, month] = selectedMonth.split('-').map(Number)
-  const prevMonth = () => {
-    const d = new Date(year, month - 2)
-    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  useEffect(() => {
+    fetchShifts()
+  }, [fetchShifts])
+
+  const getShift = (staffId: string, dateStr: string) =>
+    shifts.find(s => s.staff_id === staffId && s.date === dateStr)
+
+  const getDragShift = (staffId: string, dateStr: string) => {
+    if (!dragState || dragState.staffId !== staffId || dragState.dateStr !== dateStr) return null
+    const start = Math.min(dragState.startSlot, dragState.currentSlot)
+    const end = Math.max(dragState.startSlot, dragState.currentSlot) + 1
+    return { start: slotToTime(start), end: slotToTime(end) }
   }
-  const nextMonth = () => {
-    const d = new Date(year, month)
-    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+
+  const isClosedDay = (date: Date) => {
+    const dayIndex = date.getDay() === 0 ? 6 : date.getDay() - 1
+    return closedDays.includes(dayIndex)
+  }
+
+  const handleMouseDown = (staffId: string, dateStr: string, slot: number, e: React.MouseEvent) => {
+    e.preventDefault()
+    if (isClosedDay(new Date(dateStr + 'T00:00:00'))) return
+    dragRef.current = { staffId, dateStr, startSlot: slot, currentSlot: slot }
+    setDragState({ staffId, dateStr, startSlot: slot, currentSlot: slot })
+  }
+
+  const handleMouseEnter = (staffId: string, dateStr: string, slot: number) => {
+    if (!dragRef.current || dragRef.current.staffId !== staffId || dragRef.current.dateStr !== dateStr) return
+    dragRef.current.currentSlot = slot
+    setDragState({ ...dragRef.current, currentSlot: slot })
+  }
+
+  const handleMouseUp = async () => {
+    if (!dragRef.current) return
+    const { staffId, dateStr, startSlot, currentSlot } = dragRef.current
+    const start = Math.min(startSlot, currentSlot)
+    const end = Math.max(startSlot, currentSlot) + 1
+    dragRef.current = null
+    setDragState(null)
+
+    setSaving(true)
+    try {
+      await fetch('/api/shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staff_id: staffId,
+          date: dateStr,
+          start_time: slotToTime(start),
+          end_time: slotToTime(end),
+        })
+      })
+      await fetchShifts()
+      showToast('シフトを保存しました')
+    } catch {
+      showToast('保存に失敗しました')
+    } finally { setSaving(false) }
+  }
+
+  const handleDeleteShift = async (staffId: string, dateStr: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSaving(true)
+    try {
+      await fetch('/api/shifts', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staff_id: staffId, date: dateStr })
+      })
+      await fetchShifts()
+      showToast('シフトを削除しました')
+    } catch { }
+    finally { setSaving(false) }
+  }
+
+  const handleCopyPrevWeek = async () => {
+    setSaving(true)
+    try {
+      const prevWeekDates = getWeekDates(new Date(baseDate.getTime() - 7 * 24 * 60 * 60 * 1000))
+      const prevShifts = shifts.filter(s => prevWeekDates.some(d => toDateStr(d) === s.date))
+
+      for (const shift of prevShifts) {
+        const prevDate = new Date(shift.date + 'T00:00:00')
+        const newDate = new Date(prevDate.getTime() + 7 * 24 * 60 * 60 * 1000)
+        const newDateStr = toDateStr(newDate)
+        if (isClosedDay(newDate)) continue
+        await fetch('/api/shifts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            staff_id: shift.staff_id,
+            date: newDateStr,
+            start_time: shift.start_time,
+            end_time: shift.end_time,
+          })
+        })
+      }
+      await fetchShifts()
+      showToast('前週のシフトをコピーしました✨')
+    } catch {
+      showToast('コピーに失敗しました')
+    } finally { setSaving(false) }
+  }
+
+  const handleBulkRegister = async (startTime: string, endTime: string) => {
+    setSaving(true)
+    try {
+      for (const staff of staffList) {
+        for (const date of weekDates) {
+          if (isClosedDay(date)) continue
+          await fetch('/api/shifts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              staff_id: staff.id,
+              date: toDateStr(date),
+              start_time: startTime,
+              end_time: endTime,
+            })
+          })
+        }
+      }
+      await fetchShifts()
+      showToast('一括登録しました✨')
+    } catch { }
+    finally { setSaving(false) }
   }
 
   const handleAddStaff = async () => {
-    if (!newName.trim()) return
-    setSaving(true)
-    try {
-      const s = await addStaff(newName.trim(), newColor)
-      setStaffListState(prev => [...prev, s])
-      setNewName('')
-      setNewColor('#C4728A')
-      setAddStaffOpen(false)
-    } catch (e) {
-      console.error(e)
-      alert('登録に失敗しました')
-    } finally {
-      setSaving(false)
-    }
+    if (!newStaffName.trim()) return
+    await fetch('/api/staff', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newStaffName, color: newStaffColor })
+    })
+    setNewStaffName('')
+    setShowAddStaff(false)
+    await fetchStaff()
+    showToast('スタッフを追加しました')
   }
 
-  const handleRemoveStaff = async (id: string) => {
-    if (!confirm('削除しますか？')) return
-    setSaving(true)
-    try {
-      await removeStaff(id)
-      setStaffListState(prev => prev.filter(s => s.id !== id))
-      if (selectedStaff?.id === id) setSelectedStaff(null)
-    } catch (e) {
-      console.error(e)
-      alert('削除に失敗しました')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleSaveShifts = async (next: StaffShift[]) => {
-    const others = shifts.filter(s => !s.date.startsWith(selectedMonth))
-    const all = [...others, ...next]
-    setSaving(true)
-    try {
-      await saveStaffShifts(all)
-      setShiftsState(all)
-    } catch (e) {
-      console.error(e)
-      alert('シフトの保存に失敗しました')
-    } finally {
-      setSaving(false)
-    }
-  }
+  const DISPLAY_HOURS = Array.from({ length: 29 }, (_, i) => i + 16)
+  const [showBulkModal, setShowBulkModal] = useState(false)
+  const [bulkStart, setBulkStart] = useState('09:00')
+  const [bulkEnd, setBulkEnd] = useState('18:00')
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* スタッフ登録 */}
-      <section>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="gradient-line rounded-full" />
-          <span className="section-label font-dm-sans flex items-center gap-2">
-            <Users className="w-4 h-4" />
-            スタッフ登録
-          </span>
-        </div>
-        <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
-          <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
-          {loading ? (
-            <div className="flex justify-center py-8"><Loader2 className="w-8 h-8 text-rose animate-spin" /></div>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              {staffList.map((s) => (
-                <div
-                  key={s.id}
-                  onClick={() => setSelectedStaff(s)}
-                  className={`flex items-center gap-3 px-4 py-2 rounded-xl cursor-pointer transition-all ${
-                    selectedStaff?.id === s.id ? 'ring-2 ring-rose bg-rose/5' : 'bg-light-lav/50 hover:bg-light-lav'
-                  }`}
-                >
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                    style={{ backgroundColor: s.color }}
-                  >
-                    {s.name[0]}
-                  </div>
-                  <span className="font-medium text-text-main">{s.name}</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleRemoveStaff(s.id) }}
-                    disabled={saving}
-                    className="p-1.5 text-text-sub hover:text-red-600 rounded-lg disabled:opacity-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-              <button
-                onClick={() => setAddStaffOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-rose/50 text-rose rounded-xl hover:bg-rose/5"
-              >
-                <Plus className="w-4 h-4" />
-                追加
-              </button>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* 1ヶ月のシフト作成 */}
-      <section>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="gradient-line rounded-full" />
-          <span className="section-label font-dm-sans flex items-center gap-2">
-            <Calendar className="w-4 h-4" />
-            1ヶ月のシフト作成
-          </span>
-        </div>
-        <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
-          <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-light-lav">
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <span className="font-semibold text-text-main">{year}年{month}月</span>
-            <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-light-lav">
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
-          {loading ? (
-            <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-rose animate-spin" /></div>
-          ) : (
-            <ShiftCalendar
-              staffList={staffList}
-              month={selectedMonth}
-              shifts={monthShifts}
-              onSave={handleSaveShifts}
-            />
-          )}
-        </div>
-      </section>
-
-      {/* 個人目標・KPI・タスク・成長目標・絶対にやり切ること */}
-      {selectedStaff && (
-        <StaffMonthlySection
-          staff={selectedStaff}
-          month={selectedMonth}
-          onClose={() => setSelectedStaff(null)}
-        />
-      )}
-
-      {addStaffOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
-            <h3 className="font-semibold text-text-main mb-4">スタッフを追加</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-text-sub mb-1">名前</label>
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  placeholder="例: 山田"
-                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-text-sub mb-1">表示色</label>
-                <input
-                  type="color"
-                  value={newColor}
-                  onChange={e => setNewColor(e.target.value)}
-                  className="w-14 h-10 rounded-lg border cursor-pointer"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 mt-6">
-              <button
-                onClick={() => setAddStaffOpen(false)}
-                disabled={saving}
-                className="flex-1 py-2.5 rounded-xl border border-gray-200"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleAddStaff}
-                disabled={!newName.trim() || saving}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium disabled:opacity-50"
-              >
-                {saving ? '登録中...' : '追加'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ShiftCalendar({
-  staffList,
-  month,
-  shifts,
-  onSave,
-}: {
-  staffList: Staff[]
-  month: string
-  shifts: StaffShift[]
-  onSave: (shifts: StaffShift[]) => void
-}) {
-  const [year, m] = month.split('-').map(Number)
-  const daysInMonth = new Date(year, m, 0).getDate()
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
-
-  const getShift = (staffId: string, day: number) => {
-    const date = `${month}-${String(day).padStart(2, '0')}`
-    return shifts.find(s => s.staffId === staffId && s.date === date)
-  }
-
-  const setShift = (staffId: string, day: number, start: string, end: string) => {
-    const staff = staffList.find(s => s.id === staffId)
-    if (!staff) return
-    const date = `${month}-${String(day).padStart(2, '0')}`
-    const existing = shifts.find(s => s.staffId === staffId && s.date === date)
-    const updated: StaffShift = existing
-      ? { ...existing, start, end }
-      : { id: Date.now().toString(), staffId, staffName: staff.name, staffColor: staff.color, date, start, end }
-    const others = shifts.filter(s => !(s.staffId === staffId && s.date === date))
-    onSave([...others, updated])
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm min-w-[600px]">
-        <thead>
-          <tr className="border-b border-gray-200">
-            <th className="text-left p-2 text-text-sub font-medium w-20">スタッフ</th>
-            {days.map(d => (
-              <th key={d} className="text-center p-1 text-text-sub text-xs w-16">{d}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {staffList.map(staff => (
-            <tr key={staff.id} className="border-b border-gray-100">
-              <td className="p-2">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                    style={{ backgroundColor: staff.color }}
-                  >
-                    {staff.name[0]}
-                  </div>
-                  <span className="font-medium text-text-main">{staff.name}</span>
-                </div>
-              </td>
-              {days.map(day => {
-                const shift = getShift(staff.id, day)
-                return (
-                  <td key={day} className="p-1">
-                    <div className="flex gap-0.5">
-                      <input
-                        type="time"
-                        value={shift?.start ?? ''}
-                        onChange={e => setShift(staff.id, day, e.target.value, shift?.end ?? '18:00')}
-                        className="w-14 px-1 py-0.5 text-xs rounded border border-gray-200"
-                      />
-                      <span className="self-center text-text-sub">-</span>
-                      <input
-                        type="time"
-                        value={shift?.end ?? ''}
-                        onChange={e => setShift(staff.id, day, shift?.start ?? '09:00', e.target.value)}
-                        className="w-14 px-1 py-0.5 text-xs rounded border border-gray-200"
-                      />
-                    </div>
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function StaffMonthlySection({
-  staff,
-  month,
-  onClose,
-}: {
-  staff: Staff
-  month: string
-  onClose: () => void
-}) {
-  const [data, setData] = useState<StaffMonthlyData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    fetchStaffMonthlyForStaff(staff.id, month)
-      .then(d => {
-        if (!cancelled) {
-          setData(d ?? { ...EMPTY_MONTHLY, staffId: staff.id, month })
-        }
-      })
-      .catch(() => { if (!cancelled) setData({ ...EMPTY_MONTHLY, staffId: staff.id, month }) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [staff.id, month])
-
-  const save = async () => {
-    if (!data) return
-    setSaving(true)
-    try {
-      await saveStaffMonthly(data)
-    } catch (e) {
-      console.error(e)
-      alert('保存に失敗しました')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (loading || !data) {
-    return (
-      <section>
-        <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-rose animate-spin" /></div>
-      </section>
-    )
-  }
-
-  return (
-    <section>
-      <div className="flex items-center justify-between mb-4">
+    <div className="space-y-4" onMouseUp={handleMouseUp}>
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
-            style={{ backgroundColor: staff.color }}
-          >
-            {staff.name[0]}
-          </div>
-          <span className="section-label font-dm-sans">{staff.name} の {month} 目標・KPI・タスク</span>
+          <div className="gradient-line rounded-full" />
+          <span className="font-dm-sans text-base font-bold text-text-main">シフト管理</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={save}
-            disabled={saving}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-medium disabled:opacity-50"
-          >
-            {saving ? '保存中...' : '保存'}
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setShowClosedDayModal(true)}
+            className="px-3 py-1.5 rounded-xl bg-light-lav text-text-sub text-xs font-bold">
+            定休日設定
           </button>
-          <button onClick={onClose} className="p-2 text-text-sub hover:text-text-main rounded-lg">
-            <X className="w-5 h-5" />
+          <button onClick={handleCopyPrevWeek} disabled={saving}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-light-lav text-text-sub text-xs font-bold">
+            <Copy className="w-3.5 h-3.5" />前週コピー
+          </button>
+          <button onClick={() => setShowBulkModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-light-lav text-text-sub text-xs font-bold">
+            <Users className="w-3.5 h-3.5" />一括登録
+          </button>
+          <button onClick={() => setShowAddStaff(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-xs font-bold">
+            <Plus className="w-3.5 h-3.5" />スタッフ追加
           </button>
         </div>
       </div>
-      <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden space-y-6">
-        <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
 
-        <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-text-main mb-2">
-            <Target className="w-4 h-4 text-rose" />
-            個人目標
-          </label>
-          <input
-            type="text"
-            value={data.personalGoal}
-            onChange={e => setData(d => d ? { ...d, personalGoal: e.target.value } : d)}
-            placeholder="今月の個人目標を入力"
-            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
-          />
-        </div>
-
-        <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-text-main mb-2">
-            <TrendingUp className="w-4 h-4 text-rose" />
-            個人の月間KPI
-          </label>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs text-text-sub block mb-1">売上目標（円）</label>
-              <input
-                type="number"
-                value={data.monthlyKpi.sales || ''}
-                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => d ? { ...d, monthlyKpi: { ...d.monthlyKpi, sales: val === '' ? 0 : Number(val) } } : d) }}
-                onFocus={e => e.target.select()}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-text-sub block mb-1">来店数目標</label>
-              <input
-                type="number"
-                value={data.monthlyKpi.visits || ''}
-                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => d ? { ...d, monthlyKpi: { ...d.monthlyKpi, visits: val === '' ? 0 : Number(val) } } : d) }}
-                onFocus={e => e.target.select()}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-text-sub block mb-1">客単価目標（円）</label>
-              <input
-                type="number"
-                value={data.monthlyKpi.avgPrice || ''}
-                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => d ? { ...d, monthlyKpi: { ...d.monthlyKpi, avgPrice: val === '' ? 0 : Number(val) } } : d) }}
-                onFocus={e => e.target.select()}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-text-main mb-2">
-            <CheckSquare className="w-4 h-4 text-rose" />
-            重要タスク（3つ）
-          </label>
-          <div className="space-y-2">
-            {[0, 1, 2].map(i => (
-              <input
-                key={i}
-                type="text"
-                value={data.importantTasks[i] ?? ''}
-                onChange={e => {
-                  const next = [...data.importantTasks]
-                  next[i] = e.target.value
-                  setData(d => d ? { ...d, importantTasks: next as [string, string, string] } : d)
-                }}
-                placeholder={`重要タスク ${i + 1}`}
-                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
-              />
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-text-main mb-2">
-            <Sparkles className="w-4 h-4 text-rose" />
-            成長目標（3つ）
-          </label>
-          <div className="space-y-2">
-            {[0, 1, 2].map(i => (
-              <input
-                key={i}
-                type="text"
-                value={data.growthGoals[i] ?? ''}
-                onChange={e => {
-                  const next = [...data.growthGoals]
-                  next[i] = e.target.value
-                  setData(d => d ? { ...d, growthGoals: next as [string, string, string] } : d)
-                }}
-                placeholder={`成長目標 ${i + 1}`}
-                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
-              />
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-text-main mb-2">
-            <Zap className="w-4 h-4 text-rose" />
-            絶対にやり切ること（1つ）
-          </label>
-          <input
-            type="text"
-            value={data.mustDo}
-            onChange={e => setData(d => d ? { ...d, mustDo: e.target.value } : d)}
-            placeholder="今月絶対にやり切ること"
-            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
-          />
-        </div>
+      {/* 週ナビゲーション */}
+      <div className="flex items-center justify-between bg-white rounded-2xl px-4 py-3 card-shadow">
+        <button onClick={() => setBaseDate(d => new Date(d.getTime() - 7 * 24 * 60 * 60 * 1000))}
+          className="p-2 rounded-xl hover:bg-light-lav transition-all">
+          <ChevronLeft className="w-4 h-4 text-text-sub" />
+        </button>
+        <p className="font-bold text-text-main text-sm">
+          {weekDates[0].getMonth() + 1}月{weekDates[0].getDate()}日 〜 {weekDates[6].getMonth() + 1}月{weekDates[6].getDate()}日
+        </p>
+        <button onClick={() => setBaseDate(d => new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000))}
+          className="p-2 rounded-xl hover:bg-light-lav transition-all">
+          <ChevronRight className="w-4 h-4 text-text-sub" />
+        </button>
       </div>
-    </section>
+
+      {/* シフトグリッド */}
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="w-8 h-8 text-rose animate-spin" />
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl card-shadow overflow-x-auto">
+          <table className="w-full min-w-[700px]">
+            <thead>
+              <tr>
+                <th className="w-16 p-3 text-xs text-text-sub font-medium border-b border-gray-100">スタッフ</th>
+                {weekDates.map((date, i) => {
+                  const closed = isClosedDay(date)
+                  const isToday = toDateStr(date) === toDateStr(new Date())
+                  return (
+                    <th key={i} className={`p-3 text-xs font-bold border-b border-gray-100 text-center ${closed ? 'bg-gray-50' : isToday ? 'bg-rose/5' : ''}`}>
+                      <p className={WEEKDAY_COLORS[i]}>{WEEKDAYS[i]}</p>
+                      <p className={`text-sm ${isToday ? 'text-rose' : 'text-text-main'}`}>
+                        {date.getMonth() + 1}/{date.getDate()}
+                      </p>
+                      {closed && <p className="text-xs text-gray-400">定休</p>}
+                    </th>
+                  )
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {staffList.map(staff => (
+                <tr key={staff.id} className="border-b border-gray-50">
+                  <td className="p-2 text-center">
+                    <div className="w-8 h-8 rounded-full mx-auto flex items-center justify-center text-white text-xs font-bold"
+                      style={{ backgroundColor: staff.color }}>
+                      {staff.name.slice(0, 1)}
+                    </div>
+                    <p className="text-xs text-text-sub mt-1">{staff.name}</p>
+                  </td>
+                  {weekDates.map((date, di) => {
+                    const dateStr = toDateStr(date)
+                    const closed = isClosedDay(date)
+                    const shift = getShift(staff.id, dateStr)
+                    const drag = getDragShift(staff.id, dateStr)
+                    const displayShift = drag || (shift ? { start: shift.start_time, end: shift.end_time } : null)
+
+                    return (
+                      <td key={di} className={`p-1.5 relative ${closed ? 'bg-gray-50' : ''}`}>
+                        {closed ? (
+                          <div className="h-16 flex items-center justify-center text-xs text-gray-300">休</div>
+                        ) : (
+                          <div className="relative h-16 rounded-xl border-2 border-dashed border-gray-100 overflow-hidden select-none cursor-crosshair"
+                            style={{ userSelect: 'none' }}>
+                            {DISPLAY_HOURS.map(slot => (
+                              <div key={slot}
+                                className="absolute w-full"
+                                style={{ top: `${((slot - 16) / 28) * 100}%`, height: `${(1 / 28) * 100}%` }}
+                                onMouseDown={(e) => handleMouseDown(staff.id, dateStr, slot, e)}
+                                onMouseEnter={() => handleMouseEnter(staff.id, dateStr, slot)}
+                              />
+                            ))}
+                            {displayShift && (() => {
+                              const startSlot = timeToSlot(displayShift.start)
+                              const endSlot = timeToSlot(displayShift.end)
+                              const top = ((Math.max(startSlot, 16) - 16) / 28) * 100
+                              const height = ((Math.min(endSlot, 44) - Math.max(startSlot, 16)) / 28) * 100
+                              return (
+                                <div className="absolute left-0.5 right-0.5 rounded-lg flex items-center justify-between px-1.5 group z-10"
+                                  style={{
+                                    top: `${top}%`,
+                                    height: `${Math.max(height, 4)}%`,
+                                    backgroundColor: staff.color + 'dd',
+                                  }}>
+                                  <span className="text-white text-xs font-bold leading-none truncate">
+                                    {displayShift.start}〜{displayShift.end}
+                                  </span>
+                                  {shift && !drag && (
+                                    <button onClick={(e) => handleDeleteShift(staff.id, dateStr, e)}
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-white/20 rounded">
+                                      <Trash2 className="w-3 h-3 text-white" />
+                                    </button>
+                                  )}
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="flex gap-4 px-4 py-2 border-t border-gray-100">
+            <p className="text-xs text-text-sub">8:00〜22:00の範囲でドラッグしてシフトを登録</p>
+          </div>
+        </div>
+      )}
+
+      {/* 定休日設定モーダル */}
+      {showClosedDayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm card-shadow">
+            <h3 className="font-bold text-text-main mb-4">定休日設定</h3>
+            <div className="flex gap-2 flex-wrap mb-6">
+              {WEEKDAYS.map((day, i) => (
+                <button key={i} onClick={() => setClosedDays(prev =>
+                  prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i]
+                )}
+                  className={`w-12 h-12 rounded-xl text-sm font-bold transition-all ${closedDays.includes(i)
+                    ? 'bg-gradient-to-br from-rose to-lavender text-white'
+                    : 'bg-light-lav text-text-sub'}`}>
+                  {day}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setShowClosedDayModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-gray-100 text-text-sub text-sm font-bold">閉じる</button>
+              <button onClick={() => { setShowClosedDayModal(false); showToast('定休日を設定しました') }}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-bold">保存</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 一括登録モーダル */}
+      {showBulkModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm card-shadow">
+            <h3 className="font-bold text-text-main mb-1">一括登録</h3>
+            <p className="text-xs text-text-sub mb-4">今週の全スタッフに同じ時間を登録します（定休日除く）</p>
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-text-sub mb-1">開始時間</p>
+                <select value={bulkStart} onChange={e => setBulkStart(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm">
+                  {Array.from({ length: 28 }, (_, i) => slotToTime(i + 12)).map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <p className="text-xs text-text-sub mb-1">終了時間</p>
+                <select value={bulkEnd} onChange={e => setBulkEnd(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm">
+                  {Array.from({ length: 28 }, (_, i) => slotToTime(i + 14)).map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowBulkModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-gray-100 text-text-sub text-sm font-bold">キャンセル</button>
+              <button onClick={() => { handleBulkRegister(bulkStart, bulkEnd); setShowBulkModal(false) }} disabled={saving}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-bold">
+                一括登録
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* スタッフ追加モーダル */}
+      {showAddStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm card-shadow">
+            <h3 className="font-bold text-text-main mb-4">スタッフ追加</h3>
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-text-sub mb-1">名前</p>
+                <input value={newStaffName} onChange={e => setNewStaffName(e.target.value)}
+                  placeholder="例：田中"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm" />
+              </div>
+              <div>
+                <p className="text-xs text-text-sub mb-1">カラー</p>
+                <div className="flex gap-2 flex-wrap">
+                  {['#C4728A', '#9B8EC4', '#7BA7BC', '#88B584', '#E09B6B', '#B5836E'].map(c => (
+                    <button key={c} onClick={() => setNewStaffColor(c)}
+                      className={`w-10 h-10 rounded-full transition-all ${newStaffColor === c ? 'ring-2 ring-offset-2 ring-gray-400' : ''}`}
+                      style={{ backgroundColor: c }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowAddStaff(false)}
+                className="flex-1 py-2.5 rounded-xl bg-gray-100 text-text-sub text-sm font-bold">キャンセル</button>
+              <button onClick={handleAddStaff}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-bold">追加</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* トースト */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-text-main text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-lg">
+          {toast}
+        </div>
+      )}
+    </div>
   )
 }
