@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react'
 import { getMenus } from '@/lib/menus'
-import { getStaffList } from '@/lib/staff-management'
+import { fetchStaffList } from '@/lib/staff-management'
 import { ChartImage } from '@/components/chart-image'
 
 interface Customer {
@@ -78,7 +78,7 @@ export default function ChartPage() {
   const [activeTab, setActiveTab] = useState<'info' | 'history' | 'gallery' | 'follow'>('info')
   const [addVisitOpen, setAddVisitOpen] = useState(false)
   const [menus, setMenus] = useState<ReturnType<typeof getMenus>>([])
-  const [staffList, setStaffList] = useState<ReturnType<typeof getStaffList>>([])
+  const [staffList, setStaffList] = useState<{ id: string; name: string; color: string }[]>([])
 
   const fetchData = useCallback(async () => {
     try {
@@ -101,7 +101,7 @@ export default function ChartPage() {
 
   useEffect(() => {
     setMenus(getMenus())
-    setStaffList(getStaffList())
+    fetchStaffList().then(setStaffList).catch(() => [])
     fetchData()
   }, [fetchData])
 

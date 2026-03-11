@@ -1,13 +1,9 @@
 /**
- * スタッフ管理
+ * スタッフ管理（Supabase API版）
  * - スタッフ登録
  * - 1ヶ月のシフト
  * - 個人目標・月間KPI・重要タスク・成長目標・絶対にやり切ること
  */
-
-const STAFF_KEY = 'sola_staff_list'
-const SHIFTS_KEY = 'sola_staff_shifts'
-const MONTHLY_KEY = 'sola_staff_monthly'
 
 export interface Staff {
   id: string
@@ -27,7 +23,7 @@ export interface StaffShift {
 
 export interface StaffMonthlyData {
   staffId: string
-  month: string // YYYY-MM
+  month: string
   personalGoal: string
   monthlyKpi: { sales: number; visits: number; avgPrice: number }
   importantTasks: [string, string, string]
@@ -35,81 +31,107 @@ export interface StaffMonthlyData {
   mustDo: string
 }
 
-const DEFAULT_STAFF: Staff[] = [
-  { id: '1', name: '田中', color: '#C4728A' },
-  { id: '2', name: '鈴木', color: '#9B8EC4' },
-]
-
-export function getStaffList(): Staff[] {
-  if (typeof window === 'undefined') return DEFAULT_STAFF
-  try {
-    const raw = localStorage.getItem(STAFF_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_STAFF
-    }
-  } catch (_) {}
-  return DEFAULT_STAFF
+export async function fetchStaffList(): Promise<Staff[]> {
+  const res = await fetch('/api/staff')
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+  return json.staff || []
 }
 
-export function setStaffList(staff: Staff[]) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(STAFF_KEY, JSON.stringify(staff))
-  window.dispatchEvent(new Event('staff-list-updated'))
+export async function addStaff(name: string, color: string): Promise<Staff> {
+  const res = await fetch('/api/staff', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name.trim(), color: color || '#C4728A' }),
+  })
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+  return json.staff
+}
+
+export async function removeStaff(id: string): Promise<void> {
+  const res = await fetch(`/api/staff/${id}`, { method: 'DELETE' })
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+}
+
+export async function fetchStaffShifts(month?: string): Promise<StaffShift[]> {
+  const url = month ? `/api/shifts?month=${month}` : '/api/shifts'
+  const res = await fetch(url)
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+  return json.shifts || []
+}
+
+export async function saveStaffShifts(shifts: StaffShift[]): Promise<void> {
+  const payload = shifts
+    .filter(s => s.start && s.end)
+    .map(s => ({
+      staff_id: s.staffId,
+      date: s.date,
+      start_time: s.start,
+      end_time: s.end,
+    }))
+  if (payload.length === 0) return
+  const res = await fetch('/api/shifts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ shifts: payload }),
+  })
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+}
+
+export async function fetchStaffMonthlyData(): Promise<StaffMonthlyData[]> {
+  const res = await fetch('/api/staff-monthly')
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+  return json.data || []
+}
+
+export async function fetchStaffMonthlyForStaff(staffId: string, month: string): Promise<StaffMonthlyData | null> {
+  const res = await fetch(`/api/staff-monthly?staff_id=${staffId}&month=${month}`)
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+  const list = json.data || []
+  return list[0] ?? null
+}
+
+export async function saveStaffMonthly(data: StaffMonthlyData): Promise<void> {
+  const res = await fetch('/api/staff-monthly', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      staffId: data.staffId,
+      month: data.month,
+      personalGoal: data.personalGoal,
+      monthlyKpi: data.monthlyKpi,
+      importantTasks: data.importantTasks,
+      growthGoals: data.growthGoals,
+      mustDo: data.mustDo,
+    }),
+  })
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+}
+
+// 後方互換のため同期的なgetterを提供（空配列を返す・非推奨）
+export function getStaffList(): Staff[] {
+  return []
 }
 
 export function getStaffShifts(): StaffShift[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = localStorage.getItem(SHIFTS_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed : []
-    }
-  } catch (_) {}
   return []
-}
-
-export function setStaffShifts(shifts: StaffShift[]) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(SHIFTS_KEY, JSON.stringify(shifts))
-  window.dispatchEvent(new Event('staff-shifts-updated'))
 }
 
 export function getStaffMonthlyData(): StaffMonthlyData[] {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = localStorage.getItem(MONTHLY_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed : []
-    }
-  } catch (_) {}
   return []
 }
 
-export function setStaffMonthlyData(data: StaffMonthlyData[]) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(MONTHLY_KEY, JSON.stringify(data))
-  window.dispatchEvent(new Event('staff-monthly-updated'))
-}
-
-export function getMonthlyForStaff(staffId: string, month: string): StaffMonthlyData | null {
-  return getStaffMonthlyData().find(d => d.staffId === staffId && d.month === month) ?? null
-}
-
-export function saveStaffMonthly(data: StaffMonthlyData) {
-  const all = getStaffMonthlyData()
-  const idx = all.findIndex(d => d.staffId === data.staffId && d.month === data.month)
-  const next = idx >= 0 ? [...all.slice(0, idx), data, ...all.slice(idx + 1)] : [...all, data]
-  setStaffMonthlyData(next)
-}
-
-export function getShiftsForMonth(month: string): StaffShift[] {
-  return getStaffShifts().filter(s => s.date.startsWith(month))
+export function getShiftsForMonth(_month: string): StaffShift[] {
+  return []
 }
 
 export function getTodayShiftsFromNew(): StaffShift[] {
-  const today = new Date().toISOString().slice(0, 10)
-  return getStaffShifts().filter(s => s.date === today)
+  return []
 }

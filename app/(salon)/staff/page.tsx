@@ -14,13 +14,15 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from 'lucide-react'
 import {
-  getStaffList,
-  setStaffList,
-  getStaffShifts,
-  setStaffShifts,
-  getStaffMonthlyData,
+  fetchStaffList,
+  addStaff,
+  removeStaff,
+  fetchStaffShifts,
+  saveStaffShifts,
+  fetchStaffMonthlyForStaff,
   saveStaffMonthly,
   type Staff,
   type StaffShift,
@@ -43,24 +45,67 @@ export default function StaffManagementPage() {
   })
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null)
   const [shifts, setShiftsState] = useState<StaffShift[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [addStaffOpen, setAddStaffOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [newColor, setNewColor] = useState('#C4728A')
 
-  const refresh = useCallback(() => {
-    setStaffListState(getStaffList())
-    setShiftsState(getStaffShifts())
-  }, [])
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [staff, shiftData] = await Promise.all([
+        fetchStaffList(),
+        fetchStaffShifts(selectedMonth),
+      ])
+      setStaffListState(staff)
+      setShiftsState(shiftData)
+      // localStorageからSupabaseへ初回移行
+      if (staff.length === 0 && typeof window !== 'undefined') {
+        const raw = localStorage.getItem('sola_staff_list')
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              for (const s of parsed) {
+                await addStaff(s.name, s.color || '#C4728A')
+              }
+              const migrated = await fetchStaffList()
+              setStaffListState(migrated)
+              const shiftRaw = localStorage.getItem('sola_staff_shifts')
+              if (shiftRaw) {
+                const shiftParsed = JSON.parse(shiftRaw)
+                if (Array.isArray(shiftParsed) && shiftParsed.length > 0) {
+                  const mapped = shiftParsed
+                    .filter((x: { staffName?: string; date?: string; start?: string; end?: string }) => x.staffName && x.date && (x.start ?? x.end))
+                    .map((x: { staffName: string; staffColor: string; date: string; start?: string; end?: string }) => {
+                      const staffMatch = migrated.find((m: Staff) => m.name === x.staffName)
+                      return staffMatch ? { staffId: staffMatch.id, staffName: staffMatch.name, staffColor: staffMatch.color, date: x.date, start: x.start ?? '09:00', end: x.end ?? '18:00' } : null
+                    })
+                    .filter(Boolean) as StaffShift[]
+                  if (mapped.length > 0) {
+                    await saveStaffShifts(mapped)
+                    const refreshed = await fetchStaffShifts(selectedMonth)
+                    setShiftsState(refreshed)
+                  }
+                }
+              }
+              localStorage.removeItem('sola_staff_list')
+              localStorage.removeItem('sola_staff_shifts')
+              localStorage.removeItem('sola_staff_monthly')
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedMonth])
 
   useEffect(() => {
     refresh()
-    const h = () => refresh()
-    window.addEventListener('staff-list-updated', h)
-    window.addEventListener('staff-shifts-updated', h)
-    return () => {
-      window.removeEventListener('staff-list-updated', h)
-      window.removeEventListener('staff-shifts-updated', h)
-    }
   }, [refresh])
 
   const monthShifts = shifts.filter(s => s.date.startsWith(selectedMonth))
@@ -74,21 +119,51 @@ export default function StaffManagementPage() {
     setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
 
-  const addStaff = () => {
+  const handleAddStaff = async () => {
     if (!newName.trim()) return
-    const s: Staff = { id: Date.now().toString(), name: newName.trim(), color: newColor }
-    setStaffList([...staffList, s])
-    setStaffListState([...staffList, s])
-    setNewName('')
-    setNewColor('#C4728A')
-    setAddStaffOpen(false)
+    setSaving(true)
+    try {
+      const s = await addStaff(newName.trim(), newColor)
+      setStaffListState(prev => [...prev, s])
+      setNewName('')
+      setNewColor('#C4728A')
+      setAddStaffOpen(false)
+    } catch (e) {
+      console.error(e)
+      alert('登録に失敗しました')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const removeStaff = (id: string) => {
-    const next = staffList.filter(s => s.id !== id)
-    setStaffList(next)
-    setStaffListState(next)
-    if (selectedStaff?.id === id) setSelectedStaff(null)
+  const handleRemoveStaff = async (id: string) => {
+    if (!confirm('削除しますか？')) return
+    setSaving(true)
+    try {
+      await removeStaff(id)
+      setStaffListState(prev => prev.filter(s => s.id !== id))
+      if (selectedStaff?.id === id) setSelectedStaff(null)
+    } catch (e) {
+      console.error(e)
+      alert('削除に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleSaveShifts = async (next: StaffShift[]) => {
+    const others = shifts.filter(s => !s.date.startsWith(selectedMonth))
+    const all = [...others, ...next]
+    setSaving(true)
+    try {
+      await saveStaffShifts(all)
+      setShiftsState(all)
+    } catch (e) {
+      console.error(e)
+      alert('シフトの保存に失敗しました')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -104,38 +179,43 @@ export default function StaffManagementPage() {
         </div>
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
-          <div className="flex flex-wrap gap-3">
-            {staffList.map((s) => (
-              <div
-                key={s.id}
-                onClick={() => setSelectedStaff(s)}
-                className={`flex items-center gap-3 px-4 py-2 rounded-xl cursor-pointer transition-all ${
-                  selectedStaff?.id === s.id ? 'ring-2 ring-rose bg-rose/5' : 'bg-light-lav/50 hover:bg-light-lav'
-                }`}
-              >
+          {loading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-8 h-8 text-rose animate-spin" /></div>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {staffList.map((s) => (
                 <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                  style={{ backgroundColor: s.color }}
+                  key={s.id}
+                  onClick={() => setSelectedStaff(s)}
+                  className={`flex items-center gap-3 px-4 py-2 rounded-xl cursor-pointer transition-all ${
+                    selectedStaff?.id === s.id ? 'ring-2 ring-rose bg-rose/5' : 'bg-light-lav/50 hover:bg-light-lav'
+                  }`}
                 >
-                  {s.name[0]}
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                    style={{ backgroundColor: s.color }}
+                  >
+                    {s.name[0]}
+                  </div>
+                  <span className="font-medium text-text-main">{s.name}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleRemoveStaff(s.id) }}
+                    disabled={saving}
+                    className="p-1.5 text-text-sub hover:text-red-600 rounded-lg disabled:opacity-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-                <span className="font-medium text-text-main">{s.name}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); removeStaff(s.id) }}
-                  className="p-1.5 text-text-sub hover:text-red-600 rounded-lg"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() => setAddStaffOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-rose/50 text-rose rounded-xl hover:bg-rose/5"
-            >
-              <Plus className="w-4 h-4" />
-              追加
-            </button>
-          </div>
+              ))}
+              <button
+                onClick={() => setAddStaffOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-rose/50 text-rose rounded-xl hover:bg-rose/5"
+              >
+                <Plus className="w-4 h-4" />
+                追加
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -159,16 +239,16 @@ export default function StaffManagementPage() {
               <ChevronRight className="w-5 h-5" />
             </button>
           </div>
-          <ShiftCalendar
-            staffList={staffList}
-            month={selectedMonth}
-            shifts={monthShifts}
-            onSave={(next) => {
-              const others = shifts.filter(s => !s.date.startsWith(selectedMonth))
-              setStaffShifts([...others, ...next])
-              setShiftsState([...others, ...next])
-            }}
-          />
+          {loading ? (
+            <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-rose animate-spin" /></div>
+          ) : (
+            <ShiftCalendar
+              staffList={staffList}
+              month={selectedMonth}
+              shifts={monthShifts}
+              onSave={handleSaveShifts}
+            />
+          )}
         </div>
       </section>
 
@@ -209,16 +289,17 @@ export default function StaffManagementPage() {
             <div className="flex gap-2 mt-6">
               <button
                 onClick={() => setAddStaffOpen(false)}
+                disabled={saving}
                 className="flex-1 py-2.5 rounded-xl border border-gray-200"
               >
                 キャンセル
               </button>
               <button
-                onClick={addStaff}
-                disabled={!newName.trim()}
+                onClick={handleAddStaff}
+                disabled={!newName.trim() || saving}
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium disabled:opacity-50"
               >
-                追加
+                {saving ? '登録中...' : '追加'}
               </button>
             </div>
           </div>
@@ -324,18 +405,43 @@ function StaffMonthlySection({
   month: string
   onClose: () => void
 }) {
-  const existing = getStaffMonthlyData().find(d => d.staffId === staff.id && d.month === month)
-  const [data, setData] = useState<StaffMonthlyData>(() =>
-    existing ?? { ...EMPTY_MONTHLY, staffId: staff.id, month }
-  )
+  const [data, setData] = useState<StaffMonthlyData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    const e = getStaffMonthlyData().find(d => d.staffId === staff.id && d.month === month)
-    setData(e ?? { ...EMPTY_MONTHLY, staffId: staff.id, month })
+    let cancelled = false
+    setLoading(true)
+    fetchStaffMonthlyForStaff(staff.id, month)
+      .then(d => {
+        if (!cancelled) {
+          setData(d ?? { ...EMPTY_MONTHLY, staffId: staff.id, month })
+        }
+      })
+      .catch(() => { if (!cancelled) setData({ ...EMPTY_MONTHLY, staffId: staff.id, month }) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [staff.id, month])
 
-  const save = () => {
-    saveStaffMonthly(data)
+  const save = async () => {
+    if (!data) return
+    setSaving(true)
+    try {
+      await saveStaffMonthly(data)
+    } catch (e) {
+      console.error(e)
+      alert('保存に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading || !data) {
+    return (
+      <section>
+        <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 text-rose animate-spin" /></div>
+      </section>
+    )
   }
 
   return (
@@ -353,9 +459,10 @@ function StaffMonthlySection({
         <div className="flex items-center gap-2">
           <button
             onClick={save}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-medium"
+            disabled={saving}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-medium disabled:opacity-50"
           >
-            保存
+            {saving ? '保存中...' : '保存'}
           </button>
           <button onClick={onClose} className="p-2 text-text-sub hover:text-text-main rounded-lg">
             <X className="w-5 h-5" />
@@ -373,7 +480,7 @@ function StaffMonthlySection({
           <input
             type="text"
             value={data.personalGoal}
-            onChange={e => setData(d => ({ ...d, personalGoal: e.target.value }))}
+            onChange={e => setData(d => d ? { ...d, personalGoal: e.target.value } : d)}
             placeholder="今月の個人目標を入力"
             className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
           />
@@ -390,10 +497,7 @@ function StaffMonthlySection({
               <input
                 type="number"
                 value={data.monthlyKpi.sales || ''}
-                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => ({
-                  ...d,
-                  monthlyKpi: { ...d.monthlyKpi, sales: val === '' ? 0 : Number(val) },
-                })) }}
+                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => d ? { ...d, monthlyKpi: { ...d.monthlyKpi, sales: val === '' ? 0 : Number(val) } } : d) }}
                 onFocus={e => e.target.select()}
                 className="w-full px-3 py-2 rounded-lg border border-gray-200"
               />
@@ -403,10 +507,7 @@ function StaffMonthlySection({
               <input
                 type="number"
                 value={data.monthlyKpi.visits || ''}
-                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => ({
-                  ...d,
-                  monthlyKpi: { ...d.monthlyKpi, visits: val === '' ? 0 : Number(val) },
-                })) }}
+                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => d ? { ...d, monthlyKpi: { ...d.monthlyKpi, visits: val === '' ? 0 : Number(val) } } : d) }}
                 onFocus={e => e.target.select()}
                 className="w-full px-3 py-2 rounded-lg border border-gray-200"
               />
@@ -416,10 +517,7 @@ function StaffMonthlySection({
               <input
                 type="number"
                 value={data.monthlyKpi.avgPrice || ''}
-                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => ({
-                  ...d,
-                  monthlyKpi: { ...d.monthlyKpi, avgPrice: val === '' ? 0 : Number(val) },
-                })) }}
+                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setData(d => d ? { ...d, monthlyKpi: { ...d.monthlyKpi, avgPrice: val === '' ? 0 : Number(val) } } : d) }}
                 onFocus={e => e.target.select()}
                 className="w-full px-3 py-2 rounded-lg border border-gray-200"
               />
@@ -441,7 +539,7 @@ function StaffMonthlySection({
                 onChange={e => {
                   const next = [...data.importantTasks]
                   next[i] = e.target.value
-                  setData(d => ({ ...d, importantTasks: next as [string, string, string] }))
+                  setData(d => d ? { ...d, importantTasks: next as [string, string, string] } : d)
                 }}
                 placeholder={`重要タスク ${i + 1}`}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
@@ -464,7 +562,7 @@ function StaffMonthlySection({
                 onChange={e => {
                   const next = [...data.growthGoals]
                   next[i] = e.target.value
-                  setData(d => ({ ...d, growthGoals: next as [string, string, string] }))
+                  setData(d => d ? { ...d, growthGoals: next as [string, string, string] } : d)
                 }}
                 placeholder={`成長目標 ${i + 1}`}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
@@ -481,7 +579,7 @@ function StaffMonthlySection({
           <input
             type="text"
             value={data.mustDo}
-            onChange={e => setData(d => ({ ...d, mustDo: e.target.value }))}
+            onChange={e => setData(d => d ? { ...d, mustDo: e.target.value } : d)}
             placeholder="今月絶対にやり切ること"
             className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
           />

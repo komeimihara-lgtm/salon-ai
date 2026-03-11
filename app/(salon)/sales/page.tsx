@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { getMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, isCampaignActive, type MenuItem, type Campaign } from '@/lib/menus'
 import { DEMO_SALON_ID } from '@/lib/supabase'
-import { getStaffList } from '@/lib/staff-management'
+import { fetchStaffList } from '@/lib/staff-management'
 import { fetchTicketPlans, addCustomerTicket, type TicketPlan } from '@/lib/tickets'
 import { fetchSubscriptionPlans, addCustomerSubscription, type SubscriptionPlan } from '@/lib/subscriptions'
 import { fetchProducts, adjustStock, type Product } from '@/lib/products'
@@ -53,7 +53,7 @@ export default function SalesPage() {
   const [categories, setCategories] = useState<string[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [menus, setMenus] = useState<ReturnType<typeof getMenus>>([])
-  const [staffList, setStaffList] = useState<ReturnType<typeof getStaffList>>([])
+  const [staffList, setStaffList] = useState<{ id: string; name: string; color: string }[]>([])
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([])
   const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
@@ -136,7 +136,7 @@ export default function SalesPage() {
     setMenus(migratedMenus)
     setCategories(c)
     setSelectedCategory(c[0] ?? '')
-    setStaffList(getStaffList())
+    fetchStaffList().then(setStaffList).catch(() => [])
     setTaxSettingsState(getTaxSettings())
     setCampaignsState(getCampaigns())
     fetchCustomers()
