@@ -22,12 +22,9 @@ export default function LiffBookingPage() {
   const [displayName, setDisplayName] = useState('')
   const [step, setStep] = useState<'menu' | 'profile' | 'date' | 'time' | 'confirm' | 'done'>('menu')
 
-  // 初回用プロフィール（既存顧客の場合はAPIから取得した値を使用）
   const [profileName, setProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
   const [isFirstTime, setIsFirstTime] = useState(false)
-  const [existingName, setExistingName] = useState('')
-  const [existingPhone, setExistingPhone] = useState('')
 
   // 選択状態
   const [selectedMenu, setSelectedMenu] = useState<MenuItem | null>(null)
@@ -110,25 +107,23 @@ export default function LiffBookingPage() {
     finally { setSlotsLoading(false) }
   }
 
-  const checkFirstTime = async (lineUserId: string) => {
-    const res = await fetch(`/api/liff/check-customer?line_user_id=${lineUserId}`)
-    const json = await res.json()
-    if (json.exists) {
-      setExistingName(json.name || '')
-      setExistingPhone(json.phone || '')
-    }
-    return !json.exists
-  }
-
   const handleSelectMenu = async (menu: MenuItem) => {
     setSelectedMenu(menu)
     if (lineUserId) {
-      const first = await checkFirstTime(lineUserId)
-      setIsFirstTime(first)
-      setStep(first ? 'profile' : 'date')
+      try {
+        const res = await fetch(`/api/liff/check-customer?line_user_id=${lineUserId}`)
+        const json = await res.json()
+        setStep(json.exists ? 'date' : 'profile')
+        if (json.exists && json.name) setProfileName(json.name)
+        if (json.exists && json.phone) setProfilePhone(json.phone)
+        setIsFirstTime(!json.exists)
+      } catch {
+        setStep('profile')
+        setIsFirstTime(true)
+      }
     } else {
-      setIsFirstTime(true)
       setStep('profile')
+      setIsFirstTime(true)
     }
   }
 
@@ -150,8 +145,8 @@ export default function LiffBookingPage() {
         body: JSON.stringify({
           line_user_id: lineUserId,
           display_name: displayName,
-          customer_name: profileName || existingName || displayName,
-          customer_phone: profilePhone || existingPhone,
+          customer_name: profileName || displayName,
+          customer_phone: profilePhone,
           menu_id: selectedMenu.id,
           menu_name: selectedMenu.name,
           duration: selectedMenu.duration,
@@ -262,7 +257,7 @@ export default function LiffBookingPage() {
         {/* STEP 2: プロフィール入力（初回のみ） */}
         {step === 'profile' && (
           <div className="space-y-4">
-            <h2 className="font-bold text-gray-700">お客様情報の入力</h2>
+            <h2 className="font-bold text-gray-700">お客様情報</h2>
             <p className="text-xs text-gray-400">初回のご予約のため、お名前と電話番号をご入力ください</p>
             <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
               <div>
@@ -390,6 +385,8 @@ export default function LiffBookingPage() {
             <h2 className="font-bold text-gray-700">予約内容の確認</h2>
             <div className="bg-white rounded-2xl p-5 shadow-sm space-y-3">
               {[
+                { label: 'お名前', value: profileName || displayName },
+                { label: '電話番号', value: profilePhone || '未入力' },
                 { label: 'メニュー', value: selectedMenu?.name },
                 { label: '料金', value: `¥${selectedMenu?.price.toLocaleString()}` },
                 { label: '施術時間', value: `${selectedMenu?.duration}分` },

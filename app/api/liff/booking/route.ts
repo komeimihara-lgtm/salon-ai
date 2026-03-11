@@ -36,23 +36,18 @@ export async function POST(req: NextRequest) {
 
   // 既存顧客の場合は情報を更新して正式登録
   if (customer) {
-    if (customer_name && (customer.name !== customer_name || (customer_phone && customer.phone !== customer_phone))) {
-      await supabase
-        .from('customers')
-        .update({
-          name: customer_name,
-          phone: customer_phone || customer.phone,
-          status: 'active',
-        })
-        .eq('id', customer.id)
-      customer = { ...customer, name: customer_name, phone: customer_phone || customer.phone, status: 'active' }
-    } else {
-      await supabase.from('customers').update({ status: 'active' }).eq('id', customer.id)
-      customer = { ...customer, status: 'active' }
-    }
+    await supabase
+      .from('customers')
+      .update({
+        name: customer_name || customer.name,
+        phone: customer_phone || customer.phone,
+        status: 'active',
+      })
+      .eq('id', customer.id)
+    customer = { ...customer, name: customer_name || customer.name, phone: customer_phone || customer.phone, status: 'active' }
   } else {
-    // 新規登録（正式登録としてactive）
-    const { data } = await supabase
+    // 新規登録
+    const { data: newCustomer } = await supabase
       .from('customers')
       .insert({
         salon_id: salonId,
@@ -64,7 +59,7 @@ export async function POST(req: NextRequest) {
       })
       .select()
       .single()
-    customer = data
+    customer = newCustomer
   }
 
   // 予約を登録
