@@ -43,6 +43,8 @@ interface Customer {
   phone?: string
   visit_count: number
   avg_unit_price?: number
+  line_user_id?: string
+  line_status?: string
 }
 
 export default function CustomerDetailPage() {
@@ -68,6 +70,48 @@ export default function CustomerDetailPage() {
   const [purchasePaymentMethod, setPurchasePaymentMethod] = useState<'cash' | 'card' | 'online' | 'loan'>('card')
   const [subJoinDate, setSubJoinDate] = useState(new Date().toISOString().slice(0, 10))
   const [subPaymentMethod, setSubPaymentMethod] = useState<'cash' | 'card' | 'online' | 'loan'>('card')
+  const [unmatchedUsers, setUnmatchedUsers] = useState<{ line_user_id: string; followed_at: string }[]>([])
+  const [linkingLine, setLinkingLine] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const fetchCustomer = useCallback(async () => {
+    if (!id) return
+    const res = await fetch(`/api/customers/${id}`)
+    const data = await res.json()
+    setCustomer(data.customer ?? null)
+  }, [id])
+
+  const fetchUnmatchedUsers = async () => {
+    const res = await fetch('/api/line/unmatched')
+    const json = await res.json()
+    setUnmatchedUsers(json.users || [])
+  }
+
+  const handleLinkLine = async (lineUserId: string) => {
+    if (!customer) return
+    setLinkingLine(true)
+    try {
+      await fetch(`/api/customers/${customer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ line_user_id: lineUserId, line_status: 'followed' })
+      })
+      await fetch('/api/line/unmatched', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ line_user_id: lineUserId })
+      })
+      showToast('LINE連携しました✨')
+      fetchCustomer()
+    } catch {
+      showToast('失敗しました')
+    } finally { setLinkingLine(false) }
+  }
 
   const refresh = useCallback(async () => {
     if (!id) return
@@ -356,6 +400,46 @@ export default function CustomerDetailPage() {
         )}
       </div>
 
+      {/* LINE連携 */}
+      <div className="bg-white rounded-2xl p-5 card-shadow mb-6">
+        <h3 className="font-bold text-text-main mb-3 flex items-center gap-2">
+          <span className="text-green-500">💬</span> LINE連携
+        </h3>
+        {customer.line_user_id ? (
+          <div className="flex items-center gap-2 p-3 bg-green-50 rounded-xl">
+            <span className="text-green-500 text-lg">✅</span>
+            <div>
+              <p className="text-sm font-bold text-green-700">LINE連携済み</p>
+              <p className="text-xs text-text-sub">{customer.line_status === 'blocked' ? 'ブロック中' : 'フォロー中'}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-text-sub">友達追加済みのお客様と紐付けてください</p>
+            <button onClick={fetchUnmatchedUsers}
+              className="w-full py-2 rounded-xl border border-dashed border-green-300 text-green-600 text-sm font-bold">
+              友達追加リストを取得
+            </button>
+            {unmatchedUsers.length > 0 && (
+              <div className="space-y-2">
+                {unmatchedUsers.map(u => (
+                  <div key={u.line_user_id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                    <div>
+                      <p className="text-xs font-medium text-text-main">{u.line_user_id.slice(0, 20)}...</p>
+                      <p className="text-xs text-text-sub">{new Date(u.followed_at).toLocaleDateString('ja-JP')} 追加</p>
+                    </div>
+                    <button onClick={() => handleLinkLine(u.line_user_id)} disabled={linkingLine}
+                      className="px-3 py-1.5 rounded-xl bg-green-500 text-white text-xs font-bold">
+                      紐付け
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* コース購入モーダル */}
       {purchaseOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -557,6 +641,12 @@ export default function CustomerDetailPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-[70] px-6 py-4 rounded-2xl shadow-lg bg-emerald-600 text-white font-medium">
+          {toast}
         </div>
       )}
 

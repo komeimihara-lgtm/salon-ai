@@ -12,6 +12,20 @@ function verifySignature(body: string, signature: string, secret: string): boole
   return hash === signature
 }
 
+async function replyMessage(replyToken: string, text: string, accessToken: string) {
+  await fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [{ type: 'text', text }]
+    })
+  })
+}
+
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text()
@@ -35,6 +49,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'LINE設定なし' }, { status: 400 })
     }
 
+    const accessToken = salon.line_channel_access_token || ''
+
     // 署名検証
     if (!verifySignature(rawBody, signature, salon.line_channel_secret)) {
       return NextResponse.json({ error: '署名検証失敗' }, { status: 401 })
@@ -43,31 +59,110 @@ export async function POST(req: NextRequest) {
     const events = body.events || []
 
     for (const event of events) {
-      if (event.type !== 'message' || event.message.type !== 'text') continue
+      const lineUserId = event.source?.userId
+      if (!lineUserId) continue
 
-      const lineUserId = event.source.userId
-      const userMessage = event.message.text
-      const replyToken = event.replyToken
+      switch (event.type) {
+        case 'follow': {
+          // 友達追加イベント
+          await supabase.from('unmatched_line_users').upsert({
+            line_user_id: lineUserId,
+            followed_at: new Date().toISOString(),
+            salon_id: salonId,
+          }, { onConflict: 'line_user_id' })
 
-      // カウンセリングセッションを取得
-      const { data: session } = await supabase
-        .from('counseling_sessions')
-        .select('*')
-        .eq('line_user_id', lineUserId)
-        .eq('status', 'active')
-        .single()
+          // 歓迎メッセージを送信
+          if (accessToken) {
+            await fetch('https://api.line.me/v2/bot/message/push', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                to: lineUserId,
+                messages: [{
+                  type: 'text',
+                  text: 'ご登録ありがとうございます✨\n\nこちらのLINEでは\n📅 ご予約の確認・受付\n💆 来店前のカウンセリング\n🎁 お得な情報のお届け\n\nができます。\n\n「予約確認」と送っていただくと、次回のご予約をお知らせします😊'
+                }]
+              })
+            })
+          }
+          break
+        }
 
-      if (!session) continue
+        case 'unfollow': {
+          // ブロックイベント
+          await supabase
+            .from('customers')
+            .update({ line_status: 'blocked' })
+            .eq('line_user_id', lineUserId)
+            .eq('salon_id', salonId)
+          break
+        }
 
-      // 会話履歴を更新
-      const history = session.conversation_history || []
-      history.push({ role: 'user', content: userMessage })
+        case 'message': {
+          if (event.message?.type !== 'text') break
+          const text = event.message.text.trim()
+          const replyToken = event.replyToken
 
-      // AIで次の質問を生成（スタッフとして）
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 500,
-        system: `あなたは${salon.name}のスタッフです。
+          // 顧客を検索
+          const { data: customer } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('line_user_id', lineUserId)
+            .eq('salon_id', salonId)
+            .single()
+
+          // 「予約確認」コマンド
+          if (text === '予約確認') {
+            if (!customer) {
+              await replyMessage(event.replyToken, 'お客様情報が見つかりませんでした。\nスタッフにLINE連携をお申し出ください😊', accessToken)
+              break
+            }
+
+            const { data: reservations } = await supabase
+              .from('reservations')
+              .select('*')
+              .eq('customer_id', customer.id)
+              .eq('salon_id', salonId)
+              .gte('start_time', new Date().toISOString())
+              .order('start_time', { ascending: true })
+              .limit(3)
+
+            if (!reservations || reservations.length === 0) {
+              await replyMessage(replyToken, `${customer.name}様、現在ご予約はございません。\n\n「予約したい」と送っていただくとご予約を承ります😊`, accessToken)
+              break
+            }
+
+            const resvText = reservations.map((r: { start_time: string; menu?: string }, i: number) => {
+              const dt = new Date(r.start_time)
+              return `${i + 1}. ${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日 ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}\n   ${r.menu || 'メニュー未定'}`
+            }).join('\n\n')
+
+            await replyMessage(replyToken, `${customer.name}様の次回ご予約✨\n\n${resvText}\n\nご不明な点はスタッフにお申し付けください😊`, accessToken)
+            break
+          }
+
+          // プレカウンセリング中の場合は既存の処理へ
+          const { data: session } = await supabase
+            .from('counseling_sessions')
+            .select('*')
+            .eq('line_user_id', lineUserId)
+            .eq('status', 'active')
+            .single()
+
+          if (!session) break
+
+          const userMessage = text
+          const history = session.conversation_history || []
+          history.push({ role: 'user', content: userMessage })
+
+          // AIで次の質問を生成（スタッフとして）
+          const response = await anthropic.messages.create({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 500,
+            system: `あなたは${salon.name}のスタッフです。
 お客様のご来店前にLINEでプレカウンセリングを行っています。
 以下のルールを必ず守ってください：
 - AIであることは絶対に明かさない
@@ -93,64 +188,59 @@ export async function POST(req: NextRequest) {
 
 全質問が完了したらJSONを含めてください：
 COUNSELING_COMPLETE:{"collected_data": {...}}`,
-        messages: history.map((h: { role: string; content: string }) => ({
-          role: h.role as 'user' | 'assistant',
-          content: h.content,
-        })),
-      })
+            messages: history.map((h: { role: string; content: string }) => ({
+              role: h.role as 'user' | 'assistant',
+              content: h.content,
+            })),
+          })
 
-      const aiReply = response.content[0].type === 'text' ? response.content[0].text : ''
+          const aiReply = response.content[0].type === 'text' ? response.content[0].text : ''
 
-      // カウンセリング完了チェック
-      let replyText = aiReply
-      let isComplete = false
-      let collectedData = session.collected_data || {}
+          // カウンセリング完了チェック
+          let replyText = aiReply
+          let isComplete = false
+          let collectedData = session.collected_data || {}
 
-      if (aiReply.includes('COUNSELING_COMPLETE:')) {
-        const jsonMatch = aiReply.match(/COUNSELING_COMPLETE:(\{[\s\S]*\})/)
-        if (jsonMatch) {
-          try {
-            const parsed = JSON.parse(jsonMatch[1])
-            collectedData = { ...collectedData, ...parsed.collected_data }
-            isComplete = true
-            replyText = aiReply.replace(/COUNSELING_COMPLETE:[\s\S]*/, '').trim()
-          } catch { }
+          if (aiReply.includes('COUNSELING_COMPLETE:')) {
+            const jsonMatch = aiReply.match(/COUNSELING_COMPLETE:(\{[\s\S]*\})/)
+            if (jsonMatch) {
+              try {
+                const parsed = JSON.parse(jsonMatch[1])
+                collectedData = { ...collectedData, ...parsed.collected_data }
+                isComplete = true
+                replyText = aiReply.replace(/COUNSELING_COMPLETE:[\s\S]*/, '').trim()
+              } catch { }
+            }
+          }
+
+          history.push({ role: 'assistant', content: replyText })
+
+          // セッション更新
+          await supabase
+            .from('counseling_sessions')
+            .update({
+              conversation_history: history,
+              collected_data: collectedData,
+              status: isComplete ? 'completed' : 'active',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', session.id)
+
+          // カウンセリング完了時にカルテに保存
+          if (isComplete && session.customer_id) {
+            await supabase
+              .from('customers')
+              .update({ concerns: JSON.stringify(collectedData) })
+              .eq('id', session.customer_id)
+          }
+
+          await replyMessage(replyToken, replyText, accessToken)
+          break
         }
+
+        default:
+          break
       }
-
-      history.push({ role: 'assistant', content: replyText })
-
-      // セッション更新
-      await supabase
-        .from('counseling_sessions')
-        .update({
-          conversation_history: history,
-          collected_data: collectedData,
-          status: isComplete ? 'completed' : 'active',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', session.id)
-
-      // カウンセリング完了時にカルテに保存
-      if (isComplete && session.customer_id) {
-        await supabase
-          .from('customers')
-          .update({ concerns: JSON.stringify(collectedData) })
-          .eq('id', session.customer_id)
-      }
-
-      // LINEに返信
-      await fetch('https://api.line.me/v2/bot/message/reply', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${salon.line_channel_access_token}`,
-        },
-        body: JSON.stringify({
-          replyToken,
-          messages: [{ type: 'text', text: replyText }],
-        }),
-      })
     }
 
     return NextResponse.json({ ok: true })
