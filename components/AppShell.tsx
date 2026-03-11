@@ -43,6 +43,8 @@ const NAV_ITEMS = [
   { href: '/management', icon: BarChart2, label: '経営管理' },
   { href: '/daily-report', icon: BookOpen, label: 'AI日報' },
   { href: '/marketing', icon: Megaphone, label: 'AI集客' },
+  { href: '/sns/compose', icon: Megaphone, label: 'AI投稿作成' },
+  { href: '/sns/posts', icon: FileText, label: '投稿管理' },
   { href: '/menu', icon: List, label: 'メニュー設定' },
   { href: '/products', icon: Package, label: '商品管理' },
   { href: '/courses', icon: Ticket, label: '回数券管理' },
