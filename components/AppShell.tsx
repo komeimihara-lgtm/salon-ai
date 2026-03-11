@@ -64,6 +64,7 @@ const NAV_ITEMS: NavItem[] = [
       { href: '/sns/compose', label: '投稿作成' },
       { href: '/sns/posts', label: '投稿管理' },
       { href: '/sns/calendar', label: '投稿カレンダー' },
+      { href: '/sns/analytics', label: '投稿分析' },
     ],
   },
   { type: 'link', href: '/menu', icon: List, label: 'メニュー設定' },

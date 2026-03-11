@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
 
   if (archived === 'true') {
     query = query.eq('is_archived', true)
+  } else if (archived === 'all') {
+    // 全件取得（アーカイブ含む）
   } else if (status) {
     query = query.eq('status', status).eq('is_archived', false)
   } else {
