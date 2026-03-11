@@ -73,21 +73,72 @@ export async function GET(req: NextRequest) {
       monthlyReservations.push({ month: m.month, count: count || 0 })
     }
 
-    // サロン別の予約数・アクティブ状態
+    // サロン別の予約数・アクティブ状態・機能エンゲージメント
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
     const salonDetails = []
 
     for (const salon of allSalons) {
+      // 予約数（全期間・直近30日）
       const { count: reservationCount } = await supabase
         .from('reservations')
         .select('id', { count: 'exact', head: true })
         .eq('salon_id', salon.id)
 
-      const { count: recentCount } = await supabase
+      const { count: recentReservations } = await supabase
         .from('reservations')
         .select('id', { count: 'exact', head: true })
         .eq('salon_id', salon.id)
         .gte('created_at', thirtyDaysAgo)
+
+      // 機能エンゲージメント（直近30日）
+      const { count: counselingCount } = await supabase
+        .from('counseling_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('salon_id', salon.id)
+        .gte('created_at', thirtyDaysAgo)
+
+      const { count: lineMessageCount } = await supabase
+        .from('line_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('salon_id', salon.id)
+        .gte('created_at', thirtyDaysAgo)
+
+      const { count: snsPostCount } = await supabase
+        .from('content_plans')
+        .select('id', { count: 'exact', head: true })
+        .eq('salon_id', salon.id)
+        .gte('created_at', thirtyDaysAgo)
+
+      const isActive = (recentReservations || 0) > 0
+      const engagementScore = (counselingCount || 0) + (lineMessageCount || 0) + (snsPostCount || 0) + (recentReservations || 0)
+
+      // 解約リスク判定
+      const daysSinceCreation = Math.floor((now.getTime() - new Date(salon.created_at).getTime()) / (1000 * 60 * 60 * 24))
+      const isChurnRisk = !isActive && (
+        (recentReservations || 0) === 0 &&
+        engagementScore <= 1 &&
+        daysSinceCreation >= 90
+      )
+
+      // 月別売上（導入後6ヶ月分）
+      const salonMonthlyRevenue = []
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        const nextD = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+        const { data: revData } = await supabase
+          .from('reservations')
+          .select('price')
+          .eq('salon_id', salon.id)
+          .gte('reservation_date', d.toISOString().slice(0, 10))
+          .lt('reservation_date', nextD.toISOString().slice(0, 10))
+
+        const revenue = (revData || []).reduce((sum, r) => sum + (r.price || 0), 0)
+        salonMonthlyRevenue.push({
+          month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+          revenue,
+        })
+      }
 
       salonDetails.push({
         id: salon.id,
@@ -96,9 +147,31 @@ export async function GET(req: NextRequest) {
         created_at: salon.created_at,
         last_activity: salon.updated_at,
         reservation_count: reservationCount || 0,
-        is_active: (recentCount || 0) > 0,
+        recent_reservations: recentReservations || 0,
+        is_active: isActive,
+        // 機能エンゲージメント
+        engagement: {
+          counseling: counselingCount || 0,
+          line_messages: lineMessageCount || 0,
+          sns_posts: snsPostCount || 0,
+          reservations: recentReservations || 0,
+          score: engagementScore,
+        },
+        // 解約リスク
+        is_churn_risk: isChurnRisk,
+        days_since_creation: daysSinceCreation,
+        // 月別売上
+        monthly_revenue: salonMonthlyRevenue,
       })
     }
+
+    // エンゲージメントランキング（スコア降順）
+    const engagementRanking = [...salonDetails]
+      .sort((a, b) => b.engagement.score - a.engagement.score)
+      .slice(0, 20)
+
+    // 解約リスクサロン
+    const churnRiskSalons = salonDetails.filter(s => s.is_churn_risk)
 
     return NextResponse.json({
       totalSalons,
@@ -110,6 +183,8 @@ export async function GET(req: NextRequest) {
       planDistribution,
       monthlyReservations,
       salons: salonDetails,
+      engagementRanking,
+      churnRiskSalons,
     })
   } catch (e) {
     console.error(e)
