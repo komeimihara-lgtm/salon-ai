@@ -1,12 +1,17 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { Loader2, Copy, Users, Plus, Trash2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Loader2, Copy, Users, Plus, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
 const WEEKDAY_COLORS = ['text-text-main', 'text-text-main', 'text-text-main', 'text-text-main', 'text-text-main', 'text-blue-500', 'text-red-500']
+const START_HOUR = 9
+const END_HOUR = 21
+const SLOT_MINUTES = 30
+const TOTAL_SLOTS = (END_HOUR - START_HOUR) * (60 / SLOT_MINUTES)
 
 interface Staff { id: string; name: string; color: string }
-interface Shift { id?: string; staff_id: string; date: string; start_time: string; end_time: string; staff?: Staff }
+interface Shift { id?: string; staff_id: string; date: string; start_time: string; end_time: string }
+interface Reservation { id: string; staff_name: string; reservation_date: string; start_time: string; duration_minutes: number }
 
 function getWeekDates(baseDate: Date): Date[] {
   const day = baseDate.getDay()
@@ -23,38 +28,40 @@ function toDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function timeToSlot(time: string) {
-  const [h, m] = (time || '00:00').slice(0, 5).split(':').map(Number)
-  return (h || 0) * 2 + ((m || 0) >= 30 ? 1 : 0)
+function timeToSlot(time: string, startHour: number) {
+  const [h, m] = time.split(':').map(Number)
+  return (h - startHour) * 2 + (m >= 30 ? 1 : 0)
 }
 
-function slotToTime(slot: number) {
-  const h = Math.floor(slot / 2)
-  const m = slot % 2 === 1 ? '30' : '00'
-  return `${String(h).padStart(2, '0')}:${m}`
+function slotToTime(slot: number, startHour: number) {
+  const totalMinutes = startHour * 60 + slot * SLOT_MINUTES
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
 export default function StaffPage() {
   const [staffList, setStaffList] = useState<Staff[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
+  const [reservations, setReservations] = useState<Reservation[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [baseDate, setBaseDate] = useState(new Date())
-  const weekDates = getWeekDates(baseDate)
   const [toast, setToast] = useState('')
-
-  // ドラッグ状態
-  const dragRef = useRef<{ staffId: string; dateStr: string; startSlot: number; currentSlot: number } | null>(null)
-  const [dragState, setDragState] = useState<{ staffId: string; dateStr: string; startSlot: number; currentSlot: number } | null>(null)
-
-  // 定休日設定
+  const [activeTab, setActiveTab] = useState<'availability' | 'shift'>('availability')
   const [closedDays, setClosedDays] = useState<number[]>([])
   const [showClosedDayModal, setShowClosedDayModal] = useState(false)
-
-  // スタッフ追加
+  const [showBulkModal, setShowBulkModal] = useState(false)
+  const [bulkStart, setBulkStart] = useState('09:00')
+  const [bulkEnd, setBulkEnd] = useState('18:00')
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [newStaffName, setNewStaffName] = useState('')
   const [newStaffColor, setNewStaffColor] = useState('#C4728A')
+  const [editingShift, setEditingShift] = useState<{ staffId: string; dateStr: string } | null>(null)
+  const [editStart, setEditStart] = useState('09:00')
+  const [editEnd, setEditEnd] = useState('18:00')
+
+  const weekDates = getWeekDates(baseDate)
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -78,71 +85,77 @@ export default function StaffPage() {
     finally { setLoading(false) }
   }, [weekDates[0].toISOString().slice(0, 7)])
 
-  useEffect(() => {
-    fetchStaff()
-  }, [fetchStaff])
+  const fetchReservations = useCallback(async () => {
+    try {
+      const startDate = toDateStr(weekDates[0])
+      const endDate = toDateStr(weekDates[6])
+      const res = await fetch(`/api/reservations?start=${startDate}&end=${endDate}`)
+      const json = await res.json()
+      setReservations(json.reservations || [])
+    } catch { }
+  }, [toDateStr(weekDates[0]), toDateStr(weekDates[6])])
 
-  useEffect(() => {
-    fetchShifts()
-  }, [fetchShifts])
+  useEffect(() => { fetchStaff() }, [fetchStaff])
+  useEffect(() => { fetchShifts(); fetchReservations() }, [fetchShifts, fetchReservations])
 
   const getShift = (staffId: string, dateStr: string) =>
     shifts.find(s => s.staff_id === staffId && s.date === dateStr)
-
-  const getDragShift = (staffId: string, dateStr: string) => {
-    if (!dragState || dragState.staffId !== staffId || dragState.dateStr !== dateStr) return null
-    const start = Math.min(dragState.startSlot, dragState.currentSlot)
-    const end = Math.max(dragState.startSlot, dragState.currentSlot) + 1
-    return { start: slotToTime(start), end: slotToTime(end) }
-  }
 
   const isClosedDay = (date: Date) => {
     const dayIndex = date.getDay() === 0 ? 6 : date.getDay() - 1
     return closedDays.includes(dayIndex)
   }
 
-  const handleMouseDown = (staffId: string, dateStr: string, slot: number, e: React.MouseEvent) => {
-    e.preventDefault()
-    if (isClosedDay(new Date(dateStr + 'T00:00:00'))) return
-    dragRef.current = { staffId, dateStr, startSlot: slot, currentSlot: slot }
-    setDragState({ staffId, dateStr, startSlot: slot, currentSlot: slot })
+  // 空き状況チェック
+  const isAvailable = (staffId: string, dateStr: string, slotIndex: number) => {
+    const staff = staffList.find(s => s.id === staffId)
+    if (!staff) return false
+    const shift = getShift(staffId, dateStr)
+    if (!shift) return false
+
+    const slotMinutes = START_HOUR * 60 + slotIndex * SLOT_MINUTES
+    const shiftStart = parseInt(shift.start_time.split(':')[0]) * 60 + parseInt(shift.start_time.split(':')[1])
+    const shiftEnd = parseInt(shift.end_time.split(':')[0]) * 60 + parseInt(shift.end_time.split(':')[1])
+
+    if (slotMinutes < shiftStart || slotMinutes >= shiftEnd) return false
+
+    // 予約との重複チェック
+    const staffReservations = reservations.filter(r =>
+      r.staff_name === staff.name && r.reservation_date === dateStr
+    )
+    const isBooked = staffReservations.some(r => {
+      const resStart = parseInt(r.start_time.split(':')[0]) * 60 + parseInt(r.start_time.split(':')[1])
+      const resEnd = resStart + (r.duration_minutes || 60)
+      return slotMinutes >= resStart && slotMinutes < resEnd
+    })
+
+    return !isBooked
   }
 
-  const handleMouseEnter = (staffId: string, dateStr: string, slot: number) => {
-    if (!dragRef.current || dragRef.current.staffId !== staffId || dragRef.current.dateStr !== dateStr) return
-    dragRef.current.currentSlot = slot
-    setDragState({ ...dragRef.current, currentSlot: slot })
-  }
-
-  const handleMouseUp = async () => {
-    if (!dragRef.current) return
-    const { staffId, dateStr, startSlot, currentSlot } = dragRef.current
-    const start = Math.min(startSlot, currentSlot)
-    const end = Math.max(startSlot, currentSlot) + 1
-    dragRef.current = null
-    setDragState(null)
-
+  // シフト保存
+  const handleSaveShift = async () => {
+    if (!editingShift) return
     setSaving(true)
     try {
       await fetch('/api/shifts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          staff_id: staffId,
-          date: dateStr,
-          start_time: slotToTime(start),
-          end_time: slotToTime(end),
+          staff_id: editingShift.staffId,
+          date: editingShift.dateStr,
+          start_time: editStart,
+          end_time: editEnd,
         })
       })
       await fetchShifts()
-      showToast('シフトを保存しました')
-    } catch {
-      showToast('保存に失敗しました')
-    } finally { setSaving(false) }
+      setEditingShift(null)
+      showToast('シフトを保存しました✨')
+    } catch { showToast('保存に失敗しました') }
+    finally { setSaving(false) }
   }
 
-  const handleDeleteShift = async (staffId: string, dateStr: string, e: React.MouseEvent) => {
-    e.stopPropagation()
+  // シフト削除
+  const handleDeleteShift = async (staffId: string, dateStr: string) => {
     setSaving(true)
     try {
       await fetch('/api/shifts', {
@@ -156,23 +169,22 @@ export default function StaffPage() {
     finally { setSaving(false) }
   }
 
+  // 前週コピー
   const handleCopyPrevWeek = async () => {
     setSaving(true)
     try {
       const prevWeekDates = getWeekDates(new Date(baseDate.getTime() - 7 * 24 * 60 * 60 * 1000))
       const prevShifts = shifts.filter(s => prevWeekDates.some(d => toDateStr(d) === s.date))
-
       for (const shift of prevShifts) {
         const prevDate = new Date(shift.date + 'T00:00:00')
         const newDate = new Date(prevDate.getTime() + 7 * 24 * 60 * 60 * 1000)
-        const newDateStr = toDateStr(newDate)
         if (isClosedDay(newDate)) continue
         await fetch('/api/shifts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             staff_id: shift.staff_id,
-            date: newDateStr,
+            date: toDateStr(newDate),
             start_time: shift.start_time,
             end_time: shift.end_time,
           })
@@ -180,12 +192,12 @@ export default function StaffPage() {
       }
       await fetchShifts()
       showToast('前週のシフトをコピーしました✨')
-    } catch {
-      showToast('コピーに失敗しました')
-    } finally { setSaving(false) }
+    } catch { showToast('コピーに失敗しました') }
+    finally { setSaving(false) }
   }
 
-  const handleBulkRegister = async (startTime: string, endTime: string) => {
+  // 一括登録
+  const handleBulkRegister = async () => {
     setSaving(true)
     try {
       for (const staff of staffList) {
@@ -197,8 +209,8 @@ export default function StaffPage() {
             body: JSON.stringify({
               staff_id: staff.id,
               date: toDateStr(date),
-              start_time: startTime,
-              end_time: endTime,
+              start_time: bulkStart,
+              end_time: bulkEnd,
             })
           })
         }
@@ -209,6 +221,7 @@ export default function StaffPage() {
     finally { setSaving(false) }
   }
 
+  // スタッフ追加
   const handleAddStaff = async () => {
     if (!newStaffName.trim()) return
     await fetch('/api/staff', {
@@ -222,37 +235,43 @@ export default function StaffPage() {
     showToast('スタッフを追加しました')
   }
 
-  const DISPLAY_HOURS = Array.from({ length: 29 }, (_, i) => i + 16)
-  const [showBulkModal, setShowBulkModal] = useState(false)
-  const [bulkStart, setBulkStart] = useState('09:00')
-  const [bulkEnd, setBulkEnd] = useState('18:00')
+  const timeOptions = Array.from({ length: TOTAL_SLOTS + 2 }, (_, i) => slotToTime(i, START_HOUR))
+  const today = new Date()
 
   return (
-    <div className="space-y-4" onMouseUp={handleMouseUp}>
+    <div className="space-y-4">
       {/* ヘッダー */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <div className="gradient-line rounded-full" />
-          <span className="font-dm-sans text-base font-bold text-text-main">シフト管理</span>
+          <span className="font-dm-sans text-base font-bold text-text-main">スタッフ管理</span>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => setShowClosedDayModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-light-lav text-text-sub text-xs font-bold">
-            定休日設定
-          </button>
+            className="px-3 py-1.5 rounded-xl bg-light-lav text-text-sub text-xs font-bold">定休日設定</button>
           <button onClick={handleCopyPrevWeek} disabled={saving}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-light-lav text-text-sub text-xs font-bold">
-            <Copy className="w-3.5 h-3.5" />前週コピー
-          </button>
+            <Copy className="w-3.5 h-3.5" />前週コピー</button>
           <button onClick={() => setShowBulkModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-light-lav text-text-sub text-xs font-bold">
-            <Users className="w-3.5 h-3.5" />一括登録
-          </button>
+            <Users className="w-3.5 h-3.5" />一括登録</button>
           <button onClick={() => setShowAddStaff(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-xs font-bold">
-            <Plus className="w-3.5 h-3.5" />スタッフ追加
-          </button>
+            <Plus className="w-3.5 h-3.5" />スタッフ追加</button>
         </div>
+      </div>
+
+      {/* タブ */}
+      <div className="flex gap-2">
+        {[
+          { key: 'availability', label: 'サロンの空き状況' },
+          { key: 'shift', label: 'シフト登録' },
+        ].map(tab => (
+          <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === tab.key ? 'bg-gradient-to-r from-rose to-lavender text-white' : 'bg-light-lav text-text-sub'}`}>
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* 週ナビゲーション */}
@@ -262,7 +281,8 @@ export default function StaffPage() {
           <ChevronLeft className="w-4 h-4 text-text-sub" />
         </button>
         <p className="font-bold text-text-main text-sm">
-          {weekDates[0].getMonth() + 1}月{weekDates[0].getDate()}日 〜 {weekDates[6].getMonth() + 1}月{weekDates[6].getDate()}日
+          {weekDates[0].getFullYear()}年{weekDates[0].getMonth() + 1}月 &nbsp;
+          {weekDates[0].getMonth() + 1}/{weekDates[0].getDate()} 〜 {weekDates[6].getMonth() + 1}/{weekDates[6].getDate()}
         </p>
         <button onClick={() => setBaseDate(d => new Date(d.getTime() + 7 * 24 * 60 * 60 * 1000))}
           className="p-2 rounded-xl hover:bg-light-lav transition-all">
@@ -270,99 +290,182 @@ export default function StaffPage() {
         </button>
       </div>
 
-      {/* シフトグリッド */}
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="w-8 h-8 text-rose animate-spin" />
         </div>
       ) : (
-        <div className="bg-white rounded-2xl card-shadow overflow-x-auto">
-          <table className="w-full min-w-[700px]">
-            <thead>
-              <tr>
-                <th className="w-16 p-3 text-xs text-text-sub font-medium border-b border-gray-100">スタッフ</th>
-                {weekDates.map((date, i) => {
-                  const closed = isClosedDay(date)
-                  const isToday = toDateStr(date) === toDateStr(new Date())
-                  return (
-                    <th key={i} className={`p-3 text-xs font-bold border-b border-gray-100 text-center ${closed ? 'bg-gray-50' : isToday ? 'bg-rose/5' : ''}`}>
-                      <p className={WEEKDAY_COLORS[i]}>{WEEKDAYS[i]}</p>
-                      <p className={`text-sm ${isToday ? 'text-rose' : 'text-text-main'}`}>
-                        {date.getMonth() + 1}/{date.getDate()}
-                      </p>
-                      {closed && <p className="text-xs text-gray-400">定休</p>}
-                    </th>
-                  )
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {staffList.map(staff => (
-                <tr key={staff.id} className="border-b border-gray-50">
-                  <td className="p-2 text-center">
-                    <div className="w-8 h-8 rounded-full mx-auto flex items-center justify-center text-white text-xs font-bold"
-                      style={{ backgroundColor: staff.color }}>
-                      {staff.name.slice(0, 1)}
-                    </div>
-                    <p className="text-xs text-text-sub mt-1">{staff.name}</p>
-                  </td>
-                  {weekDates.map((date, di) => {
-                    const dateStr = toDateStr(date)
-                    const closed = isClosedDay(date)
-                    const shift = getShift(staff.id, dateStr)
-                    const drag = getDragShift(staff.id, dateStr)
-                    const displayShift = drag || (shift ? { start: shift.start_time, end: shift.end_time } : null)
-
+        <>
+          {/* 空き状況タブ */}
+          {activeTab === 'availability' && (
+            <div className="bg-white rounded-2xl card-shadow overflow-x-auto">
+              <table className="w-full min-w-[600px] border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="w-16 p-2 text-xs text-text-sub font-medium sticky left-0 bg-white z-10">時間</th>
+                    {weekDates.map((date, i) => {
+                      const isToday = toDateStr(date) === toDateStr(today)
+                      const closed = isClosedDay(date)
+                      return (
+                        <th key={i} className={`p-2 text-center min-w-[80px] ${isToday ? 'bg-rose/5' : closed ? 'bg-gray-50' : ''}`}>
+                          <p className={`text-xs font-bold ${WEEKDAY_COLORS[i]}`}>{WEEKDAYS[i]}</p>
+                          <p className={`text-sm font-bold ${isToday ? 'text-rose' : 'text-text-main'}`}>
+                            {date.getMonth() + 1}/{date.getDate()}
+                          </p>
+                          {closed && <p className="text-xs text-gray-300">休</p>}
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: TOTAL_SLOTS }).map((_, slotIdx) => {
+                    const time = slotToTime(slotIdx, START_HOUR)
+                    const isHour = slotIdx % 2 === 0
                     return (
-                      <td key={di} className={`p-1.5 relative ${closed ? 'bg-gray-50' : ''}`}>
-                        {closed ? (
-                          <div className="h-16 flex items-center justify-center text-xs text-gray-300">休</div>
-                        ) : (
-                          <div className="relative h-16 rounded-xl border-2 border-dashed border-gray-100 overflow-hidden select-none cursor-crosshair"
-                            style={{ userSelect: 'none' }}>
-                            {DISPLAY_HOURS.map(slot => (
-                              <div key={slot}
-                                className="absolute w-full"
-                                style={{ top: `${((slot - 16) / 28) * 100}%`, height: `${(1 / 28) * 100}%` }}
-                                onMouseDown={(e) => handleMouseDown(staff.id, dateStr, slot, e)}
-                                onMouseEnter={() => handleMouseEnter(staff.id, dateStr, slot)}
-                              />
-                            ))}
-                            {displayShift && (() => {
-                              const startSlot = timeToSlot(displayShift.start)
-                              const endSlot = timeToSlot(displayShift.end)
-                              const top = ((Math.max(startSlot, 16) - 16) / 28) * 100
-                              const height = ((Math.min(endSlot, 44) - Math.max(startSlot, 16)) / 28) * 100
-                              return (
-                                <div className="absolute left-0.5 right-0.5 rounded-lg flex items-center justify-between px-1.5 group z-10"
-                                  style={{
-                                    top: `${top}%`,
-                                    height: `${Math.max(height, 4)}%`,
-                                    backgroundColor: staff.color + 'dd',
-                                  }}>
-                                  <span className="text-white text-xs font-bold leading-none truncate">
-                                    {displayShift.start}〜{displayShift.end}
-                                  </span>
-                                  {shift && !drag && (
-                                    <button onClick={(e) => handleDeleteShift(staff.id, dateStr, e)}
-                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-white/20 rounded">
-                                      <Trash2 className="w-3 h-3 text-white" />
-                                    </button>
-                                  )}
-                                </div>
-                              )
-                            })()}
-                          </div>
-                        )}
-                      </td>
+                      <tr key={slotIdx} className={`border-b ${isHour ? 'border-gray-100' : 'border-gray-50'}`}>
+                        <td className={`p-1 text-center sticky left-0 bg-white z-10 ${isHour ? 'font-bold text-text-main' : 'text-text-sub'}`}>
+                          <span className="text-xs">{isHour ? time : ''}</span>
+                        </td>
+                        {weekDates.map((date, di) => {
+                          const dateStr = toDateStr(date)
+                          const closed = isClosedDay(date)
+                          if (closed) {
+                            return <td key={di} className="bg-gray-50 text-center p-1"><span className="text-xs text-gray-200">-</span></td>
+                          }
+                          // いずれかのスタッフが空いているか
+                          const anyAvailable = staffList.some(s => isAvailable(s.id, dateStr, slotIdx))
+                          const allAvailable = staffList.length > 0 && staffList.every(s => isAvailable(s.id, dateStr, slotIdx))
+                          return (
+                            <td key={di} className={`text-center p-1 ${toDateStr(date) === toDateStr(today) ? 'bg-rose/5' : ''}`}>
+                              {anyAvailable ? (
+                                <span className={`text-lg font-bold ${allAvailable ? 'text-rose' : 'text-rose/60'}`}>◎</span>
+                              ) : (
+                                <span className="text-sm text-gray-300">×</span>
+                              )}
+                            </td>
+                          )
+                        })}
+                      </tr>
                     )
                   })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="flex gap-4 px-4 py-2 border-t border-gray-100">
-            <p className="text-xs text-text-sub">8:00〜22:00の範囲でドラッグしてシフトを登録</p>
+                </tbody>
+              </table>
+              <div className="flex gap-4 px-4 py-2 border-t border-gray-100">
+                <div className="flex items-center gap-1.5"><span className="text-rose font-bold">◎</span><span className="text-xs text-text-sub">空きあり</span></div>
+                <div className="flex items-center gap-1.5"><span className="text-rose/60 font-bold">◎</span><span className="text-xs text-text-sub">一部空きあり</span></div>
+                <div className="flex items-center gap-1.5"><span className="text-gray-300">×</span><span className="text-xs text-text-sub">満員・シフトなし</span></div>
+              </div>
+            </div>
+          )}
+
+          {/* シフト登録タブ */}
+          {activeTab === 'shift' && (
+            <div className="bg-white rounded-2xl card-shadow overflow-x-auto">
+              <table className="w-full min-w-[600px]">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="w-20 p-3 text-xs text-text-sub font-medium">スタッフ</th>
+                    {weekDates.map((date, i) => {
+                      const isToday = toDateStr(date) === toDateStr(today)
+                      const closed = isClosedDay(date)
+                      return (
+                        <th key={i} className={`p-2 text-center ${isToday ? 'bg-rose/5' : closed ? 'bg-gray-50' : ''}`}>
+                          <p className={`text-xs font-bold ${WEEKDAY_COLORS[i]}`}>{WEEKDAYS[i]}</p>
+                          <p className={`text-sm font-bold ${isToday ? 'text-rose' : 'text-text-main'}`}>
+                            {date.getMonth() + 1}/{date.getDate()}
+                          </p>
+                        </th>
+                      )
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {staffList.map(staff => (
+                    <tr key={staff.id} className="border-b border-gray-50">
+                      <td className="p-2 text-center">
+                        <div className="w-8 h-8 rounded-full mx-auto flex items-center justify-center text-white text-xs font-bold"
+                          style={{ backgroundColor: staff.color }}>
+                          {staff.name.slice(0, 1)}
+                        </div>
+                        <p className="text-xs text-text-sub mt-1">{staff.name}</p>
+                      </td>
+                      {weekDates.map((date, di) => {
+                        const dateStr = toDateStr(date)
+                        const closed = isClosedDay(date)
+                        const shift = getShift(staff.id, dateStr)
+                        return (
+                          <td key={di} className={`p-1.5 text-center ${closed ? 'bg-gray-50' : ''}`}>
+                            {closed ? (
+                              <span className="text-xs text-gray-300">休</span>
+                            ) : shift ? (
+                              <button onClick={() => {
+                                setEditingShift({ staffId: staff.id, dateStr })
+                                setEditStart(shift.start_time.slice(0, 5))
+                                setEditEnd(shift.end_time.slice(0, 5))
+                              }}
+                                className="w-full py-1.5 px-1 rounded-xl text-white text-xs font-bold leading-tight"
+                                style={{ backgroundColor: staff.color }}>
+                                {shift.start_time.slice(0, 5)}<br />〜{shift.end_time.slice(0, 5)}
+                              </button>
+                            ) : (
+                              <button onClick={() => {
+                                setEditingShift({ staffId: staff.id, dateStr })
+                                setEditStart('09:00')
+                                setEditEnd('18:00')
+                              }}
+                                className="w-full py-2 rounded-xl border-2 border-dashed border-gray-200 text-gray-300 text-xs hover:border-rose/30 hover:text-rose/30 transition-all">
+                                ＋
+                              </button>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* シフト編集モーダル */}
+      {editingShift && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm card-shadow">
+            <h3 className="font-bold text-text-main mb-4">シフト設定</h3>
+            <p className="text-xs text-text-sub mb-4">
+              {staffList.find(s => s.id === editingShift.staffId)?.name} / {editingShift.dateStr}
+            </p>
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-text-sub mb-1">開始時間</p>
+                <select value={editStart} onChange={e => setEditStart(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm">
+                  {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <p className="text-xs text-text-sub mb-1">終了時間</p>
+                <select value={editEnd} onChange={e => setEditEnd(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm">
+                  {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setEditingShift(null)}
+                className="flex-1 py-2.5 rounded-xl bg-gray-100 text-text-sub text-sm font-bold">キャンセル</button>
+              {getShift(editingShift.staffId, editingShift.dateStr) && (
+                <button onClick={() => { handleDeleteShift(editingShift.staffId, editingShift.dateStr); setEditingShift(null) }}
+                  className="px-4 py-2.5 rounded-xl bg-red-100 text-red-500 text-sm font-bold">削除</button>
+              )}
+              <button onClick={handleSaveShift} disabled={saving}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-bold flex items-center justify-center gap-2">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : '保存'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -377,9 +480,7 @@ export default function StaffPage() {
                 <button key={i} onClick={() => setClosedDays(prev =>
                   prev.includes(i) ? prev.filter(d => d !== i) : [...prev, i]
                 )}
-                  className={`w-12 h-12 rounded-xl text-sm font-bold transition-all ${closedDays.includes(i)
-                    ? 'bg-gradient-to-br from-rose to-lavender text-white'
-                    : 'bg-light-lav text-text-sub'}`}>
+                  className={`w-12 h-12 rounded-xl text-sm font-bold transition-all ${closedDays.includes(i) ? 'bg-gradient-to-br from-rose to-lavender text-white' : 'bg-light-lav text-text-sub'}`}>
                   {day}
                 </button>
               ))}
@@ -399,34 +500,28 @@ export default function StaffPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm card-shadow">
             <h3 className="font-bold text-text-main mb-1">一括登録</h3>
-            <p className="text-xs text-text-sub mb-4">今週の全スタッフに同じ時間を登録します（定休日除く）</p>
+            <p className="text-xs text-text-sub mb-4">今週の全スタッフに同じ時間を登録します</p>
             <div className="space-y-3">
               <div>
                 <p className="text-xs text-text-sub mb-1">開始時間</p>
                 <select value={bulkStart} onChange={e => setBulkStart(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm">
-                  {Array.from({ length: 28 }, (_, i) => slotToTime(i + 12)).map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
+                  {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div>
                 <p className="text-xs text-text-sub mb-1">終了時間</p>
                 <select value={bulkEnd} onChange={e => setBulkEnd(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm">
-                  {Array.from({ length: 28 }, (_, i) => slotToTime(i + 14)).map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
+                  {timeOptions.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
             </div>
             <div className="flex gap-2 mt-4">
               <button onClick={() => setShowBulkModal(false)}
                 className="flex-1 py-2.5 rounded-xl bg-gray-100 text-text-sub text-sm font-bold">キャンセル</button>
-              <button onClick={() => { handleBulkRegister(bulkStart, bulkEnd); setShowBulkModal(false) }} disabled={saving}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-bold">
-                一括登録
-              </button>
+              <button onClick={() => { handleBulkRegister(); setShowBulkModal(false) }} disabled={saving}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-bold">一括登録</button>
             </div>
           </div>
         </div>
