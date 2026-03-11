@@ -3,6 +3,10 @@ import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   try {
+    // 顧客ステータスの自動判定を実行（非同期・失敗時は無視）
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    await fetch(`${appUrl}/api/customers/update-status`, { method: 'POST' }).catch(() => {})
+
     const { searchParams } = new URL(req.url)
     const search = searchParams.get('search') || ''
     const status = searchParams.get('status') || ''

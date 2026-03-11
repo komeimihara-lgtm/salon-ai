@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Plus, Loader2 } from 'lucide-react'
 import type { Customer } from '@/types'
-import { getMenus, type MenuItem } from '@/lib/menus'
+import { getMenus, getCategories, type MenuItem } from '@/lib/menus'
 
 // 10:00〜21:00 を15分刻み（予約表と一致）
 function buildTimeOptions(): string[] {
@@ -61,6 +61,8 @@ export default function ReservationFormModal({
   onSaved,
 }: ReservationFormModalProps) {
   const [menus, setMenus] = useState<MenuItem[]>([])
+  const [categories, setCategories] = useState<string[]>([])
+  const [menuCategory, setMenuCategory] = useState<string>('')
   const [mode, setMode] = useState<CustomerMode>('existing')
   const [form, setForm] = useState({
     customer_name: '',
@@ -85,9 +87,23 @@ export default function ReservationFormModal({
   const dropdownRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // メニュー管理と連動: モーダルが開くたびに最新のメニュー・カテゴリを取得
   useEffect(() => {
     setMenus(getMenus())
-  }, [])
+    setCategories(getCategories())
+    setMenuCategory('')
+  }, [defaultDate, defaultStartTime, defaultBed])
+
+  const filteredMenus = menuCategory
+    ? menus.filter(m => (m.category || '').trim() === menuCategory)
+    : menus
+
+  // カテゴリ変更時に、選択中のメニューがフィルタ結果に含まれなければクリア
+  useEffect(() => {
+    if (form.menu && !filteredMenus.some(m => m.name === form.menu)) {
+      setForm(p => ({ ...p, menu: '' }))
+    }
+  }, [menuCategory, filteredMenus, form.menu])
 
   // 担当スタッフ: 親から渡されていれば使用、そうでなければAPIから取得
   useEffect(() => {
@@ -380,14 +396,43 @@ export default function ReservationFormModal({
             </div>
           )}
 
-          {/* 5. 施術メニュー（選択すると終了時間を自動計算） */}
+          {/* 5. 施術メニュー（メニュー管理と連動・カテゴリでフィルタ） */}
           <div>
             <label className="text-xs text-[#4A5568] mb-1 block">施術メニュー</label>
-            <select value={form.menu} onChange={e => setForm(p => ({ ...p, menu: e.target.value }))}
-              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
-              <option value="">選択してください</option>
-              {menus.map(m => <option key={m.id} value={m.name}>{m.name}（{m.duration}分）</option>)}
-            </select>
+            <div className="space-y-2">
+              {categories.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setMenuCategory('')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      menuCategory === '' ? 'bg-[#0891B2] text-white' : 'bg-white border border-[#BAE6FD] text-[#4A5568] hover:border-[#0891B2]'
+                    }`}
+                  >
+                    全て
+                  </button>
+                  {categories.map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setMenuCategory(cat)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        menuCategory === cat ? 'bg-[#0891B2] text-white' : 'bg-white border border-[#BAE6FD] text-[#4A5568] hover:border-[#0891B2]'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <select value={form.menu} onChange={e => setForm(p => ({ ...p, menu: e.target.value }))}
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
+                <option value="">選択してください</option>
+                {filteredMenus.map(m => (
+                  <option key={m.id} value={m.name}>{m.name}（{m.duration}分）</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* 6. 担当スタッフ（出勤スタッフから選択） */}

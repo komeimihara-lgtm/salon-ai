@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export const DEMO_SALON_ID = 'a0000000-0000-0000-0000-000000000001'
 
@@ -15,12 +15,15 @@ export function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) throw new Error('Supabase環境変数が設定されていません')
-  return createClient(url, key)
+  return createSupabaseClient(url, key)
 }
 
 export function getSupabaseClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !key) throw new Error('Supabase環境変数が設定されていません')
-  return createClient(url, key)
+  return createSupabaseClient(url, key)
 }
+
+/** createClient のエイリアス（互換用） */
+export const createClient = getSupabaseClient

@@ -52,7 +52,7 @@ CREATE TABLE customers (
   -- LINE連携
   line_user_id TEXT,
   -- ステータス
-  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'lost', 'vip', 'temporary')),
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'lost', 'vip', 'temporary', 'at_risk', 'dormant')),
   -- 移行元
   imported_from TEXT,                    -- 'penguin', 'salonboard', 'csv', 'manual'
   -- タイムスタンプ

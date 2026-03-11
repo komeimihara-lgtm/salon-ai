@@ -1,11 +1,9 @@
-/**
- * 商品（物販）管理
- */
-
-import { getSalonId } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
+import { DEMO_SALON_ID } from '@/lib/supabase'
 
 export type Product = {
   id: string
+  salon_id: string
   name: string
   category: string
   price: number
@@ -14,75 +12,54 @@ export type Product = {
   low_stock_threshold: number
   barcode?: string
   memo?: string
+  created_at?: string
 }
 
-function mapRow(r: Record<string, unknown>): Product {
-  return {
-    id: String(r.id),
-    name: String(r.name ?? ''),
-    category: String(r.category ?? '物販'),
-    price: Number(r.price ?? 0),
-    cost: Number(r.cost ?? 0),
-    stock: Number(r.stock ?? 0),
-    low_stock_threshold: Number(r.low_stock_threshold ?? 5),
-    barcode: r.barcode != null ? String(r.barcode) : undefined,
-    memo: r.memo != null ? String(r.memo) : undefined,
-  }
-}
+const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
 
 export async function fetchProducts(): Promise<Product[]> {
-  const salonId = getSalonId()
-  const res = await fetch(`/api/products?salon_id=${encodeURIComponent(salonId)}`)
-  const json = await res.json()
-  if (!res.ok) throw new Error(json.error || '取得に失敗しました')
-  return (json.products || []).map((r: Record<string, unknown>) => mapRow(r))
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('salon_id', salonId)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
 }
 
-export async function createProduct(data: Omit<Product, 'id'>): Promise<Product> {
-  const res = await fetch('/api/products', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: data.name,
-      category: data.category,
-      price: data.price,
-      cost: data.cost,
-      stock: data.stock,
-      low_stock_threshold: data.low_stock_threshold,
-      barcode: data.barcode ?? null,
-      memo: data.memo ?? null,
-    }),
-  })
-  const json = await res.json()
-  if (!res.ok) throw new Error(json.error || '登録に失敗しました')
-  return mapRow(json.product)
+export async function createProduct(data: Omit<Product, 'id' | 'salon_id' | 'created_at'>): Promise<Product> {
+  const supabase = createClient()
+  const { data: row, error } = await supabase
+    .from('products')
+    .insert({ ...data, salon_id: salonId })
+    .select()
+    .single()
+  if (error) throw error
+  return row
 }
 
 export async function updateProduct(id: string, data: Partial<Product>): Promise<Product> {
-  const body: Record<string, unknown> = {}
-  if (data.name != null) body.name = data.name
-  if (data.category != null) body.category = data.category
-  if (data.price != null) body.price = data.price
-  if (data.cost != null) body.cost = data.cost
-  if (data.stock != null) body.stock = data.stock
-  if (data.low_stock_threshold != null) body.low_stock_threshold = data.low_stock_threshold
-  if (data.barcode !== undefined) body.barcode = data.barcode
-  if (data.memo !== undefined) body.memo = data.memo
-
-  const res = await fetch(`/api/products/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const json = await res.json()
-  if (!res.ok) throw new Error(json.error || '更新に失敗しました')
-  return mapRow(json.product)
+  const supabase = createClient()
+  const { data: row, error } = await supabase
+    .from('products')
+    .update(data)
+    .eq('id', id)
+    .eq('salon_id', salonId)
+    .select()
+    .single()
+  if (error) throw error
+  return row
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  const res = await fetch(`/api/products/${id}`, { method: 'DELETE' })
-  const json = await res.json()
-  if (!res.ok) throw new Error(json.error || '削除に失敗しました')
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', id)
+    .eq('salon_id', salonId)
+  if (error) throw error
 }
 
 export async function adjustStock(
@@ -91,11 +68,23 @@ export async function adjustStock(
   quantity: number,
   memo?: string
 ): Promise<void> {
-  const res = await fetch(`/api/products/${productId}/stock`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type, quantity, memo }),
-  })
-  const json = await res.json()
-  if (!res.ok) throw new Error(json.error || '在庫調整に失敗しました')
+  const supabase = createClient()
+  const { data: product, error: fetchError } = await supabase
+    .from('products')
+    .select('stock')
+    .eq('id', productId)
+    .single()
+  if (fetchError) throw fetchError
+  const newStock =
+    type === 'in' ? product.stock + quantity :
+    type === 'out' ? Math.max(0, product.stock - quantity) :
+    quantity
+  const { error: updateError } = await supabase
+    .from('products')
+    .update({ stock: newStock })
+    .eq('id', productId)
+  if (updateError) throw updateError
+  await supabase
+    .from('product_stock_logs')
+    .insert({ salon_id: salonId, product_id: productId, type, quantity, memo })
 }

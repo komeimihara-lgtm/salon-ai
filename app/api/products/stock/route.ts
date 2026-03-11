@@ -4,15 +4,19 @@ import { DEMO_SALON_ID } from '@/lib/supabase'
 
 const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request) {
   const supabase = createClient()
-  const { id } = await params
-  const { type, quantity, memo } = await req.json()
+  const { product_id, type, quantity, memo } = await req.json()
+
+  const { error: logError } = await supabase
+    .from('product_stock_logs')
+    .insert({ salon_id: salonId, product_id, type, quantity, memo })
+  if (logError) return NextResponse.json({ error: logError.message }, { status: 500 })
 
   const { data: product, error: fetchError } = await supabase
     .from('products')
     .select('stock')
-    .eq('id', id)
+    .eq('id', product_id)
     .single()
   if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 })
 
@@ -24,12 +28,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { error: updateError } = await supabase
     .from('products')
     .update({ stock: newStock })
-    .eq('id', id)
+    .eq('id', product_id)
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
-
-  await supabase
-    .from('product_stock_logs')
-    .insert({ salon_id: salonId, product_id: id, type, quantity, memo })
 
   return NextResponse.json({ ok: true, stock: newStock })
 }

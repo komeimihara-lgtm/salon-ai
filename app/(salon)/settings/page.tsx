@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Plus, Trash2, Save, Pencil, X } from 'lucide-react'
+import { Plus, Trash2, Save, Pencil, X, Loader2 } from 'lucide-react'
 import { getSalonSettings, setSalonSettings, type SalonSettings } from '@/lib/salon-settings'
 
 // 営業開始: 6:00〜13:00（30分刻み）
@@ -35,10 +35,29 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [bedsEditing, setBedsEditing] = useState(false)
   const [editingBedNames, setEditingBedNames] = useState<Record<number, string>>({})
+  const [lineToken, setLineToken] = useState('')
+  const [lineSecret, setLineSecret] = useState('')
+  const [lineSaving, setLineSaving] = useState(false)
+  const [lineStatus, setLineStatus] = useState<'unknown' | 'connected' | 'error'>('unknown')
+  const [lineToast, setLineToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
     setSettings(getSalonSettings())
   }, [])
+
+  useEffect(() => {
+    fetch('/api/line/verify', { method: 'POST' })
+      .then(r => r.json())
+      .then(d => setLineStatus(d.connected ? 'connected' : 'error'))
+      .catch(() => setLineStatus('unknown'))
+  }, [])
+
+  useEffect(() => {
+    if (lineToast) {
+      const t = setTimeout(() => setLineToast(null), 3000)
+      return () => clearTimeout(t)
+    }
+  }, [lineToast])
 
   const save = () => {
     setSalonSettings(settings)
@@ -80,6 +99,33 @@ export default function SettingsPage() {
   const cancelBedsEdit = () => {
     setBedsEditing(false)
     setEditingBedNames({})
+  }
+
+  const saveLineSettings = async () => {
+    setLineSaving(true)
+    setLineToast(null)
+    try {
+      const res = await fetch('/api/settings/line', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          line_channel_access_token: lineToken,
+          line_channel_secret: lineSecret,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      const verifyRes = await fetch('/api/line/verify', { method: 'POST' })
+      const verifyJson = await verifyRes.json()
+      setLineStatus(verifyJson.connected ? 'connected' : 'error')
+      setLineToast({
+        message: verifyJson.connected ? 'LINE連携が完了しました' : 'トークンを確認してください',
+        type: verifyJson.connected ? 'success' : 'error',
+      })
+    } catch {
+      setLineToast({ message: '保存に失敗しました', type: 'error' })
+    } finally {
+      setLineSaving(false)
+    }
   }
 
   const addStaff = () => {
@@ -434,17 +480,41 @@ export default function SettingsPage() {
         </div>
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
-          <p className="text-sm text-text-sub mb-4">
-            LINE公式アカウントと連携すると、自動フォローや予約リマインドが利用できます。
+          <h3 className="font-bold text-text-main mb-4">LINE連携設定</h3>
+          <div className={`flex items-center gap-2 mb-4 px-4 py-3 rounded-xl ${lineStatus === 'connected' ? 'bg-emerald-50 border border-emerald-200' : lineStatus === 'error' ? 'bg-red-50 border border-red-200' : 'bg-gray-50 border border-gray-200'}`}>
+            <div className={`w-2.5 h-2.5 rounded-full ${lineStatus === 'connected' ? 'bg-emerald-500' : lineStatus === 'error' ? 'bg-red-500' : 'bg-gray-400'}`} />
+            <p className="text-sm font-medium">{lineStatus === 'connected' ? 'LINE連携済み' : lineStatus === 'error' ? '連携エラー' : '未連携'}</p>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-text-sub block mb-1">チャンネルアクセストークン</label>
+              <input type="password" value={lineToken} onChange={e => setLineToken(e.target.value)}
+                placeholder="LINE Developersから取得したトークン"
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-text-sub block mb-1">チャンネルシークレット</label>
+              <input type="password" value={lineSecret} onChange={e => setLineSecret(e.target.value)}
+                placeholder="LINE Developersから取得したシークレット"
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm" />
+            </div>
+            <button onClick={saveLineSettings} disabled={lineSaving || !lineToken || !lineSecret}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold disabled:opacity-50 flex items-center justify-center gap-2">
+              {lineSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : 'LINE連携を保存・確認'}
+            </button>
+          </div>
+          <p className="text-xs text-text-sub mt-3">
+            LINE Developers（https://developers.line.biz）でMessaging APIチャンネルを作成し、
+            チャンネルアクセストークンとチャンネルシークレットを取得してください。
           </p>
-          <Link
-            href="/line"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium hover:opacity-90"
-          >
-            LINE連携設定へ
-          </Link>
         </div>
       </section>
+
+      {lineToast && (
+        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-lg font-medium ${lineToast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'} text-white`}>
+          {lineToast.message}
+        </div>
+      )}
     </div>
   )
 }

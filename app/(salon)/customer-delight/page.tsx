@@ -13,12 +13,14 @@ import {
   Gift,
   Zap,
 } from 'lucide-react'
-import { getManualTasks, setManualTasks } from '@/lib/dashboard-tasks'
+import { addTask } from '@/lib/dashboard-tasks'
 
 interface Proposal {
   customer_name: string
+  customer_rank: string
   reason: string
   initiative: string
+  special_experience?: string
   action_type: string
   message_template?: string
   priority: number
@@ -29,6 +31,14 @@ const ACTION_ICONS: Record<string, typeof MessageCircle> = {
   task: Zap,
   offer: Gift,
   surprise: Heart,
+}
+
+const RANK_LABELS: Record<string, { label: string; color: string }> = {
+  vip: { label: 'VIP', color: 'bg-amber-100 text-amber-700' },
+  at_risk: { label: '失客予備軍', color: 'bg-orange-100 text-orange-700' },
+  dormant: { label: '休眠客', color: 'bg-purple-100 text-purple-700' },
+  new: { label: '初回', color: 'bg-emerald-100 text-emerald-700' },
+  active: { label: 'アクティブ', color: 'bg-blue-100 text-blue-700' },
 }
 
 export default function CustomerDelightPage() {
@@ -58,19 +68,20 @@ export default function CustomerDelightPage() {
     fetchProposals()
   }, [])
 
-  const handleExecute = (p: Proposal) => {
+  const handleExecute = async (p: Proposal) => {
     const taskText = p.message_template
       ? `${p.customer_name}様: ${p.initiative} — 「${p.message_template.slice(0, 50)}${p.message_template.length > 50 ? '…' : ''}」`
       : `${p.customer_name}様: ${p.initiative}`
-    const tasks = getManualTasks()
-    const newTask = {
-      id: Date.now().toString(),
-      text: taskText,
-      done: false,
-    }
-    setManualTasks([...tasks, newTask])
-    setExecuted((prev) => new Set(prev).add(`${p.customer_name}-${p.initiative}`))
-    window.dispatchEvent(new Event('dashboard-tasks-updated'))
+    try {
+      await addTask({
+        text: taskText,
+        source: 'customer_delight',
+        priority: 'high',
+        due_date: null,
+        done: false,
+      })
+      setExecuted((prev) => new Set(prev).add(`${p.customer_name}-${p.initiative}`))
+    } catch { }
   }
 
   const handleCopy = async (p: Proposal) => {
@@ -143,12 +154,23 @@ export default function CustomerDelightPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-bold text-text-main">{p.customer_name}様</span>
+                        {p.customer_rank && RANK_LABELS[p.customer_rank] && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${RANK_LABELS[p.customer_rank].color}`}>
+                            {RANK_LABELS[p.customer_rank].label}
+                          </span>
+                        )}
                         <span className="text-xs text-rose font-medium">
                           優先度 {p.priority}
                         </span>
                       </div>
                       <p className="text-xs text-text-sub mb-2">{p.reason}</p>
                       <p className="text-sm text-text-main font-medium mb-2">{p.initiative}</p>
+                      {p.special_experience && (
+                        <div className="bg-purple-50 rounded-xl p-3 mb-3 border border-purple-100">
+                          <p className="text-xs text-purple-600 font-medium mb-1">✨ 特別体験</p>
+                          <p className="text-sm text-text-main">{p.special_experience}</p>
+                        </div>
+                      )}
                       {p.message_template && (
                         <div className="text-xs text-text-sub bg-white/60 rounded-lg p-3 mb-3 border border-gray-100">
                           {p.message_template}

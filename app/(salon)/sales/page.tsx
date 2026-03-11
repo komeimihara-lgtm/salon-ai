@@ -142,8 +142,13 @@ export default function SalesPage() {
     fetchCustomers()
     fetchTicketPlans().then(setTicketPlans).catch(() => [])
     fetchSubscriptionPlans().then(setSubPlans).catch(() => [])
-    fetchProducts().then(setProducts).catch(() => [])
   }, [fetchCustomers])
+
+  useEffect(() => {
+    if (selectedCategory === '物販' && products.length === 0) {
+      fetchProducts().then(setProducts).catch(() => [])
+    }
+  }, [selectedCategory, products.length])
 
   useEffect(() => { setLoading(true); fetchSales() }, [fetchSales])
 
@@ -210,9 +215,9 @@ export default function SalesPage() {
   const addProductToCart = (product: Product) => {
     setError('')
     setCart(prev => {
-      const found = prev.find(c => c.type === 'menu' && c.menuId === product.id && c.productId)
-      if (found) return prev.map(c => c.type === 'menu' && c.menuId === product.id && c.productId ? { ...c, qty: c.qty + 1 } : c)
-      return [...prev, { type: 'menu' as const, menuId: product.id, name: product.name, price: product.price, qty: 1, category: '物販', productId: product.id }]
+      const found = prev.find(c => c.type === 'menu' && c.productId === product.id)
+      if (found) return prev.map(c => c.type === 'menu' && c.productId === product.id ? { ...c, qty: c.qty + 1 } : c)
+      return [...prev, { type: 'menu' as const, menuId: `product-${product.id}`, name: product.name, price: product.price, qty: 1, category: '物販', productId: product.id }]
     })
   }
 
@@ -351,9 +356,9 @@ export default function SalesPage() {
         if (!res.ok) throw new Error()
       }
       for (const c of cart) {
-        if (c.productId && c.qty > 0) {
+        if (c.category === '物販' && c.productId && c.qty > 0) {
           try {
-            await adjustStock(c.productId, 'out', c.qty)
+            await adjustStock(c.productId, 'out', c.qty, '売上による在庫減算')
           } catch (e) {
             console.error('在庫減算エラー:', e)
           }
@@ -469,7 +474,7 @@ export default function SalesPage() {
                     className="min-h-[100px] p-4 rounded-2xl border-2 border-gray-200 hover:border-rose hover:bg-rose/5 text-left transition-all active:scale-[0.98]">
                     <p className="font-bold text-text-main text-base leading-tight">{p.name}</p>
                     <p className="text-xl font-bold text-rose mt-1">¥{p.price.toLocaleString()}</p>
-                    <p className="text-sm text-text-sub mt-0.5">在庫: {p.stock}</p>
+                    <p className="text-sm text-text-sub mt-0.5">在庫: {p.stock}個</p>
                   </button>
                 ))
               ) : (

@@ -20,7 +20,7 @@ import { RescheduleModal, EditReservationModal } from '@/components/ReservationM
 import ReservationFormModal from '@/components/ReservationFormModal'
 import { useReservations } from '@/hooks/useReservations'
 import { useTodayShifts } from '@/lib/staff-shifts'
-import { getManualTasks, setManualTasks, type ManualTask } from '@/lib/dashboard-tasks'
+import { fetchTasks, addTask, toggleTask, deleteTask, type ManualTask } from '@/lib/dashboard-tasks'
 import { getSalonSettings } from '@/lib/salon-settings'
 import { getAchievementRate, getAchievementColor, getAchievementBgColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
 import {
@@ -222,6 +222,8 @@ export default function DashboardPage() {
   const [manualTasks, setManualTasksState] = useState<ManualTask[]>([])
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [newTaskText, setNewTaskText] = useState('')
+  const [newTaskPriority, setNewTaskPriority] = useState<'high' | 'medium' | 'low'>('medium')
+  const [newTaskDueDate, setNewTaskDueDate] = useState('')
   const [reservationDetailModal, setReservationDetailModal] = useState<Reservation | null>(null)
   const [courseAlerts, setCourseAlerts] = useState<{ id: string; type: string; text: string; action: string }[]>([])
   const [salesSummary, setSalesSummary] = useState<{ cashSales: number; consumeSales: number; serviceLiability: number } | null>(null)
@@ -279,7 +281,7 @@ export default function DashboardPage() {
         } : null)
       })
       .catch(() => {})
-    setManualTasksState(getManualTasks())
+    fetchTasks().then(setManualTasksState).catch(() => {})
     Promise.all([fetchExpiringSoonTickets(14), fetchExpiredTickets()]).then(([expiring, expired]) => {
       const alerts: { id: string; type: string; text: string; action: string }[] = []
       if (expired.length > 0) {
@@ -302,24 +304,33 @@ export default function DashboardPage() {
     })
   }, [])
 
-  const toggleTaskDone = (id: string) => {
+  const toggleTaskDone = async (id: string, currentDone: boolean) => {
     const next = manualTasks.map(t => (t.id === id ? { ...t, done: !t.done } : t))
     setManualTasksState(next)
-    setManualTasks(next)
+    await toggleTask(id, !currentDone).catch(() => {})
   }
 
-  const addTask = () => {
+  const addTaskHandler = async () => {
     if (!newTaskText.trim()) return
-    const task: ManualTask = {
-      id: Date.now().toString(),
-      text: newTaskText.trim(),
-      done: false,
-    }
-    const next = [...manualTasks, task]
-    setManualTasksState(next)
-    setManualTasks(next)
-    setNewTaskText('')
-    setTaskModalOpen(false)
+    try {
+      const task = await addTask({
+        text: newTaskText.trim(),
+        source: 'manual',
+        priority: newTaskPriority,
+        due_date: newTaskDueDate || null,
+        done: false,
+      })
+      setManualTasksState(prev => [task, ...prev])
+      setNewTaskText('')
+      setNewTaskPriority('medium')
+      setNewTaskDueDate('')
+      setTaskModalOpen(false)
+    } catch { }
+  }
+
+  const deleteTaskHandler = async (id: string) => {
+    setManualTasksState(prev => prev.filter(t => t.id !== id))
+    await deleteTask(id).catch(() => {})
   }
 
   const now = new Date()
@@ -552,15 +563,22 @@ export default function DashboardPage() {
                 </div>
               ))}
               {manualTasks.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-light-lav/30 cursor-pointer group"
-                  onClick={() => toggleTaskDone(t.id)}
-                >
-                  <CheckSquare className={`w-5 h-5 shrink-0 ${t.done ? 'text-text-sub' : 'text-rose'}`} />
-                  <p className={`flex-1 text-sm ${t.done ? 'text-text-sub line-through' : 'text-text-main'}`}>
-                    {t.text}
-                  </p>
+                <div key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${t.done ? 'bg-gray-50 border-gray-100 opacity-60' : t.priority === 'high' ? 'bg-red-50 border-red-200' : t.priority === 'low' ? 'bg-gray-50 border-gray-200' : 'bg-light-lav/50 border-lavender/30'}`}>
+                  <div onClick={() => toggleTaskDone(t.id, t.done)} className="flex-shrink-0">
+                    <CheckSquare className={`w-5 h-5 ${t.done ? 'text-text-sub' : t.priority === 'high' ? 'text-red-500' : 'text-rose'}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm ${t.done ? 'line-through text-text-sub' : 'text-text-main'}`}>{t.text}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {t.source === 'leo' && <span className="text-xs text-blue-500 font-medium">LEO提案</span>}
+                      {t.source === 'customer_delight' && <span className="text-xs text-purple-500 font-medium">感動体験</span>}
+                      {t.priority === 'high' && <span className="text-xs text-red-500 font-medium">優先度：高</span>}
+                      {t.due_date && <span className="text-xs text-text-sub">{t.due_date}まで</span>}
+                    </div>
+                  </div>
+                  <button onClick={() => deleteTaskHandler(t.id)} className="flex-shrink-0 p-1 text-text-sub hover:text-red-500 rounded">
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
               <button
@@ -736,9 +754,26 @@ export default function DashboardPage() {
               onChange={e => setNewTaskText(e.target.value)}
               placeholder="例: 予約確認の電話"
               className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none mb-4"
-              onKeyDown={e => e.key === 'Enter' && addTask()}
+              onKeyDown={e => e.key === 'Enter' && addTaskHandler()}
             />
-            <div className="flex gap-2">
+            <div className="flex gap-2 mt-3">
+              {[
+                { value: 'high', label: '高', color: 'bg-red-100 text-red-700 border-red-300' },
+                { value: 'medium', label: '中', color: 'bg-amber-100 text-amber-700 border-amber-300' },
+                { value: 'low', label: '低', color: 'bg-gray-100 text-gray-700 border-gray-300' },
+              ].map(p => (
+                <button key={p.value} onClick={() => setNewTaskPriority(p.value as 'high' | 'medium' | 'low')}
+                  className={`flex-1 py-2 rounded-xl text-sm font-bold border ${newTaskPriority === p.value ? p.color : 'bg-white text-text-sub border-gray-200'}`}>
+                  優先度：{p.label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3">
+              <label className="text-xs text-text-sub block mb-1">期限（任意）</label>
+              <input type="date" value={newTaskDueDate} onChange={e => setNewTaskDueDate(e.target.value)}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-rose" />
+            </div>
+            <div className="flex gap-2 mt-4">
               <button
                 onClick={() => setTaskModalOpen(false)}
                 className="flex-1 py-2.5 rounded-xl border border-gray-200 text-text-main hover:bg-gray-50"
@@ -746,7 +781,7 @@ export default function DashboardPage() {
                 キャンセル
               </button>
               <button
-                onClick={addTask}
+                onClick={addTaskHandler}
                 disabled={!newTaskText.trim()}
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium hover:opacity-90 disabled:opacity-50"
               >

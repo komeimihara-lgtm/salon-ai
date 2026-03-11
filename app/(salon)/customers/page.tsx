@@ -32,17 +32,20 @@ import {
 
 // ステータスバッジ
 function StatusBadge({ status }: { status: Customer['status'] }) {
-  const map = {
+  const map: Record<string, { label: string; color: string }> = {
     active: { label: 'アクティブ', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
     lost: { label: '失客', color: 'bg-red-500/20 text-red-600 border-red-500/30' },
     vip: { label: 'VIP', color: 'bg-amber-500/20 text-[#0891B2] border-amber-500/30' },
     temporary: { label: '仮登録', color: 'bg-sky-500/20 text-sky-600 border-sky-500/30' },
+    at_risk: { label: '失客予備軍', color: 'bg-orange-500/20 text-orange-600 border-orange-500/30' },
+    dormant: { label: '休眠客', color: 'bg-purple-500/20 text-purple-600 border-purple-500/30' },
   }
-  const { label, color } = map[status]
+  const { label, color } = map[status] ?? { label: status, color: 'bg-gray-500/20 text-gray-600 border-gray-500/30' }
   return (
     <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${color}`}>
       {status === 'vip' && <Crown className="w-3 h-3 inline mr-1" />}
       {status === 'lost' && <AlertTriangle className="w-3 h-3 inline mr-1" />}
+      {status === 'at_risk' && <AlertTriangle className="w-3 h-3 inline mr-1" />}
       {label}
     </span>
   )
@@ -647,6 +650,8 @@ export default function CustomersPage() {
   const totalPages = Math.ceil(total / 20)
   const lostCount = customers.filter(c => c.status === 'lost').length
   const vipCount = customers.filter(c => c.status === 'vip').length
+  const atRiskCount = customers.filter(c => c.status === 'at_risk').length
+  const dormantCount = customers.filter(c => c.status === 'dormant').length
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -691,6 +696,34 @@ export default function CustomersPage() {
             </Link>
           </div>
         )}
+        {atRiskCount > 0 && (
+          <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl px-4 py-3 mb-5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-orange-600" />
+              <p className="text-sm text-orange-700">
+                <span className="font-bold">失客予備軍：</span>
+                {atRiskCount}名が60日以上未来店です。フォローを検討しましょう
+              </p>
+            </div>
+            <Link href="/leo" className="text-xs text-orange-600 hover:text-orange-700 font-semibold underline">
+              LEOに対策を相談 →
+            </Link>
+          </div>
+        )}
+        {dormantCount > 0 && (
+          <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl px-4 py-3 mb-5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-purple-600" />
+              <p className="text-sm text-purple-700">
+                <span className="font-bold">休眠客：</span>
+                {dormantCount}名が120日以上未来店です。リマインドを検討しましょう
+              </p>
+            </div>
+            <Link href="/leo" className="text-xs text-purple-600 hover:text-purple-700 font-semibold underline">
+              LEOに対策を相談 →
+            </Link>
+          </div>
+        )}
 
         {/* 検索・フィルター */}
         <div className="flex gap-3 mb-5">
@@ -710,16 +743,20 @@ export default function CustomersPage() {
           >
             <option value="">全員</option>
             <option value="active">アクティブ</option>
+            <option value="at_risk">失客予備軍</option>
+            <option value="dormant">休眠客</option>
             <option value="lost">失客</option>
             <option value="vip">VIP</option>
           </select>
         </div>
 
         {/* 統計サマリー */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
           {[
             { label: '総顧客数', value: total, icon: Users, color: 'text-blue-400' },
             { label: '失客', value: lostCount, icon: AlertTriangle, color: 'text-red-600' },
+            { label: '失客予備軍', value: atRiskCount, icon: AlertTriangle, color: 'text-orange-600' },
+            { label: '休眠客', value: dormantCount, icon: Users, color: 'text-purple-600' },
             { label: 'VIP', value: vipCount, icon: Crown, color: 'text-[#0891B2]' },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-xl p-3 flex items-center gap-3">

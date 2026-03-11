@@ -168,6 +168,31 @@ export default function LeoPage() {
 
       setMessages(prev => [...prev, assistantMsg])
       setHistory(prev => [...prev, { role: 'assistant', content: data.message }])
+
+      // LEOの回答からタスクを自動抽出して保存
+      try {
+        const taskRes = await fetch('/api/leo/extract-tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: data.message }),
+        })
+        const taskData = await taskRes.json()
+        if (taskData.tasks?.length > 0) {
+          for (const task of taskData.tasks) {
+            await fetch('/api/tasks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                text: task.text,
+                source: 'leo',
+                priority: task.priority || 'high',
+                due_date: task.due_date || null,
+                done: false,
+              }),
+            })
+          }
+        }
+      } catch { }
     } catch (err) {
       const errorMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
