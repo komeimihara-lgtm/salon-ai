@@ -26,40 +26,71 @@ import {
   BarChart2,
   BookOpen,
   Package,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react'
 import { useState } from 'react'
 
-const NAV_ITEMS = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'ダッシュボード' },
-  { href: '/customers', icon: Users, label: '顧客管理' },
-  { href: '/chart', icon: FileText, label: 'カルテ' },
-  { href: '/customer-delight', icon: Heart, label: '感動体験' },
-  { href: '/counseling', icon: MessageSquare, label: 'SOLAカウンセリング' },
-  { href: '/leo', icon: MessageCircle, label: '経営会議' },
-  { href: '/reservations', icon: Calendar, label: '予約管理' },
-  { href: '/follow', icon: Send, label: '自動フォロー' },
-  { href: '/sales', icon: ShoppingCart, label: '売上・レジ' },
-  { href: '/sales-analysis', icon: TrendingUp, label: '売上分析' },
-  { href: '/management', icon: BarChart2, label: '経営管理' },
-  { href: '/daily-report', icon: BookOpen, label: 'AI日報' },
-  { href: '/marketing', icon: Megaphone, label: 'AI集客' },
-  { href: '/sns/compose', icon: Megaphone, label: 'AI投稿作成' },
-  { href: '/sns/posts', icon: FileText, label: '投稿管理' },
-  { href: '/menu', icon: List, label: 'メニュー設定' },
-  { href: '/products', icon: Package, label: '商品管理' },
-  { href: '/courses', icon: Ticket, label: '回数券管理' },
-  { href: '/subscriptions', icon: Repeat, label: 'サブスク管理' },
-  { href: '/staff', icon: Clock, label: 'スタッフ管理' },
-  { href: '/settings', icon: Settings, label: 'サロン設定' },
+type NavLink = { type: 'link'; href: string; icon: React.ComponentType<{ className?: string }>; label: string }
+type NavGroup = {
+  type: 'group'
+  key: string
+  label: string
+  icon: React.ComponentType<{ className?: string }>
+  children: { href: string; label: string }[]
+}
+type NavItem = NavLink | NavGroup
+
+const NAV_ITEMS: NavItem[] = [
+  { type: 'link', href: '/dashboard', icon: LayoutDashboard, label: 'ダッシュボード' },
+  { type: 'link', href: '/customers', icon: Users, label: '顧客管理' },
+  { type: 'link', href: '/chart', icon: FileText, label: 'カルテ' },
+  { type: 'link', href: '/customer-delight', icon: Heart, label: '感動体験' },
+  { type: 'link', href: '/counseling', icon: MessageSquare, label: 'SOLAカウンセリング' },
+  { type: 'link', href: '/leo', icon: MessageCircle, label: '経営会議' },
+  { type: 'link', href: '/reservations', icon: Calendar, label: '予約管理' },
+  { type: 'link', href: '/follow', icon: Send, label: '自動フォロー' },
+  { type: 'link', href: '/sales', icon: ShoppingCart, label: '売上・レジ' },
+  { type: 'link', href: '/sales-analysis', icon: TrendingUp, label: '売上分析' },
+  { type: 'link', href: '/management', icon: BarChart2, label: '経営管理' },
+  { type: 'link', href: '/daily-report', icon: BookOpen, label: 'AI日報' },
+  {
+    type: 'group',
+    key: 'sns',
+    label: 'AI-SNS生成',
+    icon: Megaphone,
+    children: [
+      { href: '/sns/compose', label: '投稿作成' },
+      { href: '/sns/posts', label: '投稿管理' },
+    ],
+  },
+  { type: 'link', href: '/menu', icon: List, label: 'メニュー設定' },
+  { type: 'link', href: '/products', icon: Package, label: '商品管理' },
+  { type: 'link', href: '/courses', icon: Ticket, label: '回数券管理' },
+  { type: 'link', href: '/subscriptions', icon: Repeat, label: 'サブスク管理' },
+  { type: 'link', href: '/staff', icon: Clock, label: 'スタッフ管理' },
+  { type: 'link', href: '/settings', icon: Settings, label: 'サロン設定' },
 ]
 
 const BOTTOM_NAV_ITEMS = [
   { href: '/qa-chat', icon: HelpCircle, label: 'Q&Aチャット' },
 ]
 
+function getAllNavLabels(): { href: string; label: string }[] {
+  const result: { href: string; label: string }[] = []
+  for (const item of NAV_ITEMS) {
+    if (item.type === 'link') result.push({ href: item.href, label: item.label })
+    else for (const c of item.children) result.push({ href: c.href, label: c.label })
+  }
+  return result
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  const [snsExpanded, setSnsExpanded] = useState(false)
+  const isSnsExpanded = pathname.startsWith('/sns') || snsExpanded
 
   // ルートのリダイレクト時はシェルを表示しない
   if (pathname === '/') return <>{children}</>
@@ -82,21 +113,60 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <span className="text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
-            const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+          {NAV_ITEMS.map((item) => {
+            if (item.type === 'link') {
+              const { href, icon: Icon, label } = item
+              const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
+                    isActive
+                      ? 'bg-rose/20 text-rose border-l-[3px] border-rose ml-0 -ml-[3px] pl-[calc(1rem+3px)]'
+                      : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Icon className="w-5 h-5 shrink-0" />
+                  <span>{label}</span>
+                </Link>
+              )
+            }
+            const { key, label, icon: Icon, children } = item
+            const expanded = key === 'sns' ? isSnsExpanded : false
+            const onToggle = key === 'sns' ? () => setSnsExpanded(prev => !prev) : undefined
             return (
-              <Link
-                key={href}
-                href={href}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
-                  isActive
-                    ? 'bg-rose/20 text-rose border-l-[3px] border-rose ml-0 -ml-[3px] pl-[calc(1rem+3px)]'
-                    : 'text-white/60 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Icon className="w-5 h-5 shrink-0" />
-                <span>{label}</span>
-              </Link>
+              <div key={key}>
+                <button
+                  type="button"
+                  onClick={onToggle}
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors w-full text-left text-white/60 hover:text-white hover:bg-white/5"
+                >
+                  <Icon className="w-5 h-5 shrink-0" />
+                  <span className="flex-1">{label}</span>
+                  {expanded ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
+                </button>
+                {expanded && (
+                  <div className="ml-4 pl-4 border-l border-white/10 space-y-0.5">
+                    {children.map((c) => {
+                      const isActive = pathname === c.href || pathname.startsWith(c.href + '/')
+                      return (
+                        <Link
+                          key={c.href}
+                          href={c.href}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                            isActive
+                              ? 'bg-rose/20 text-rose'
+                              : 'text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          <span>{c.label}</span>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )
           })}
           <div className="my-2 border-t border-white/10" />
@@ -149,22 +219,62 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
-            const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+          {NAV_ITEMS.map((item) => {
+            if (item.type === 'link') {
+              const { href, icon: Icon, label } = item
+              const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
+                    isActive
+                      ? 'bg-rose/20 text-rose border-l-[3px] border-rose ml-0 -ml-[3px] pl-[calc(1rem+3px)]'
+                      : 'text-white/60 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Icon className="w-5 h-5 shrink-0" />
+                  <span>{label}</span>
+                </Link>
+              )
+            }
+            const { key, label, icon: Icon, children } = item
+            const expanded = key === 'sns' ? isSnsExpanded : false
+            const onToggle = key === 'sns' ? () => setSnsExpanded(prev => !prev) : undefined
             return (
-              <Link
-                key={href}
-                href={href}
-                onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors ${
-                  isActive
-                    ? 'bg-rose/20 text-rose border-l-[3px] border-rose ml-0 -ml-[3px] pl-[calc(1rem+3px)]'
-                    : 'text-white/60 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Icon className="w-5 h-5 shrink-0" />
-                <span>{label}</span>
-              </Link>
+              <div key={key}>
+                <button
+                  type="button"
+                  onClick={onToggle}
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-colors w-full text-left text-white/60 hover:text-white hover:bg-white/5"
+                >
+                  <Icon className="w-5 h-5 shrink-0" />
+                  <span className="flex-1">{label}</span>
+                  {expanded ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
+                </button>
+                {expanded && (
+                  <div className="ml-4 pl-4 border-l border-white/10 space-y-0.5">
+                    {children.map((c) => {
+                      const isActive = pathname === c.href || pathname.startsWith(c.href + '/')
+                      return (
+                        <Link
+                          key={c.href}
+                          href={c.href}
+                          onClick={() => setSidebarOpen(false)}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                            isActive
+                              ? 'bg-rose/20 text-rose'
+                              : 'text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          <span>{c.label}</span>
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             )
           })}
           <div className="my-2 border-t border-white/10" />
@@ -205,7 +315,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Menu className="w-6 h-6" />
             </button>
             <h1 className="text-lg font-semibold text-text-main font-serif-jp">
-              {[...NAV_ITEMS, ...BOTTOM_NAV_ITEMS].find(n => pathname === n.href || (n.href !== '/dashboard' && pathname.startsWith(n.href)))?.label ?? 'ダッシュボード'}
+              {[...getAllNavLabels(), ...BOTTOM_NAV_ITEMS].find(n => pathname === n.href || (n.href !== '/dashboard' && pathname.startsWith(n.href)))?.label ?? 'ダッシュボード'}
             </h1>
           </div>
           <div className="flex items-center gap-2">
