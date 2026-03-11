@@ -314,12 +314,18 @@ export default function SnsComposePage() {
                   </div>
 
                   {/* 投稿用画像生成ボタン */}
-                  <button onClick={handleGenerateImage} disabled={imageLoading}
-                    className="w-full py-3 rounded-xl border-2 border-dashed border-rose/30 text-rose text-sm font-bold flex items-center justify-center gap-2 hover:bg-rose/5 transition-all disabled:opacity-50">
-                    {imageLoading
-                      ? <><Loader2 className="w-4 h-4 animate-spin" />画像生成中（10〜20秒）...</>
-                      : <><ImagePlus className="w-4 h-4" />この投稿用の画像を生成</>}
-                  </button>
+                  {purpose === 'before_after' ? (
+                    <div className="w-full py-3 rounded-xl border-2 border-dashed border-gray-200 text-text-sub text-sm flex items-center justify-center gap-2 bg-gray-50">
+                      📷 ビフォーアフターは実際の写真をアップロードしてください
+                    </div>
+                  ) : (
+                    <button onClick={handleGenerateImage} disabled={imageLoading}
+                      className="w-full py-3 rounded-xl border-2 border-dashed border-rose/30 text-rose text-sm font-bold flex items-center justify-center gap-2 hover:bg-rose/5 transition-all disabled:opacity-50">
+                      {imageLoading
+                        ? <><Loader2 className="w-4 h-4 animate-spin" />画像生成中（10〜20秒）...</>
+                        : <><ImagePlus className="w-4 h-4" />この投稿用の画像を生成</>}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
