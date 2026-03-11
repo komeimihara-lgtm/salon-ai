@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     start_time,
     end_time,
     staff_name,
+    bed_id,
     memo,
   } = body
 
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
       end_time,
       menu: menu_name,
       staff_name,
+      bed_id: bed_id || null,
       price: price || 0,
       duration_minutes: duration || 60,
       memo: memo || '',

@@ -8,7 +8,7 @@ declare global {
 }
 
 interface MenuItem { id: string; name: string; duration: number; price: number; category: string }
-interface Slot { staff_id: string; staff_name: string; staff_color: string; start: string; end: string }
+interface Slot { staff_id: string; staff_name: string; staff_color: string; start: string; end: string; bed_id?: string }
 
 const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
 
@@ -130,6 +130,7 @@ export default function LiffBookingPage() {
           end_time: selectedSlot.end,
           staff_id: selectedSlot.staff_id,
           staff_name: selectedSlot.staff_name,
+          bed_id: selectedSlot.bed_id,
           memo,
         })
       })
