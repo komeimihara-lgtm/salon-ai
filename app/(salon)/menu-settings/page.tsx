@@ -4,41 +4,11 @@ import { useState, useEffect } from 'react'
 import { Plus, Trash2, Pencil, X, Ticket, Repeat } from 'lucide-react'
 import { fetchTicketPlans, createTicketPlan, deleteTicketPlan, type TicketPlan } from '@/lib/tickets'
 import { fetchSubscriptionPlans, createSubscriptionPlan, deleteSubscriptionPlan, type SubscriptionPlan } from '@/lib/subscriptions'
-
-const STORAGE_KEY = 'sola_menus'
-
-interface MenuItem {
-  id: string
-  name: string
-  duration: number
-  price: number
-}
-
-const DEFAULT_MENUS: MenuItem[] = [
-  { id: '1', name: 'フェイシャル', duration: 60, price: 8000 },
-  { id: '2', name: 'ボディケア', duration: 90, price: 12000 },
-  { id: '3', name: 'フルコース', duration: 120, price: 20000 },
-]
-
-function loadMenus(): MenuItem[] {
-  if (typeof window === 'undefined') return DEFAULT_MENUS
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_MENUS
-    }
-  } catch (_) {}
-  return DEFAULT_MENUS
-}
-
-function saveMenus(menus: MenuItem[]) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(menus))
-}
+import { fetchMenus, saveMenu, updateMenu, deleteMenu, migrateMenusFromLocalStorage, type MenuItem } from '@/lib/menus'
 
 export default function MenuSettingsPage() {
-  const [menus, setMenus] = useState<MenuItem[]>(loadMenus())
+  const [menus, setMenus] = useState<MenuItem[]>([])
+  const [menusLoading, setMenusLoading] = useState(true)
   const [newName, setNewName] = useState('')
   const [newDuration, setNewDuration] = useState(60)
   const [newPrice, setNewPrice] = useState(5000)
@@ -50,11 +20,7 @@ export default function MenuSettingsPage() {
   const [ticketPlans, setTicketPlansState] = useState<TicketPlan[]>([])
   const [ticketPlansLoading, setTicketPlansLoading] = useState(true)
   const [courseName, setCourseName] = useState('')
-  const [courseMenuName, setCourseMenuName] = useState(() => {
-    if (typeof window === 'undefined') return ''
-    const m = loadMenus()
-    return m[0]?.name ?? ''
-  })
+  const [courseMenuName, setCourseMenuName] = useState('')
   const [courseSessions, setCourseSessions] = useState(5)
   const [coursePrice, setCoursePrice] = useState(40000)
   const [courseExpiryDays, setCourseExpiryDays] = useState(180)
@@ -62,44 +28,49 @@ export default function MenuSettingsPage() {
   const [subPlans, setSubPlansState] = useState<SubscriptionPlan[]>([])
   const [subPlansLoading, setSubPlansLoading] = useState(true)
   const [subName, setSubName] = useState('')
-  const [subMenuName, setSubMenuName] = useState(() => {
-    if (typeof window === 'undefined') return ''
-    const m = loadMenus()
-    return m[0]?.name ?? ''
-  })
+  const [subMenuName, setSubMenuName] = useState('')
   const [subPrice, setSubPrice] = useState(8000)
   const [subSessions, setSubSessions] = useState(2)
   const [subBillingDay, setSubBillingDay] = useState(1)
 
   useEffect(() => {
-    if (!subMenuName && menus.length > 0) setSubMenuName(menus[0].name)
+    migrateMenusFromLocalStorage().then(() => {
+      fetchMenus().then(m => {
+        setMenus(m)
+        setMenusLoading(false)
+        if (m.length > 0) {
+          setCourseMenuName(m[0].name)
+          setSubMenuName(m[0].name)
+        }
+      }).catch(() => setMenusLoading(false))
+    })
     setTicketPlansLoading(true)
     setSubPlansLoading(true)
     fetchTicketPlans().then(p => { setTicketPlansState(p) }).catch(() => {}).finally(() => setTicketPlansLoading(false))
     fetchSubscriptionPlans().then(p => { setSubPlansState(p) }).catch(() => {}).finally(() => setSubPlansLoading(false))
   }, [])
 
-  const addMenu = () => {
+  const addMenu = async () => {
     if (!newName.trim()) return
-    const item: MenuItem = {
-      id: Date.now().toString(),
-      name: newName.trim(),
-      duration: newDuration,
-      price: newPrice,
+    const saved = await saveMenu({ name: newName.trim(), duration: newDuration, price: newPrice, category: '' })
+    if (saved) {
+      setMenus(prev => [...prev, saved])
+      setNewName('')
+      setNewDuration(60)
+      setNewPrice(5000)
+    } else {
+      alert('登録に失敗しました')
     }
-    const next = [...menus, item]
-    setMenus(next)
-    saveMenus(next)
-    setNewName('')
-    setNewDuration(60)
-    setNewPrice(5000)
   }
 
-  const removeMenu = (id: string) => {
-    const next = menus.filter(m => m.id !== id)
-    setMenus(next)
-    saveMenus(next)
-    if (editingId === id) setEditingId(null)
+  const removeMenu = async (id: string) => {
+    try {
+      await deleteMenu(id)
+      setMenus(prev => prev.filter(m => m.id !== id))
+      if (editingId === id) setEditingId(null)
+    } catch {
+      alert('削除に失敗しました')
+    }
   }
 
   const startEdit = (m: MenuItem) => {
@@ -109,16 +80,17 @@ export default function MenuSettingsPage() {
     setEditPrice(m.price)
   }
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingId) return
-    const next = menus.map(m =>
-      m.id === editingId
-        ? { ...m, name: editName.trim(), duration: editDuration, price: editPrice }
-        : m
-    )
-    setMenus(next)
-    saveMenus(next)
-    setEditingId(null)
+    try {
+      await updateMenu(editingId, { name: editName.trim(), duration: editDuration, price: editPrice })
+      setMenus(prev => prev.map(m =>
+        m.id === editingId ? { ...m, name: editName.trim(), duration: editDuration, price: editPrice } : m
+      ))
+      setEditingId(null)
+    } catch {
+      alert('更新に失敗しました')
+    }
   }
 
   const addTicketPlan = async () => {
@@ -192,6 +164,10 @@ export default function MenuSettingsPage() {
         <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
           <div className="space-y-3">
+            {menusLoading ? (
+              <p className="text-sm text-text-sub py-4">読み込み中...</p>
+            ) : (
+            <>
             {menus.map((m) => (
               <div key={m.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
                 {editingId === m.id ? (
@@ -256,6 +232,8 @@ export default function MenuSettingsPage() {
                 )}
               </div>
             ))}
+            </>
+            )}
             <div className="flex gap-3 flex-wrap pt-4">
               <input
                 type="text"

@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, Loader2, Tag, AlertCircle, ArrowLeft,
   UserPlus, Search,
 } from 'lucide-react'
-import { getMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, isCampaignActive, type MenuItem, type Campaign } from '@/lib/menus'
+import { fetchMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, isCampaignActive, type MenuItem, type Campaign } from '@/lib/menus'
 import { DEMO_SALON_ID } from '@/lib/supabase'
 import { fetchStaffList } from '@/lib/staff-management'
 import { fetchTicketPlans, addCustomerTicket, type TicketPlan } from '@/lib/tickets'
@@ -52,7 +52,7 @@ export default function SalesPage() {
   const [tab, setTab] = useState<'register' | 'sales'>('register')
   const [categories, setCategories] = useState<string[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string>('')
-  const [menus, setMenus] = useState<ReturnType<typeof getMenus>>([])
+  const [menus, setMenus] = useState<MenuItem[]>([])
   const [staffList, setStaffList] = useState<{ id: string; name: string; color: string }[]>([])
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([])
   const [sales, setSales] = useState<Sale[]>([])
@@ -127,15 +127,16 @@ export default function SalesPage() {
   }, [])
 
   useEffect(() => {
-    const m = getMenus()
     const c = getCategories()
-    const migratedMenus = m.map((menu: MenuItem) => ({
-      ...menu,
-      category: menu.category || c[0] || 'フェイシャル'
-    }))
-    setMenus(migratedMenus)
     setCategories(c)
     setSelectedCategory(c[0] ?? '')
+    fetchMenus().then(m => {
+      const migratedMenus = m.map((menu: MenuItem) => ({
+        ...menu,
+        category: menu.category || c[0] || 'フェイシャル'
+      }))
+      setMenus(migratedMenus)
+    })
     fetchStaffList().then(setStaffList).catch(() => [])
     setTaxSettingsState(getTaxSettings())
     setCampaignsState(getCampaigns())

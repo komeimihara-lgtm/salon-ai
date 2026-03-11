@@ -5,7 +5,8 @@ import { Plus, Trash2, Pencil, X, Ticket, Repeat, Tag, Settings2, Loader2 } from
 import { fetchTicketPlans, createTicketPlan, deleteTicketPlan, type TicketPlan } from '@/lib/tickets'
 import { fetchSubscriptionPlans, createSubscriptionPlan, deleteSubscriptionPlan, type SubscriptionPlan } from '@/lib/subscriptions'
 import {
-  getMenus, setMenus, getCategories, setCategories,
+  fetchMenus, saveMenu, saveMenusBulk, updateMenu, deleteMenu, migrateMenusFromLocalStorage,
+  getCategories, setCategories,
   getTaxSettings, setTaxSettings, getCampaigns, setCampaigns,
   DEFAULT_CATEGORIES, isCampaignActive, isCampaignExpired,
   type MenuItem, type TaxSettings, type Campaign, type CampaignType, type CampaignTargetType
@@ -307,18 +308,21 @@ export default function MenuSettingsPage() {
   const [showTaxConfirm, setShowTaxConfirm] = useState(false)
 
   useEffect(() => {
-    const m = getMenus()
-    const c = getCategories()
-    setMenusState(m)
-    setCategoriesState(c)
-    setSelectedCategory(c[0] ?? '')
-    setNewCategory(c[0] ?? '')
+    migrateMenusFromLocalStorage().then(() => {
+      fetchMenus().then(m => {
+        setMenusState(m)
+        const c = getCategories()
+        setCategoriesState(c)
+        setSelectedCategory(c[0] ?? '')
+        setNewCategory(c[0] ?? '')
+        setCourseMenuName(m[0]?.name ?? '')
+        setSubMenuName(m[0]?.name ?? '')
+        setCourseCategory(c[0] ?? '')
+        setSubCategory(c[0] ?? '')
+      })
+    })
     setTaxSettingsState(getTaxSettings())
     setCampaignsState(getCampaigns())
-    setCourseMenuName(m[0]?.name ?? '')
-    setSubMenuName(m[0]?.name ?? '')
-    setCourseCategory(c[0] ?? '')
-    setSubCategory(c[0] ?? '')
     setTicketPlansLoading(true)
     setSubPlansLoading(true)
     fetchTicketPlans().then(p => { setTicketPlansState(p) }).catch(() => {}).finally(() => setTicketPlansLoading(false))
@@ -336,27 +340,31 @@ export default function MenuSettingsPage() {
     ? subPlans.filter(s => s.category === selectedCategory || s.category === '' || !s.category?.trim())
     : subPlans
 
-  const addMenu = () => {
+  const addMenu = async () => {
     if (!newName.trim()) return
-    const item: MenuItem = {
-      id: Date.now().toString(),
+    const saved = await saveMenu({
       name: newName.trim(),
       duration: newDuration,
       price: newPrice,
       category: newCategory || categories[0] || '',
+    })
+    if (saved) {
+      setMenusState(prev => [...prev, saved])
+      setNewName('')
+      setNewDuration(60)
+      setNewPrice(5000)
+    } else {
+      alert('登録に失敗しました')
     }
-    const next = [...menus, item]
-    setMenusState(next)
-    setMenus(next)
-    setNewName('')
-    setNewDuration(60)
-    setNewPrice(5000)
   }
 
-  const removeMenu = (id: string) => {
-    const next = menus.filter(m => m.id !== id)
-    setMenusState(next)
-    setMenus(next)
+  const removeMenu = async (id: string) => {
+    try {
+      await deleteMenu(id)
+      setMenusState(prev => prev.filter(m => m.id !== id))
+    } catch {
+      alert('削除に失敗しました')
+    }
   }
 
   const startEdit = (m: MenuItem) => {
@@ -367,16 +375,17 @@ export default function MenuSettingsPage() {
     setEditCategory(m.category)
   }
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingId) return
-    const next = menus.map(m =>
-      m.id === editingId
-        ? { ...m, name: editName.trim(), duration: editDuration, price: editPrice, category: editCategory }
-        : m
-    )
-    setMenusState(next)
-    setMenus(next)
-    setEditingId(null)
+    try {
+      await updateMenu(editingId, { name: editName.trim(), duration: editDuration, price: editPrice, category: editCategory })
+      setMenusState(prev => prev.map(m =>
+        m.id === editingId ? { ...m, name: editName.trim(), duration: editDuration, price: editPrice, category: editCategory } : m
+      ))
+      setEditingId(null)
+    } catch {
+      alert('更新に失敗しました')
+    }
   }
 
   const addCategory = () => {
@@ -1039,10 +1048,12 @@ export default function MenuSettingsPage() {
       {showImport && (
         <ImportModal
           onClose={() => setShowImport(false)}
-          onImport={(newMenus, newCategories) => {
-            const merged = [...menus, ...newMenus]
-            setMenusState(merged)
-            setMenus(merged)
+          onImport={async (newMenus, newCategories) => {
+            const toSave = newMenus.map(m => ({ name: m.name, duration: m.duration, price: m.price, category: m.category || '' }))
+            const saved = await saveMenusBulk(toSave)
+            if (saved.length > 0) {
+              setMenusState(prev => [...prev, ...saved])
+            }
             const mergedCats = Array.from(new Set([...categories, ...newCategories]))
             setCategoriesState(mergedCats)
             setCategories(mergedCats)

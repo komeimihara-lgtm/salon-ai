@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Plus, Loader2 } from 'lucide-react'
 import type { Customer } from '@/types'
-import { getMenus, getCategories, type MenuItem } from '@/lib/menus'
+import { fetchMenus, getCategories, type MenuItem } from '@/lib/menus'
 
 // 10:00〜21:00 を15分刻み（予約表と一致）
 function buildTimeOptions(): string[] {
@@ -89,7 +89,7 @@ export default function ReservationFormModal({
 
   // メニュー管理と連動: モーダルが開くたびに最新のメニュー・カテゴリを取得
   useEffect(() => {
-    setMenus(getMenus())
+    fetchMenus().then(setMenus)
     setCategories(getCategories())
     setMenuCategory('')
   }, [defaultDate, defaultStartTime, defaultBed])

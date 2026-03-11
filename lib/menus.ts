@@ -106,6 +106,95 @@ export function setMenus(menus: MenuItem[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(menus))
 }
 
+export async function fetchMenus(): Promise<MenuItem[]> {
+  try {
+    const res = await fetch('/api/menus')
+    const json = await res.json()
+    if (json.error) throw new Error(json.error)
+    return (json.menus || []).map((m: { id: string; name: string; duration: number; price: number; category?: string }) => ({
+      id: m.id,
+      name: m.name,
+      duration: m.duration ?? 60,
+      price: m.price ?? 0,
+      category: m.category ?? '',
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function saveMenusBulk(menus: Omit<MenuItem, 'id'>[]): Promise<MenuItem[]> {
+  try {
+    const res = await fetch('/api/menus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(menus),
+    })
+    const json = await res.json()
+    if (json.error) throw new Error(json.error)
+    return (json.menus || []).map((m: { id: string; name: string; duration: number; price: number; category?: string }) => ({
+      id: m.id,
+      name: m.name,
+      duration: m.duration ?? 60,
+      price: m.price ?? 0,
+      category: m.category ?? '',
+    }))
+  } catch {
+    return []
+  }
+}
+
+export async function saveMenu(menu: Omit<MenuItem, 'id'>): Promise<MenuItem | null> {
+  try {
+    const res = await fetch('/api/menus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(menu),
+    })
+    const json = await res.json()
+    if (json.error) throw new Error(json.error)
+    const m = json.menu
+    return m ? { id: m.id, name: m.name, duration: m.duration ?? 60, price: m.price ?? 0, category: m.category ?? '' } : null
+  } catch {
+    return null
+  }
+}
+
+export async function updateMenu(id: string, menu: Partial<MenuItem>): Promise<void> {
+  const res = await fetch(`/api/menus/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(menu),
+  })
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+}
+
+export async function deleteMenu(id: string): Promise<void> {
+  const res = await fetch(`/api/menus/${id}`, { method: 'DELETE' })
+  const json = await res.json()
+  if (json.error) throw new Error(json.error)
+}
+
+export async function migrateMenusFromLocalStorage(): Promise<void> {
+  if (typeof window === 'undefined') return
+  const raw = localStorage.getItem(STORAGE_KEY)
+  if (!raw) return
+  try {
+    const menus = JSON.parse(raw)
+    if (!Array.isArray(menus) || menus.length === 0) return
+    const res = await fetch('/api/menus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(menus),
+    })
+    const json = await res.json()
+    if (json.error) throw new Error(json.error)
+    localStorage.removeItem(STORAGE_KEY)
+    console.log('メニューをSupabaseに移行しました')
+  } catch { }
+}
+
 export function getCategories(): string[] {
   if (typeof window === 'undefined') return DEFAULT_CATEGORIES
   try {

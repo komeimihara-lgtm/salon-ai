@@ -17,7 +17,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react'
-import { getMenus } from '@/lib/menus'
+import { fetchMenus, type MenuItem } from '@/lib/menus'
 import { fetchStaffList } from '@/lib/staff-management'
 import { ChartImage } from '@/components/chart-image'
 
@@ -77,7 +77,7 @@ export default function ChartPage() {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'info' | 'history' | 'gallery' | 'follow'>('info')
   const [addVisitOpen, setAddVisitOpen] = useState(false)
-  const [menus, setMenus] = useState<ReturnType<typeof getMenus>>([])
+  const [menus, setMenus] = useState<MenuItem[]>([])
   const [staffList, setStaffList] = useState<{ id: string; name: string; color: string }[]>([])
 
   const fetchData = useCallback(async () => {
@@ -100,7 +100,7 @@ export default function ChartPage() {
   }, [id])
 
   useEffect(() => {
-    setMenus(getMenus())
+    fetchMenus().then(setMenus)
     fetchStaffList().then(setStaffList).catch(() => [])
     fetchData()
   }, [fetchData])
