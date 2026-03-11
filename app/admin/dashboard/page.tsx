@@ -65,12 +65,28 @@ function formatNumber(n: number) {
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
     fetch('/api/admin/stats')
-      .then(r => r.json())
-      .then(d => setStats(d))
-      .catch(console.error)
+      .then(async r => {
+        if (!r.ok) {
+          const text = await r.text().catch(() => '')
+          throw new Error(`HTTP ${r.status}: ${text.slice(0, 200)}`)
+        }
+        return r.json()
+      })
+      .then(d => {
+        if (d.error) {
+          setErrorMsg(d.error)
+        } else {
+          setStats(d)
+        }
+      })
+      .catch(e => {
+        console.error('Admin stats fetch error:', e)
+        setErrorMsg(e.message || 'ネットワークエラー')
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -82,8 +98,13 @@ export default function AdminDashboardPage() {
     )
   }
 
-  if (!stats || stats.error || !stats.salons) {
-    return <div className="text-center text-gray-500 py-16">データの取得に失敗しました</div>
+  if (!stats || !stats.salons) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-gray-500">データの取得に失敗しました</p>
+        {errorMsg && <p className="text-xs text-red-400 mt-2">{errorMsg}</p>}
+      </div>
+    )
   }
 
   const summaryCards = [
