@@ -16,6 +16,12 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text()
     const signature = req.headers.get('x-line-signature') || ''
+    const body = JSON.parse(rawBody)
+
+    // LINEの検証リクエスト（eventsが空配列）の場合は即200を返す
+    if (!body.events || body.events.length === 0) {
+      return NextResponse.json({ ok: true })
+    }
 
     // サロンのシークレットを取得
     const supabase = getSupabaseAdmin()
@@ -34,7 +40,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '署名検証失敗' }, { status: 401 })
     }
 
-    const body = JSON.parse(rawBody)
     const events = body.events || []
 
     for (const event of events) {
