@@ -1,5 +1,15 @@
 {
   "framework": "nextjs",
   "buildCommand": "VERCEL_FORCE_NO_BUILD_CACHE=1 npm run build",
-  "installCommand": "npm install"
+  "installCommand": "npm install",
+  "crons": [
+    {
+      "path": "/api/cron/reminder",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/precounseling",
+      "schedule": "0 11 * * *"
+    }
+  ]
 }
