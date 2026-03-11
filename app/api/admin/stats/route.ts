@@ -22,17 +22,18 @@ export async function GET(req: NextRequest) {
     const allSalons = salons || []
     const totalSalons = allSalons.length
 
-    // プラン別分布
+    // プラン別分布（小文字→大文字に正規化）
+    const normalizePlan = (p: string | null) => (p || 'LITE').toUpperCase()
     const planDistribution = Object.entries(
       allSalons.reduce<Record<string, number>>((acc, s) => {
-        const plan = s.plan || 'LITE'
+        const plan = normalizePlan(s.plan)
         acc[plan] = (acc[plan] || 0) + 1
         return acc
       }, {})
     ).map(([plan, count]) => ({ plan, count, ratio: totalSalons > 0 ? Math.round((count / totalSalons) * 100) : 0 }))
 
     // MRR / ARR
-    const mrr = allSalons.reduce((sum, s) => sum + (PLAN_PRICES[s.plan || 'LITE'] || 0), 0)
+    const mrr = allSalons.reduce((sum, s) => sum + (PLAN_PRICES[normalizePlan(s.plan)] || 0), 0)
     const arr = mrr * 12
 
     // 今月の新規契約数・解約数
@@ -150,7 +151,7 @@ export async function GET(req: NextRequest) {
       salonDetails.push({
         id: salon.id,
         name: salon.name,
-        plan: salon.plan || 'LITE',
+        plan: normalizePlan(salon.plan),
         created_at: salon.created_at,
         last_activity: salon.updated_at,
         reservation_count: reservationCount || 0,
@@ -168,7 +169,7 @@ export async function GET(req: NextRequest) {
         is_churn_risk: isChurnRisk,
         risk_reasons: riskReasons,
         days_since_creation: daysSinceCreation,
-        mrr_contribution: PLAN_PRICES[salon.plan || 'LITE'] || 0,
+        mrr_contribution: PLAN_PRICES[normalizePlan(salon.plan)] || 0,
         // 月別売上
         monthly_revenue: salonMonthlyRevenue,
       })

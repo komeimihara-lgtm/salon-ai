@@ -34,6 +34,7 @@ type SalonDetail = {
 }
 
 type Stats = {
+  error?: string
   totalSalons: number
   mrr: number
   arr: number
@@ -81,7 +82,7 @@ export default function AdminDashboardPage() {
     )
   }
 
-  if (!stats) {
+  if (!stats || stats.error || !stats.salons) {
     return <div className="text-center text-gray-500 py-16">データの取得に失敗しました</div>
   }
 
