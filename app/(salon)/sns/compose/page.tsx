@@ -173,11 +173,11 @@ export default function SnsComposePage() {
   const handleCopy = async () => {
     const v = variations[activeTab]
     if (!v) return
-    const text = `${v.main_text}\n\n${v.hashtags.map(h => `#${h}`).join(' ')}`
+    const text = `${v.main_text}\n\n${v.cta}\n\n${v.hashtags.map(h => `#${h}`).join(' ')}`
     await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-    showToast('コピーしました')
+    showToast('本文・行動促し文・ハッシュタグをコピーしました')
   }
 
   const currentVariation = variations[activeTab]
@@ -293,7 +293,7 @@ export default function SnsComposePage() {
 
                   <div className="grid grid-cols-2 gap-2">
                     <div className="bg-emerald-50 rounded-xl p-3">
-                      <p className="text-xs font-bold text-emerald-600 mb-1">📣 CTA</p>
+                      <p className="text-xs font-bold text-emerald-600 mb-1">📣 行動促し文</p>
                       <p className="text-xs text-emerald-700">{currentVariation.cta}</p>
                     </div>
                     <div className="bg-amber-50 rounded-xl p-3">
