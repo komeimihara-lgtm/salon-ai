@@ -89,22 +89,21 @@ export default function StaffPage() {
     try {
       const startDate = toDateStr(weekDates[0])
       const endDate = toDateStr(weekDates[6])
-      const res = await fetch(`/api/reservations/list?start=${startDate}&end=${endDate}`)
+      const res = await fetch(`/api/reservations?start=${startDate}&end=${endDate}`)
       const json = await res.json()
       setReservations(json.reservations || [])
     } catch { }
   }, [toDateStr(weekDates[0]), toDateStr(weekDates[6])])
 
-  const fetchClosedDays = useCallback(async () => {
-    try {
-      const res = await fetch('/api/settings/salon')
-      const json = await res.json()
-      setClosedDays(Array.isArray(json.closed_weekdays) ? json.closed_weekdays : [])
-    } catch { }
+  // 定休日をSupabaseから取得
+  useEffect(() => {
+    fetch('/api/settings/salon')
+      .then(r => r.json())
+      .then(j => setClosedDays(Array.isArray(j.closed_days) ? j.closed_days : []))
+      .catch(() => {})
   }, [])
 
   useEffect(() => { fetchStaff() }, [fetchStaff])
-  useEffect(() => { fetchClosedDays() }, [fetchClosedDays])
   useEffect(() => { fetchShifts(); fetchReservations() }, [fetchShifts, fetchReservations])
 
   const getShift = (staffId: string, dateStr: string) =>
@@ -498,18 +497,16 @@ export default function StaffPage() {
               <button onClick={() => setShowClosedDayModal(false)}
                 className="flex-1 py-2.5 rounded-xl bg-gray-100 text-text-sub text-sm font-bold">閉じる</button>
               <button onClick={async () => {
-                try {
-                  const res = await fetch('/api/settings/salon', {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ closed_weekdays: closedDays }),
-                  })
-                  if (res.ok) {
+                  try {
+                    await fetch('/api/settings/salon', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ closed_days: closedDays }),
+                    })
                     setShowClosedDayModal(false)
                     showToast('定休日を設定しました')
-                  }
-                } catch { showToast('保存に失敗しました') }
-              }}
+                  } catch { showToast('保存に失敗しました') }
+                }}
                 className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-bold">保存</button>
             </div>
           </div>
