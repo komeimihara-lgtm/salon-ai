@@ -41,26 +41,38 @@ export default function LiffBookingPage() {
 
   // LIFF初期化
   useEffect(() => {
-    const script = document.createElement('script')
-    script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js'
-    script.onload = async () => {
+    const initLiff = async () => {
       try {
-        await window.liff.init({ liffId: process.env.NEXT_PUBLIC_LIFF_ID! })
-        if (!window.liff.isLoggedIn()) {
-          window.liff.login()
-          return
+        const script = document.createElement('script')
+        script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js'
+        script.onload = async () => {
+          try {
+            await window.liff.init({ liffId: process.env.NEXT_PUBLIC_LIFF_ID! })
+            if (window.liff.isLoggedIn()) {
+              const profile = await window.liff.getProfile()
+              setLineUserId(profile.userId)
+              setDisplayName(profile.displayName)
+            } else {
+              window.liff.login()
+              return
+            }
+          } catch (e) {
+            console.error('LIFF init error:', e)
+          } finally {
+            setLiffReady(true)
+          }
         }
-        const profile = await window.liff.getProfile()
-        setLineUserId(profile.userId)
-        setDisplayName(profile.displayName)
-        setLiffReady(true)
+        script.onerror = () => {
+          // LINEブラウザ外でも動作確認できるようにフォールバック
+          setLiffReady(true)
+        }
+        document.head.appendChild(script)
       } catch (e) {
         console.error(e)
-        // 開発環境用フォールバック
         setLiffReady(true)
       }
     }
-    document.head.appendChild(script)
+    initLiff()
   }, [])
 
   // メニュー取得
