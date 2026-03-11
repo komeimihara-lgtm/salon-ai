@@ -187,8 +187,9 @@ function TimelineSchedule({
                             height: ROW_HEIGHT - 8,
                           }}
                         >
-                          <p className="font-semibold truncate">{r.customer_name}</p>
+                          <p className="font-semibold truncate">{r.customer_name}様</p>
                           <p className="text-white/90 truncate">{r.menu || '-'}</p>
+                          {r.staff_name && <p className="text-white/80 truncate text-[10px]">担当: {r.staff_name}</p>}
                         </div>
                       )
                     })}
@@ -837,7 +838,7 @@ export default function DashboardPage() {
               </button>
             </div>
             <div className="space-y-3 mb-4">
-              <p><span className="text-xs text-text-sub">顧客名</span> <span className="font-medium">{reservationDetailModal.customer_name}</span></p>
+              <p><span className="text-xs text-text-sub">顧客名</span> <span className="font-medium">{reservationDetailModal.customer_name}様</span></p>
               {reservationDetailModal.customer_phone && <p><span className="text-xs text-text-sub">電話番号</span> {reservationDetailModal.customer_phone}</p>}
               <p><span className="text-xs text-text-sub">施術メニュー</span> {reservationDetailModal.menu || '-'}</p>
               <p><span className="text-xs text-text-sub">担当スタッフ</span> {reservationDetailModal.staff_name || '-'}</p>
