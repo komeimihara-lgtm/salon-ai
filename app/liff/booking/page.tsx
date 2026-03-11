@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Loader2, ChevronLeft, ChevronRight, Check } from 'lucide-react'
 
 declare global {
@@ -16,6 +16,15 @@ function toDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function getMonday(d: Date) {
+  const date = new Date(d)
+  date.setHours(0, 0, 0, 0)
+  const day = date.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  date.setDate(date.getDate() + diff)
+  return date
+}
+
 export default function LiffBookingPage() {
   const [liffReady, setLiffReady] = useState(false)
   const [lineUserId, setLineUserId] = useState('')
@@ -26,22 +35,22 @@ export default function LiffBookingPage() {
   const [profilePhone, setProfilePhone] = useState('')
   const [isFirstTime, setIsFirstTime] = useState(false)
 
-  // 選択状態
   const [selectedMenu, setSelectedMenu] = useState<MenuItem | null>(null)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null)
   const [memo, setMemo] = useState('')
 
-  // データ
   const [menus, setMenus] = useState<MenuItem[]>([])
   const [slots, setSlots] = useState<Slot[]>([])
-  const [holidays, setHolidays] = useState<string[]>([])
 
-  // UI状態
+  // 空き状況カレンダー
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [availMap, setAvailMap] = useState<Record<string, number | null>>({})
+  const fetchedRef = useRef(new Set<string>())
+
   const [loading, setLoading] = useState(true)
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [calendarBase, setCalendarBase] = useState(new Date())
 
   // LIFF初期化
   useEffect(() => {
@@ -67,7 +76,6 @@ export default function LiffBookingPage() {
           }
         }
         script.onerror = () => {
-          // LINEブラウザ外でも動作確認できるようにフォールバック
           setLiffReady(true)
         }
         document.head.appendChild(script)
@@ -88,15 +96,46 @@ export default function LiffBookingPage() {
       .finally(() => setLoading(false))
   }, [liffReady])
 
-  // 休業日取得
-  useEffect(() => {
-    const month = `${calendarBase.getFullYear()}-${String(calendarBase.getMonth() + 1).padStart(2, '0')}`
-    fetch(`/api/holidays?month=${month}`)
-      .then(r => r.json())
-      .then(j => setHolidays((j.holidays || []).map((h: { date: string }) => h.date)))
-  }, [calendarBase])
+  // 週の日付を計算
+  const getWeekDays = useCallback((offset: number): Date[] => {
+    const monday = getMonday(new Date())
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday)
+      d.setDate(monday.getDate() + offset * 7 + i)
+      return d
+    })
+  }, [])
 
-  // 空き枠取得
+  // 表示中の週の空き状況を取得
+  useEffect(() => {
+    if (step !== 'date' || !selectedMenu) return
+    const days = getWeekDays(weekOffset)
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+
+    days.forEach(async (day) => {
+      const dateStr = toDateStr(day)
+      if (fetchedRef.current.has(dateStr)) return
+      fetchedRef.current.add(dateStr)
+
+      if (day < now) {
+        setAvailMap(prev => ({ ...prev, [dateStr]: 0 }))
+        return
+      }
+
+      setAvailMap(prev => ({ ...prev, [dateStr]: null }))
+      try {
+        const res = await fetch(`/api/availability?date=${dateStr}&duration=${selectedMenu.duration}`)
+        const json = await res.json()
+        const uniqueCount = new Set((json.slots || []).map((s: Slot) => s.start)).size
+        setAvailMap(prev => ({ ...prev, [dateStr]: uniqueCount }))
+      } catch {
+        setAvailMap(prev => ({ ...prev, [dateStr]: 0 }))
+      }
+    })
+  }, [step, weekOffset, selectedMenu, getWeekDays])
+
+  // 時間枠取得
   const fetchSlots = async (date: Date, duration: number) => {
     setSlotsLoading(true)
     try {
@@ -109,6 +148,10 @@ export default function LiffBookingPage() {
 
   const handleSelectMenu = async (menu: MenuItem) => {
     setSelectedMenu(menu)
+    setAvailMap({})
+    fetchedRef.current.clear()
+    setWeekOffset(0)
+
     if (lineUserId) {
       try {
         const res = await fetch(`/api/liff/check-customer?line_user_id=${lineUserId}`)
@@ -165,17 +208,18 @@ export default function LiffBookingPage() {
     finally { setSubmitting(false) }
   }
 
-  // カレンダー生成
-  const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate()
-  const getFirstDay = (y: number, m: number) => {
-    const d = new Date(y, m, 1).getDay()
-    return d === 0 ? 6 : d - 1
-  }
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-
-  const isHoliday = (date: Date) => holidays.includes(toDateStr(date))
   const isPast = (date: Date) => date < today
+
+  const getAvailIndicator = (dateStr: string, date: Date) => {
+    if (isPast(date)) return { icon: '×', color: 'text-gray-300', loading: false }
+    const count = availMap[dateStr]
+    if (count === null || count === undefined) return { icon: '', color: 'text-gray-300', loading: true }
+    if (count >= 3) return { icon: '◎', color: 'text-pink-500', loading: false }
+    if (count >= 1) return { icon: '△', color: 'text-yellow-500', loading: false }
+    return { icon: '×', color: 'text-gray-300', loading: false }
+  }
 
   const groupedMenus = menus.reduce((acc: Record<string, MenuItem[]>, m) => {
     const cat = m.category || 'その他'
@@ -183,6 +227,10 @@ export default function LiffBookingPage() {
     acc[cat].push(m)
     return acc
   }, {})
+
+  const weekDays = getWeekDays(weekOffset)
+  const weekStart = weekDays[0]
+  const weekEnd = weekDays[6]
 
   if (!liffReady || loading) {
     return (
@@ -294,55 +342,89 @@ export default function LiffBookingPage() {
           </div>
         )}
 
-        {/* STEP 3: 日付選択 */}
+        {/* STEP 3: 日付＋空き状況（ホットペッパー風） */}
         {step === 'date' && (
           <div className="space-y-4">
             <h2 className="font-bold text-gray-700">日付を選択</h2>
             <div className="bg-white rounded-2xl p-4 shadow-sm">
+              {/* 週ナビゲーション */}
               <div className="flex items-center justify-between mb-4">
-                <button onClick={() => setCalendarBase(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))}
-                  className="p-2 rounded-xl hover:bg-gray-100">
+                <button
+                  onClick={() => setWeekOffset(w => Math.max(0, w - 1))}
+                  disabled={weekOffset === 0}
+                  className="p-2 rounded-xl hover:bg-gray-100 disabled:opacity-30">
                   <ChevronLeft className="w-4 h-4 text-gray-500" />
                 </button>
-                <p className="font-bold text-gray-700">
-                  {calendarBase.getFullYear()}年{calendarBase.getMonth() + 1}月
+                <p className="font-bold text-gray-700 text-sm">
+                  {weekStart.getMonth() + 1}/{weekStart.getDate()}（{WEEKDAYS[(weekStart.getDay() + 6) % 7]}）〜{weekEnd.getMonth() + 1}/{weekEnd.getDate()}（{WEEKDAYS[(weekEnd.getDay() + 6) % 7]}）
                 </p>
-                <button onClick={() => setCalendarBase(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))}
-                  className="p-2 rounded-xl hover:bg-gray-100">
+                <button
+                  onClick={() => setWeekOffset(w => Math.min(3, w + 1))}
+                  disabled={weekOffset === 3}
+                  className="p-2 rounded-xl hover:bg-gray-100 disabled:opacity-30">
                   <ChevronRight className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
+
+              {/* 曜日ヘッダー */}
               <div className="grid grid-cols-7 mb-2">
                 {WEEKDAYS.map((d, i) => (
-                  <p key={d} className={`text-center text-xs font-bold py-1 ${i === 5 ? 'text-blue-400' : i === 6 ? 'text-red-400' : 'text-gray-400'}`}>{d}</p>
+                  <p key={d} className={`text-center text-xs font-bold py-1 ${
+                    i === 5 ? 'text-blue-400' : i === 6 ? 'text-red-400' : 'text-gray-400'
+                  }`}>{d}</p>
                 ))}
               </div>
+
+              {/* 日付セル＋空き状況 */}
               <div className="grid grid-cols-7 gap-1">
-                {Array.from({ length: getFirstDay(calendarBase.getFullYear(), calendarBase.getMonth()) }).map((_, i) => (
-                  <div key={`e-${i}`} />
-                ))}
-                {Array.from({ length: getDaysInMonth(calendarBase.getFullYear(), calendarBase.getMonth()) }).map((_, i) => {
-                  const date = new Date(calendarBase.getFullYear(), calendarBase.getMonth(), i + 1)
-                  const disabled = isPast(date) || isHoliday(date)
-                  const isSelected = selectedDate && toDateStr(date) === toDateStr(selectedDate)
+                {weekDays.map((date, i) => {
+                  const dateStr = toDateStr(date)
+                  const past = isPast(date)
+                  const avail = getAvailIndicator(dateStr, date)
+                  const canSelect = !past && !avail.loading && avail.icon !== '×'
+
                   return (
-                    <button key={i} onClick={() => !disabled && handleSelectDate(date)}
-                      disabled={disabled}
-                      className={`aspect-square rounded-xl text-sm font-bold transition-all ${
-                        isSelected ? 'bg-gradient-to-br from-pink-400 to-purple-400 text-white' :
-                        disabled ? 'text-gray-200 cursor-not-allowed' :
-                        'hover:bg-pink-50 text-gray-700'
+                    <button
+                      key={i}
+                      onClick={() => canSelect && handleSelectDate(date)}
+                      disabled={!canSelect}
+                      className={`flex flex-col items-center py-3 rounded-xl transition-all ${
+                        canSelect
+                          ? 'hover:bg-pink-50 active:scale-95'
+                          : 'opacity-50 cursor-not-allowed'
+                      }`}
+                    >
+                      <span className={`text-sm font-bold ${
+                        past ? 'text-gray-300' :
+                        i === 5 ? 'text-blue-500' :
+                        i === 6 ? 'text-red-500' :
+                        'text-gray-700'
                       }`}>
-                      {i + 1}
+                        {date.getDate()}
+                      </span>
+                      {avail.loading ? (
+                        <Loader2 className="w-3 h-3 text-gray-300 animate-spin mt-1" />
+                      ) : (
+                        <span className={`text-xs font-bold mt-0.5 ${avail.color}`}>
+                          {avail.icon}
+                        </span>
+                      )}
                     </button>
                   )
                 })}
               </div>
             </div>
+
+            {/* 凡例 */}
+            <div className="flex items-center justify-center gap-4 text-xs text-gray-400">
+              <span><span className="text-pink-500 font-bold">◎</span> 空きあり</span>
+              <span><span className="text-yellow-500 font-bold">△</span> 残りわずか</span>
+              <span><span className="text-gray-300 font-bold">×</span> 空きなし</span>
+            </div>
           </div>
         )}
 
-        {/* STEP 4: 時間選択（時間のみ表示、スタッフ別なし） */}
+        {/* STEP 4: 時間選択 */}
         {step === 'time' && (
           <div className="space-y-4">
             <h2 className="font-bold text-gray-700">
@@ -367,8 +449,10 @@ export default function LiffBookingPage() {
                       <button
                         key={i}
                         onClick={() => { setSelectedSlot(slot); setStep('confirm') }}
-                        className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                          isSelected ? 'bg-gradient-to-br from-pink-400 to-purple-400 text-white' : 'bg-pink-50 text-pink-600 hover:bg-pink-100'
+                        className={`py-3 rounded-2xl text-sm font-bold transition-all ${
+                          isSelected
+                            ? 'bg-gradient-to-br from-pink-400 to-purple-400 text-white shadow-md'
+                            : 'bg-white text-pink-600 shadow-sm hover:shadow-md'
                         }`}>
                         {slot.start}
                       </button>
@@ -379,7 +463,7 @@ export default function LiffBookingPage() {
           </div>
         )}
 
-        {/* STEP 4: 確認 */}
+        {/* STEP 5: 確認 */}
         {step === 'confirm' && (
           <div className="space-y-4">
             <h2 className="font-bold text-gray-700">予約内容の確認</h2>
@@ -413,14 +497,14 @@ export default function LiffBookingPage() {
           </div>
         )}
 
-        {/* STEP 5: 完了 */}
+        {/* STEP 6: 完了 */}
         {step === 'done' && (
           <div className="text-center py-12 space-y-4">
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-pink-400 to-purple-400 flex items-center justify-center mx-auto shadow-lg">
               <Check className="w-10 h-10 text-white" />
             </div>
-            <h2 className="text-xl font-bold text-gray-800">予約が完了しました✨</h2>
-            <p className="text-sm text-gray-400">LINEに予約確認メッセージを送りました</p>
+            <h2 className="text-xl font-bold text-gray-800">ご予約ありがとうございます</h2>
+            <p className="text-sm text-gray-400">LINEに予約確認メッセージをお送りしました</p>
             <div className="bg-white rounded-2xl p-4 shadow-sm text-left space-y-2 mt-4">
               <p className="text-sm font-bold text-gray-700">{selectedMenu?.name}</p>
               <p className="text-sm text-gray-400">
