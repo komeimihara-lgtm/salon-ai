@@ -74,7 +74,6 @@ export default function ReservationFormModal({
   const [shifts, setShifts] = useState<ShiftItem[]>([])
   const [beds, setBedsState] = useState<string[]>(bedsProp)
   const [holidays, setHolidays] = useState<string[]>([])
-  const [toast, setToast] = useState<string | null>(null)
   const [form, setForm] = useState({
     customer_name: '',
     customer_phone: '',
@@ -113,7 +112,7 @@ export default function ReservationFormModal({
         })
       })
 
-    const month = new Date().toISOString().slice(0, 7)
+    const month = form.reservation_date?.slice(0, 7) || new Date().toISOString().slice(0, 7)
     fetch(`/api/shifts?month=${month}`)
       .then(r => r.json())
       .then(j => setShifts(j.shifts || []))
@@ -121,7 +120,7 @@ export default function ReservationFormModal({
     fetch(`/api/holidays?month=${month}`)
       .then(r => r.json())
       .then(j => setHolidays((j.holidays || []).map((h: { date: string }) => h.date)))
-  }, [bedsProp])
+  }, [bedsProp, form.reservation_date])
 
   // メニュー管理と連動: モーダルが開くたびに最新のメニュー・カテゴリを取得
   useEffect(() => {
@@ -136,10 +135,11 @@ export default function ReservationFormModal({
   }
 
   const buildTimeOptions = useCallback(() => {
-    if (!form.reservation_date) return []
+    const defaultOpts = () => Array.from({ length: 45 }, (_, i) => minutesToTime(600 + i * 15))
+    if (!form.reservation_date) return defaultOpts()
     if (holidays.includes(form.reservation_date)) return []
     const dayShifts = shifts.filter(s => s.date === form.reservation_date)
-    if (dayShifts.length === 0) return buildDefaultTimeOptions()
+    if (dayShifts.length === 0) return defaultOpts()
     const allStarts = dayShifts.map(s => timeToMinutes(s.start_time))
     const allEnds = dayShifts.map(s => timeToMinutes(s.end_time))
     const earliest = Math.min(...allStarts)
@@ -382,8 +382,7 @@ export default function ReservationFormModal({
               onChange={e => {
                 const value = e.target.value
                 if (holidays.includes(value)) {
-                  setToast('この日は定休日です')
-                  setTimeout(() => setToast(null), 3000)
+                  alert('この日は定休日です')
                   return
                 }
                 setForm(p => ({ ...p, reservation_date: value }))
@@ -548,23 +547,20 @@ export default function ReservationFormModal({
                     key={s.name}
                     type="button"
                     onClick={() => {
-                      const staffName = form.staff_name === s.name ? '' : s.name
-                      setForm(p => {
-                        const next = { ...p, staff_name: staffName }
-                        if (!staffName || !form.reservation_date) return next
-                        const staffShift = shifts.find(sh =>
-                          sh.date === form.reservation_date && getStaffNameFromShift(sh) === staffName
-                        )
-                        if (staffShift) {
-                          const currentStart = timeToMinutes(p.start_time)
-                          const shiftStart = timeToMinutes(staffShift.start_time)
-                          const shiftEnd = timeToMinutes(staffShift.end_time)
-                          if (currentStart < shiftStart || currentStart >= shiftEnd) {
-                            next.start_time = staffShift.start_time
-                          }
+                      const value = form.staff_name === s.name ? '' : s.name
+                      const staffShift = value && form.reservation_date
+                        ? shifts.find(sh => sh.date === form.reservation_date && getStaffNameFromShift(sh) === value)
+                        : null
+                      if (staffShift) {
+                        const currentStart = timeToMinutes(form.start_time || '10:00')
+                        const shiftStart = timeToMinutes(staffShift.start_time)
+                        const shiftEnd = timeToMinutes(staffShift.end_time)
+                        if (currentStart < shiftStart || currentStart >= shiftEnd) {
+                          setForm(p => ({ ...p, staff_name: value, start_time: staffShift.start_time }))
+                          return
                         }
-                        return next
-                      })
+                      }
+                      setForm(p => ({ ...p, staff_name: value }))
                     }}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       form.staff_name === s.name
@@ -603,11 +599,6 @@ export default function ReservationFormModal({
               placeholder="アレルギーや注意事項など" />
           </div>
         </div>
-        {toast && (
-          <div className="px-5 py-2 bg-amber-500/10 border-t border-amber-500/20 text-amber-700 text-sm">
-            {toast}
-          </div>
-        )}
         <div className="flex gap-3 p-5 border-t border-[#BAE6FD] shrink-0">
           <button onClick={onClose} className="flex-1 bg-white border border-[#BAE6FD] text-[#4A5568] rounded-xl py-2.5 text-sm hover:text-[#1A202C] transition-colors">
             キャンセル

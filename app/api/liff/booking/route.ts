@@ -9,6 +9,8 @@ export async function POST(req: NextRequest) {
   const {
     line_user_id,
     display_name,
+    customer_name,
+    customer_phone,
     menu_name,
     duration,
     price,
@@ -32,16 +34,33 @@ export async function POST(req: NextRequest) {
     customer = data
   }
 
-  // 顧客が未登録の場合は仮登録
-  if (!customer && display_name) {
+  // 既存顧客の場合は情報を更新して正式登録
+  if (customer) {
+    if (customer_name && (customer.name !== customer_name || (customer_phone && customer.phone !== customer_phone))) {
+      await supabase
+        .from('customers')
+        .update({
+          name: customer_name,
+          phone: customer_phone || customer.phone,
+          status: 'active',
+        })
+        .eq('id', customer.id)
+      customer = { ...customer, name: customer_name, phone: customer_phone || customer.phone, status: 'active' }
+    } else {
+      await supabase.from('customers').update({ status: 'active' }).eq('id', customer.id)
+      customer = { ...customer, status: 'active' }
+    }
+  } else {
+    // 新規登録（正式登録としてactive）
     const { data } = await supabase
       .from('customers')
       .insert({
         salon_id: salonId,
-        name: display_name,
+        name: customer_name || display_name || '未登録',
+        phone: customer_phone || '',
         line_user_id: line_user_id || '',
         line_status: 'followed',
-        status: 'temporary',
+        status: 'active',
       })
       .select()
       .single()
@@ -54,8 +73,8 @@ export async function POST(req: NextRequest) {
     .insert({
       salon_id: salonId,
       customer_id: customer?.id || null,
-      customer_name: customer?.name || display_name || '未登録',
-      customer_phone: customer?.phone || '',
+      customer_name: customer?.name || customer_name || display_name || '未登録',
+      customer_phone: customer?.phone || customer_phone || '',
       reservation_date: date,
       start_time,
       end_time,
@@ -89,7 +108,7 @@ export async function POST(req: NextRequest) {
           to: line_user_id,
           messages: [{
             type: 'text',
-            text: `✅ ご予約が確定しました！\n\n📋 ${menu_name}\n📅 ${dateLabel}\n⏰ ${start_time}〜${end_time}\n👤 担当：${staff_name}\n💴 料金：¥${(price ?? 0).toLocaleString()}\n\n${memo ? `📝 ${memo}\n\n` : ''}ご来店をお待ちしております✨\n\n「予約確認」と送っていただくといつでもご予約内容を確認できます😊`
+            text: `✅ ご予約が確定しました！\n\n📋 ${menu_name}\n📅 ${dateLabel}\n⏰ ${start_time}〜${end_time}\n${staff_name ? `👤 担当：${staff_name}\n` : ''}💴 料金：¥${(price ?? 0).toLocaleString()}\n\n${memo ? `📝 ${memo}\n\n` : ''}ご来店をお待ちしております✨\n\n「予約確認」と送っていただくといつでもご予約内容を確認できます😊`
           }]
         })
       })

@@ -254,13 +254,12 @@ export default function DashboardPage() {
   const [detailModal, setDetailModal] = useState<'cash' | 'consume' | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; start: string; end: string; bed: string } | null>(null)
   const [showReservationModal, setShowReservationModal] = useState(false)
-  const [beds, setBeds] = useState<string[]>(() => getSalonSettings().beds?.length ? getSalonSettings().beds : ['A', 'B'])
+  const [beds, setBeds] = useState<string[]>(['A', 'B'])
 
   useEffect(() => {
-    const refresh = () => setBeds(getSalonSettings().beds?.length ? getSalonSettings().beds : ['A', 'B'])
-    refresh()
-    window.addEventListener('salon-settings-updated', refresh)
-    return () => window.removeEventListener('salon-settings-updated', refresh)
+    fetch('/api/settings/salon')
+      .then(r => r.json())
+      .then(j => setBeds(j.beds || ['A', 'B']))
   }, [])
 
   useEffect(() => {

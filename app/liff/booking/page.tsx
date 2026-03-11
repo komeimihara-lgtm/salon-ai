@@ -20,7 +20,14 @@ export default function LiffBookingPage() {
   const [liffReady, setLiffReady] = useState(false)
   const [lineUserId, setLineUserId] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [step, setStep] = useState<'menu' | 'date' | 'time' | 'confirm' | 'done'>('menu')
+  const [step, setStep] = useState<'menu' | 'profile' | 'date' | 'time' | 'confirm' | 'done'>('menu')
+
+  // 初回用プロフィール（既存顧客の場合はAPIから取得した値を使用）
+  const [profileName, setProfileName] = useState('')
+  const [profilePhone, setProfilePhone] = useState('')
+  const [isFirstTime, setIsFirstTime] = useState(false)
+  const [existingName, setExistingName] = useState('')
+  const [existingPhone, setExistingPhone] = useState('')
 
   // 選択状態
   const [selectedMenu, setSelectedMenu] = useState<MenuItem | null>(null)
@@ -103,6 +110,28 @@ export default function LiffBookingPage() {
     finally { setSlotsLoading(false) }
   }
 
+  const checkFirstTime = async (lineUserId: string) => {
+    const res = await fetch(`/api/liff/check-customer?line_user_id=${lineUserId}`)
+    const json = await res.json()
+    if (json.exists) {
+      setExistingName(json.name || '')
+      setExistingPhone(json.phone || '')
+    }
+    return !json.exists
+  }
+
+  const handleSelectMenu = async (menu: MenuItem) => {
+    setSelectedMenu(menu)
+    if (lineUserId) {
+      const first = await checkFirstTime(lineUserId)
+      setIsFirstTime(first)
+      setStep(first ? 'profile' : 'date')
+    } else {
+      setIsFirstTime(true)
+      setStep('profile')
+    }
+  }
+
   const handleSelectDate = (date: Date) => {
     setSelectedDate(date)
     setSelectedSlot(null)
@@ -121,6 +150,8 @@ export default function LiffBookingPage() {
         body: JSON.stringify({
           line_user_id: lineUserId,
           display_name: displayName,
+          customer_name: profileName || existingName || displayName,
+          customer_phone: profilePhone || existingPhone,
           menu_id: selectedMenu.id,
           menu_name: selectedMenu.name,
           duration: selectedMenu.duration,
@@ -175,7 +206,8 @@ export default function LiffBookingPage() {
       <div className="bg-white shadow-sm px-4 py-4 flex items-center gap-3 sticky top-0 z-10">
         {step !== 'menu' && step !== 'done' && (
           <button onClick={() => {
-            if (step === 'date') setStep('menu')
+            if (step === 'profile') setStep('menu')
+            if (step === 'date') setStep(isFirstTime ? 'profile' : 'menu')
             if (step === 'time') setStep('date')
             if (step === 'confirm') setStep('time')
           }} className="p-1">
@@ -191,9 +223,9 @@ export default function LiffBookingPage() {
       {/* ステップインジケーター */}
       {step !== 'done' && (
         <div className="flex gap-1 px-4 pt-4">
-          {['menu', 'date', 'time', 'confirm'].map((s, i) => (
+          {['menu', 'profile', 'date', 'time', 'confirm'].map((s, i) => (
             <div key={s} className={`h-1.5 flex-1 rounded-full transition-all ${
-              ['menu', 'date', 'time', 'confirm'].indexOf(step) >= i
+              ['menu', 'profile', 'date', 'time', 'confirm'].indexOf(step) >= i
                 ? 'bg-gradient-to-r from-pink-400 to-purple-400'
                 : 'bg-gray-200'
             }`} />
@@ -212,7 +244,7 @@ export default function LiffBookingPage() {
                 <p className="text-xs font-bold text-gray-400 mb-2 uppercase">{cat}</p>
                 <div className="space-y-2">
                   {items.map(menu => (
-                    <button key={menu.id} onClick={() => { setSelectedMenu(menu); setStep('date') }}
+                    <button key={menu.id} onClick={() => handleSelectMenu(menu)}
                       className="w-full bg-white rounded-2xl p-4 text-left shadow-sm flex items-center justify-between hover:shadow-md transition-all">
                       <div>
                         <p className="font-bold text-gray-800">{menu.name}</p>
@@ -227,7 +259,47 @@ export default function LiffBookingPage() {
           </div>
         )}
 
-        {/* STEP 2: 日付選択 */}
+        {/* STEP 2: プロフィール入力（初回のみ） */}
+        {step === 'profile' && (
+          <div className="space-y-4">
+            <h2 className="font-bold text-gray-700">お客様情報の入力</h2>
+            <p className="text-xs text-gray-400">初回のご予約のため、お名前と電話番号をご入力ください</p>
+            <div className="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+              <div>
+                <p className="text-xs text-gray-400 mb-1">お名前 <span className="text-red-400">*</span></p>
+                <input
+                  value={profileName}
+                  onChange={e => setProfileName(e.target.value)}
+                  placeholder="例：山田 花子"
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 outline-none focus:border-pink-300 text-sm"
+                />
+              </div>
+              <div>
+                <p className="text-xs text-gray-400 mb-1">電話番号 <span className="text-red-400">*</span></p>
+                <input
+                  value={profilePhone}
+                  onChange={e => setProfilePhone(e.target.value)}
+                  placeholder="例：090-1234-5678"
+                  type="tel"
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 outline-none focus:border-pink-300 text-sm"
+                />
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (!profileName.trim() || !profilePhone.trim()) {
+                  alert('お名前と電話番号を入力してください')
+                  return
+                }
+                setStep('date')
+              }}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-pink-400 to-purple-400 text-white font-bold text-base shadow-lg">
+              次へ →
+            </button>
+          </div>
+        )}
+
+        {/* STEP 3: 日付選択 */}
         {step === 'date' && (
           <div className="space-y-4">
             <h2 className="font-bold text-gray-700">日付を選択</h2>
@@ -275,7 +347,7 @@ export default function LiffBookingPage() {
           </div>
         )}
 
-        {/* STEP 3: 時間選択 */}
+        {/* STEP 4: 時間選択（時間のみ表示、スタッフ別なし） */}
         {step === 'time' && (
           <div className="space-y-4">
             <h2 className="font-bold text-gray-700">
@@ -291,38 +363,22 @@ export default function LiffBookingPage() {
                 <button onClick={() => setStep('date')} className="mt-3 text-pink-400 text-sm">別の日を選ぶ</button>
               </div>
             ) : (
-              <div className="space-y-3">
-                {/* スタッフごとにグループ化 */}
-                {Object.entries(slots.reduce((acc: Record<string, Slot[]>, s) => {
-                  if (!acc[s.staff_name]) acc[s.staff_name] = []
-                  acc[s.staff_name].push(s)
-                  return acc
-                }, {})).map(([staffName, staffSlots]) => (
-                  <div key={staffName} className="bg-white rounded-2xl p-4 shadow-sm">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                        style={{ backgroundColor: staffSlots[0].staff_color }}>
-                        {staffName.slice(0, 1)}
-                      </div>
-                      <p className="text-sm font-bold text-gray-700">{staffName}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {staffSlots.map((slot, i) => {
-                        const isSelected = selectedSlot?.start === slot.start && selectedSlot?.staff_id === slot.staff_id
-                        return (
-                          <button key={i} onClick={() => { setSelectedSlot(slot); setStep('confirm') }}
-                            className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                              isSelected
-                                ? 'bg-gradient-to-br from-pink-400 to-purple-400 text-white'
-                                : 'bg-pink-50 text-pink-600 hover:bg-pink-100'
-                            }`}>
-                            {slot.start}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
+              <div className="grid grid-cols-3 gap-2">
+                {slots
+                  .filter((slot, index, self) => index === self.findIndex(s => s.start === slot.start))
+                  .map((slot, i) => {
+                    const isSelected = selectedSlot?.start === slot.start
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => { setSelectedSlot(slot); setStep('confirm') }}
+                        className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                          isSelected ? 'bg-gradient-to-br from-pink-400 to-purple-400 text-white' : 'bg-pink-50 text-pink-600 hover:bg-pink-100'
+                        }`}>
+                        {slot.start}
+                      </button>
+                    )
+                  })}
               </div>
             )}
           </div>
@@ -339,7 +395,6 @@ export default function LiffBookingPage() {
                 { label: '施術時間', value: `${selectedMenu?.duration}分` },
                 { label: '日付', value: `${selectedDate?.getMonth()! + 1}月${selectedDate?.getDate()}日（${WEEKDAYS[(selectedDate?.getDay()! + 6) % 7]}）` },
                 { label: '時間', value: `${selectedSlot?.start} 〜 ${selectedSlot?.end}` },
-                { label: 'スタッフ', value: selectedSlot?.staff_name },
               ].map(item => (
                 <div key={item.label} className="flex justify-between items-center py-2 border-b border-gray-50">
                   <p className="text-sm text-gray-400">{item.label}</p>
@@ -374,7 +429,6 @@ export default function LiffBookingPage() {
               <p className="text-sm text-gray-400">
                 {selectedDate?.getMonth()! + 1}月{selectedDate?.getDate()}日 {selectedSlot?.start}〜{selectedSlot?.end}
               </p>
-              <p className="text-sm text-gray-400">担当：{selectedSlot?.staff_name}</p>
             </div>
             <button onClick={() => window.liff?.closeWindow()}
               className="w-full py-3 rounded-2xl bg-gray-100 text-gray-600 font-bold text-sm mt-4">
