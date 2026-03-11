@@ -10,6 +10,15 @@ export async function POST(req: NextRequest) {
     const { purpose, platform, menu_name, details, tone } = await req.json()
 
     const supabase = getSupabaseAdmin()
+
+    const { data: archivedPosts } = await supabase
+      .from('content_plans')
+      .select('title, content, platform, archive_memo, archive_metrics')
+      .eq('salon_id', salonId)
+      .eq('is_archived', true)
+      .order('created_at', { ascending: false })
+      .limit(5)
+
     const { data: salon } = await supabase
       .from('salons')
       .select('name, address, phone')
@@ -72,7 +81,15 @@ export async function POST(req: NextRequest) {
     }
   ]
 }
-variationsは必ず3パターン生成してください。`,
+variationsは必ず3パターン生成してください。${archivedPosts && archivedPosts.length > 0 ? `
+【過去に反響が良かった投稿（必ず参考にすること）】
+${archivedPosts.map((p: { title: string; content?: string; platform: string; archive_memo?: string; archive_metrics?: { likes?: string; saves?: string; bookings?: string } }) => `
+・${p.title}
+  内容：${(p.content || '').slice(0, 100)}...
+  メモ：${p.archive_memo || 'なし'}
+  反響：いいね${p.archive_metrics?.likes || 0} 保存${p.archive_metrics?.saves || 0} 予約${p.archive_metrics?.bookings || 0}
+`).join('')}
+これらの投稿の傾向・トーン・テーマを参考に、今回の投稿を生成してください。` : ''}`,
       messages: [{
         role: 'user',
         content: `以下の条件でSNS投稿を3パターン生成してください。
