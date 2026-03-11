@@ -258,6 +258,8 @@ export default function DashboardPage() {
   const [beds, setBeds] = useState<string[]>(['A', 'B'])
   const [salonTargets, setSalonTargets] = useState({ sales: 600000, visits: 60, avgPrice: 10000 })
   const [businessHours, setBusinessHours] = useState({ openTime: '10:00', closeTime: '21:00' })
+  const [announcements, setAnnouncements] = useState<{ id: string; title: string; type: string; body: string; is_read: boolean }[]>([])
+  const [dismissedAnnouncements, setDismissedAnnouncements] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetch('/api/settings/salon')
@@ -272,6 +274,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetch('/api/tickets/check-expiry', { method: 'POST' }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/announcements')
+      .then(r => r.json())
+      .then(d => setAnnouncements((d.announcements || []).filter((a: { is_read: boolean }) => !a.is_read).slice(0, 3)))
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -396,6 +405,31 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-6">
+      {/* お知らせバナー */}
+      {announcements.filter(a => !dismissedAnnouncements.has(a.id)).map(a => {
+        const colors = a.type === 'important' ? 'bg-red-50 border-red-200 text-red-700'
+          : a.type === 'update' ? 'bg-green-50 border-green-200 text-green-700'
+          : a.type === 'maintenance' ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
+          : 'bg-blue-50 border-blue-200 text-blue-700'
+        return (
+          <div key={a.id} className={`rounded-xl border px-4 py-3 flex items-center justify-between ${colors}`}>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">{a.title}</p>
+              {a.body && <p className="text-xs opacity-80 mt-0.5 truncate">{a.body.slice(0, 60)}</p>}
+            </div>
+            <button
+              onClick={() => {
+                fetch(`/api/announcements/${a.id}/read`, { method: 'POST' })
+                setDismissedAnnouncements(prev => { const next = new Set(Array.from(prev)); next.add(a.id); return next })
+              }}
+              className="ml-3 p-1 hover:opacity-70 shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )
+      })}
+
       {/* レジ・売上登録ボタン（大きめ） */}
       <Link
         href="/sales"

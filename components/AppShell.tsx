@@ -30,7 +30,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 type NavLink = { type: 'link'; href: string; icon: React.ComponentType<{ className?: string }>; label: string }
 type NavGroup = {
@@ -77,6 +77,7 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 const BOTTOM_NAV_ITEMS = [
+  { href: '/announcements', icon: Bell, label: 'お知らせ' },
   { href: '/qa-chat', icon: HelpCircle, label: 'Q&Aチャット' },
 ]
 
@@ -95,6 +96,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const [snsExpanded, setSnsExpanded] = useState(false)
   const isSnsExpanded = pathname.startsWith('/sns') || snsExpanded
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    fetch('/api/announcements')
+      .then(r => r.json())
+      .then(d => setUnreadCount(d.unread_count || 0))
+      .catch(() => {})
+  }, [pathname])
 
   // ルートのリダイレクト時はシェルを表示しない
   if (pathname === '/') return <>{children}</>
@@ -326,9 +335,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <span className="text-sm text-text-sub font-dm-sans hidden sm:inline">
               {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
             </span>
-            <button className="p-2 text-text-sub hover:text-text-main rounded-lg hover:bg-light-lav">
+            <Link href="/announcements" className="relative p-2 text-text-sub hover:text-text-main rounded-lg hover:bg-light-lav">
               <Bell className="w-5 h-5" />
-            </button>
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
             <div className="w-8 h-8 rounded-full bg-gradient-to-r from-rose to-lavender flex items-center justify-center text-white text-xs font-bold">
               K
             </div>
