@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
 
-const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
+export const dynamic = 'force-dynamic'
+
 const SLOT_MINUTES = 15
 
 export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin()
+  const salonId = getSalonId()
   const { searchParams } = new URL(req.url)
   const date = searchParams.get('date')
   const duration = Number(searchParams.get('duration') || '60')

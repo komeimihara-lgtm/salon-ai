@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 const PLAN_PRICES: Record<string, number> = {
   LITE: 29800,
   PRO: 68000,
