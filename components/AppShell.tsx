@@ -8,6 +8,7 @@ import {
   MessageCircle,
   MessageSquare,
   Calendar,
+  CalendarDays,
   Send,
   TrendingUp,
   Megaphone,
@@ -62,6 +63,7 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { href: '/sns/compose', label: '投稿作成' },
       { href: '/sns/posts', label: '投稿管理' },
+      { href: '/sns/calendar', label: '投稿カレンダー' },
     ],
   },
   { type: 'link', href: '/menu', icon: List, label: 'メニュー設定' },
