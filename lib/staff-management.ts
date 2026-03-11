@@ -55,12 +55,25 @@ export async function removeStaff(id: string): Promise<void> {
   if (json.error) throw new Error(json.error)
 }
 
+function mapShiftFromApi(s: { id: string; staff_id: string; date: string; start_time: string; end_time: string; staff?: { id: string; name: string; color: string } | null }): StaffShift {
+  const staff = Array.isArray(s.staff) ? s.staff[0] : s.staff
+  return {
+    id: s.id,
+    staffId: s.staff_id,
+    staffName: staff?.name ?? '',
+    staffColor: staff?.color ?? '#C4728A',
+    date: s.date,
+    start: s.start_time?.slice(0, 5) ?? '09:00',
+    end: s.end_time?.slice(0, 5) ?? '18:00',
+  }
+}
+
 export async function fetchStaffShifts(month?: string): Promise<StaffShift[]> {
   const url = month ? `/api/shifts?month=${month}` : '/api/shifts'
   const res = await fetch(url)
   const json = await res.json()
   if (json.error) throw new Error(json.error)
-  return json.shifts || []
+  return (json.shifts || []).map(mapShiftFromApi)
 }
 
 export async function saveStaffShifts(shifts: StaffShift[]): Promise<void> {
