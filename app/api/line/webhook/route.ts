@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
 import Anthropic from '@anthropic-ai/sdk'
+import { recalcCustomerAfterCancel } from '@/lib/recalc-customer'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
@@ -24,6 +25,61 @@ async function replyMessage(replyToken: string, text: string, accessToken: strin
       messages: [{ type: 'text', text }]
     })
   })
+}
+
+async function replyFlex(replyToken: string, flex: object, accessToken: string) {
+  await fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      replyToken,
+      messages: [{ type: 'flex', altText: '予約キャンセル確認', contents: flex }]
+    })
+  })
+}
+
+function buildCancelConfirmFlex(reservation: { reservation_date: string; start_time: string; end_time?: string; menu?: string; staff_name?: string; id: string }) {
+  const date = reservation.reservation_date
+  const start = reservation.start_time?.slice(0, 5) ?? ''
+  const end = reservation.end_time?.slice(0, 5) ?? ''
+  const menu = reservation.menu || 'メニュー未定'
+  const staff = reservation.staff_name || '未定'
+  return {
+    type: 'bubble',
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'text',
+          text: '以下の予約をキャンセルしますか？',
+          weight: 'bold',
+          size: 'md',
+        },
+        { type: 'separator' },
+        { type: 'text', text: `📅 ${date} ${start}〜${end}`, size: 'sm', margin: 'md' },
+        { type: 'text', text: `💆 ${menu}`, size: 'sm' },
+        { type: 'text', text: `担当：${staff}`, size: 'sm' },
+      ],
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [{
+        type: 'button',
+        action: {
+          type: 'postback',
+          label: 'キャンセルする',
+          data: `action=cancel&reservation_id=${reservation.id}`,
+        },
+        style: 'primary',
+        color: '#E03E52',
+      }],
+    },
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -101,6 +157,35 @@ export async function POST(req: NextRequest) {
           break
         }
 
+        case 'postback': {
+          const data = event.postback?.data || ''
+          const replyToken = event.replyToken
+          if (data.startsWith('action=cancel&reservation_id=')) {
+            const reservationId = data.replace('action=cancel&reservation_id=', '')
+            const { data: reservation } = await supabase
+              .from('reservations')
+              .select('*')
+              .eq('id', reservationId)
+              .eq('salon_id', salonId)
+              .single()
+
+            if (reservation) {
+              await supabase
+                .from('reservations')
+                .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                .eq('id', reservationId)
+
+              const customerId = reservation.customer_id
+              if (customerId) {
+                await recalcCustomerAfterCancel(customerId)
+              }
+
+              await replyMessage(replyToken, 'ご予約をキャンセルしました。\nまたのご来店をお待ちしております🌸', accessToken)
+            }
+          }
+          break
+        }
+
         case 'message': {
           if (event.message?.type !== 'text') break
           const text = event.message.text.trim()
@@ -114,33 +199,70 @@ export async function POST(req: NextRequest) {
             .eq('salon_id', salonId)
             .single()
 
-          // 「予約確認」コマンド
-          if (text === '予約確認') {
-            if (!customer) {
-              await replyMessage(event.replyToken, 'お客様情報が見つかりませんでした。\nスタッフにLINE連携をお申し出ください😊', accessToken)
+          // 「キャンセル」コマンド
+          if (text === 'キャンセル') {
+            const tomorrow = new Date()
+            tomorrow.setDate(tomorrow.getDate() + 1)
+            const tomorrowStr = tomorrow.toISOString().slice(0, 10)
+
+            const customerId = customer?.id
+            let nextReservation = null
+            if (customerId) {
+              const { data: reservations } = await supabase
+                .from('reservations')
+                .select('*')
+                .eq('customer_id', customerId)
+                .eq('salon_id', salonId)
+                .eq('status', 'confirmed')
+                .gte('reservation_date', tomorrowStr)
+                .order('reservation_date', { ascending: true })
+                .order('start_time', { ascending: true })
+                .limit(1)
+              nextReservation = reservations?.[0] ?? null
+            }
+
+            if (!nextReservation) {
+              await replyMessage(replyToken, 'キャンセル可能な予約はございません', accessToken)
               break
             }
 
+            await replyFlex(replyToken, buildCancelConfirmFlex(nextReservation), accessToken)
+            break
+          }
+
+          // 「予約確認」コマンド
+          if (text === '予約確認') {
+            if (!customer) {
+              await replyMessage(replyToken, 'お客様情報が見つかりませんでした。\nスタッフにLINE連携をお申し出ください😊', accessToken)
+              break
+            }
+
+            const todayStr = new Date().toISOString().slice(0, 10)
             const { data: reservations } = await supabase
               .from('reservations')
               .select('*')
               .eq('customer_id', customer.id)
               .eq('salon_id', salonId)
-              .gte('start_time', new Date().toISOString())
+              .in('status', ['confirmed', 'rescheduled'])
+              .gte('reservation_date', todayStr)
+              .order('reservation_date', { ascending: true })
               .order('start_time', { ascending: true })
-              .limit(3)
+              .limit(1)
 
-            if (!reservations || reservations.length === 0) {
+            const nextRes = reservations?.[0]
+            if (!nextRes) {
               await replyMessage(replyToken, `${customer.name}様、現在ご予約はございません。\n\n「予約したい」と送っていただくとご予約を承ります😊`, accessToken)
               break
             }
 
-            const resvText = reservations.map((r: { start_time: string; menu?: string }, i: number) => {
-              const dt = new Date(r.start_time)
-              return `${i + 1}. ${dt.getFullYear()}年${dt.getMonth() + 1}月${dt.getDate()}日 ${dt.getHours()}:${String(dt.getMinutes()).padStart(2, '0')}\n   ${r.menu || 'メニュー未定'}`
-            }).join('\n\n')
+            const date = nextRes.reservation_date
+            const start = nextRes.start_time?.slice(0, 5) ?? ''
+            const end = nextRes.end_time?.slice(0, 5) ?? ''
+            const menu = nextRes.menu || 'メニュー未定'
+            const staff = nextRes.staff_name || '未定'
 
-            await replyMessage(replyToken, `${customer.name}様の次回ご予約✨\n\n${resvText}\n\nご不明な点はスタッフにお申し付けください😊`, accessToken)
+            const msg = `📅 次のご予約\n\n日付：${date}\n時間：${start}〜${end}\nメニュー：${menu}\n担当：${staff}\n\n変更・キャンセルは「キャンセル」と送信してください`
+            await replyMessage(replyToken, msg, accessToken)
             break
           }
 

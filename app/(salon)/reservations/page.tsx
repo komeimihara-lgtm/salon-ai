@@ -62,10 +62,12 @@ export default function ReservationsPage() {
   const selectedDateReservations = reservations.filter(r => r.reservation_date === selectedDate)
   const todayStr = toDateStr(today)
 
-  // 週次サマリー
+  // 週次サマリー（キャンセル済みは売上から除外）
   const weekConfirmed = reservations.filter(r => r.status === 'confirmed').length
   const weekCompleted = reservations.filter(r => r.status === 'completed').length
-  const weekRevenue = reservations.filter(r => r.status === 'completed').reduce((sum, r) => sum + r.price, 0)
+  const weekRevenue = reservations
+    .filter(r => r.status === 'completed')
+    .reduce((sum, r) => sum + r.price, 0)
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">

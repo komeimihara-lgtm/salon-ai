@@ -9,7 +9,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   visited: { label: '来店済み', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
   completed: { label: '来店済み', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
   rescheduled: { label: 'リスケ', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  cancelled: { label: 'キャンセル', color: 'bg-slate-500/20 text-[#4A5568] border-slate-500/30' },
+  cancelled: { label: 'キャンセル済み', color: 'bg-red-500/20 text-red-500 border-red-500/30' },
   no_show: { label: '無断キャンセル', color: 'bg-red-500/20 text-red-400 border-red-500/30' },
 }
 
@@ -33,8 +33,12 @@ export default function ReservationActionCard({
   const { label, color } = STATUS_MAP[reservation.status] ?? STATUS_MAP.confirmed
   const canAct = reservation.status === 'confirmed' || reservation.status === 'rescheduled'
 
+  const isCancelled = reservation.status === 'cancelled'
+
   return (
-    <div className="bg-white rounded-xl p-4 border border-[#E8E0F0] card-shadow space-y-2">
+    <div className={`rounded-xl p-4 border card-shadow space-y-2 ${
+      isCancelled ? 'bg-gray-100 border-gray-200 opacity-75' : 'bg-white border-[#E8E0F0]'
+    }`}>
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-1.5">
@@ -42,14 +46,18 @@ export default function ReservationActionCard({
             {reservation.customer_id ? (
               <Link
                 href={`/chart/${reservation.customer_id}`}
-                className="text-sm font-bold text-text-main hover:text-rose hover:underline"
+                className={`text-sm font-bold hover:text-rose hover:underline ${
+                  isCancelled ? 'text-text-sub line-through' : 'text-text-main'
+                }`}
               >
                 {reservation.customer_name}
               </Link>
             ) : (
               <Link
                 href={`/chart?name=${encodeURIComponent(reservation.customer_name)}`}
-                className="text-sm font-bold text-text-main hover:text-rose hover:underline"
+                className={`text-sm font-bold hover:text-rose hover:underline ${
+                  isCancelled ? 'text-text-sub line-through' : 'text-text-main'
+                }`}
               >
                 {reservation.customer_name}
               </Link>
@@ -62,7 +70,9 @@ export default function ReservationActionCard({
             </div>
           )}
         </div>
-        <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${color}`}>{label}</span>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${
+          isCancelled ? 'bg-red-500/20 text-red-500 border-red-500/30' : color
+        }`}>{label}</span>
       </div>
 
       <div className="flex items-center gap-3 text-xs text-text-sub">
