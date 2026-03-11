@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Sparkles, Loader2, Copy, Check, BookmarkPlus } from 'lucide-react'
 
 type Platform = 'instagram' | 'x' | 'tiktok' | 'line'
@@ -52,6 +52,15 @@ export default function SnsComposePage() {
   const [saved, setSaved] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [imageTab, setImageTab] = useState<'generate' | 'upload'>('generate')
+  const [imagePrompt, setImagePrompt] = useState('')
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null)
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
+  const [imageLoading, setImageLoading] = useState(false)
+  const [brightness, setBrightness] = useState(100)
+  const [contrast, setContrast] = useState(100)
+  const [imageText, setImageText] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -88,6 +97,35 @@ export default function SnsComposePage() {
     setTimeout(() => setCopied(false), 2000)
     showToast('コピーしました')
   }
+
+  const handleGenerateImage = async () => {
+    if (!imagePrompt) return
+    setImageLoading(true)
+    try {
+      const res = await fetch('/api/sns/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: imagePrompt }),
+      })
+      const json = await res.json()
+      if (json.error) throw new Error(json.error)
+      setGeneratedImage(json.image)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '画像生成に失敗しました')
+    } finally {
+      setImageLoading(false)
+    }
+  }
+
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setUploadedImage(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  const activeImage = imageTab === 'generate' ? generatedImage : uploadedImage
 
   const handleSave = async () => {
     const v = variations[activeTab]
@@ -270,6 +308,103 @@ export default function SnsComposePage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* 画像セクション */}
+        <div className="bg-white rounded-2xl p-5 card-shadow space-y-4">
+          <p className="font-bold text-text-main text-sm">🖼️ 投稿画像</p>
+
+          {/* タブ */}
+          <div className="flex gap-2">
+            <button onClick={() => setImageTab('generate')}
+              className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${imageTab === 'generate' ? 'bg-gradient-to-r from-rose to-lavender text-white' : 'bg-light-lav text-text-sub'}`}>
+              ✨ AI生成
+            </button>
+            <button onClick={() => setImageTab('upload')}
+              className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${imageTab === 'upload' ? 'bg-gradient-to-r from-rose to-lavender text-white' : 'bg-light-lav text-text-sub'}`}>
+              📷 アップロード
+            </button>
+          </div>
+
+          {/* AI生成 */}
+          {imageTab === 'generate' && (
+            <div className="space-y-3">
+              <textarea value={imagePrompt} onChange={e => setImagePrompt(e.target.value)}
+                placeholder="例：明るいエステサロンでフェイシャルケアを受ける女性、ナチュラルライト、清潔感"
+                rows={3}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm resize-none" />
+              {currentVariation?.image_suggestion && (
+                <button onClick={() => setImagePrompt(currentVariation.image_suggestion)}
+                  className="text-xs text-rose hover:underline">
+                  ← AI提案のプロンプトを使う
+                </button>
+              )}
+              <button onClick={handleGenerateImage} disabled={imageLoading || !imagePrompt}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                {imageLoading ? <><Loader2 className="w-4 h-4 animate-spin" />生成中（10〜20秒）...</> : '✨ 画像を生成'}
+              </button>
+            </div>
+          )}
+
+          {/* アップロード */}
+          {imageTab === 'upload' && (
+            <div>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleUpload} className="hidden" />
+              <button onClick={() => fileInputRef.current?.click()}
+                className="w-full py-8 rounded-xl border-2 border-dashed border-gray-200 text-text-sub text-sm hover:border-rose hover:text-rose transition-all">
+                📷 タップして写真を選択
+              </button>
+            </div>
+          )}
+
+          {/* 画像プレビュー・加工 */}
+          {activeImage && (
+            <div className="space-y-3">
+              <div className="relative rounded-xl overflow-hidden">
+                <img src={activeImage} alt="投稿画像"
+                  style={{ filter: `brightness(${brightness}%) contrast(${contrast}%)` }}
+                  className="w-full object-cover rounded-xl" />
+                {imageText && (
+                  <div className="absolute bottom-4 left-0 right-0 text-center">
+                    <span className="bg-black/50 text-white px-3 py-1 rounded-full text-sm font-bold">
+                      {imageText}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* 加工コントロール */}
+              <div className="space-y-2">
+                <div>
+                  <div className="flex justify-between text-xs text-text-sub mb-1">
+                    <span>明るさ</span><span>{brightness}%</span>
+                  </div>
+                  <input type="range" min={50} max={150} value={brightness}
+                    onChange={e => setBrightness(Number(e.target.value))}
+                    className="w-full accent-rose" />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs text-text-sub mb-1">
+                    <span>コントラスト</span><span>{contrast}%</span>
+                  </div>
+                  <input type="range" min={50} max={150} value={contrast}
+                    onChange={e => setContrast(Number(e.target.value))}
+                    className="w-full accent-rose" />
+                </div>
+                <div>
+                  <p className="text-xs text-text-sub mb-1">テキスト追加</p>
+                  <input value={imageText} onChange={e => setImageText(e.target.value)}
+                    placeholder="例：初回限定50%OFF"
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm" />
+                </div>
+              </div>
+
+              <button onClick={() => { setGeneratedImage(null); setUploadedImage(null); setBrightness(100); setContrast(100); setImageText('') }}
+                className="w-full py-2 rounded-xl bg-gray-100 text-text-sub text-sm font-medium">
+                画像をリセット
+              </button>
             </div>
           )}
         </div>
