@@ -11,6 +11,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [demoLoading, setDemoLoading] = useState(false)
+
+  const handleDemo = async () => {
+    setDemoLoading(true)
+    await fetch('/api/demo/setup', { method: 'POST' }).catch(() => {})
+    document.cookie = 'demo_mode=true; path=/'
+    document.cookie = 'salon_id=de000000-0000-0000-0000-000000000001; path=/'
+    router.push('/dashboard')
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -95,12 +104,13 @@ export default function LoginPage() {
             <div className="relative flex justify-center"><span className="bg-white px-3 text-xs text-text-sub">または</span></div>
           </div>
 
-          <Link
-            href="/demo/login"
-            className="block w-full py-3 border-2 border-lavender text-lavender rounded-xl font-semibold text-sm text-center hover:bg-lavender/5 transition-colors"
+          <button
+            onClick={handleDemo}
+            disabled={demoLoading}
+            className="w-full py-3 border-2 border-lavender text-lavender rounded-xl font-semibold text-sm text-center hover:bg-lavender/5 transition-colors disabled:opacity-50"
           >
-            デモを試す
-          </Link>
+            {demoLoading ? 'デモ環境を準備中...' : 'デモを試す'}
+          </button>
         </div>
 
         <p className="text-center text-white/50 text-xs mt-6">&copy; LENARD Corporation</p>
