@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
-const DEMO_SALON_ID = 'demo0000-0000-0000-0000-000000000001'
+const DEMO_SALON_ID = 'de000000-0000-0000-0000-000000000001'
 
 export async function POST() {
   const supabase = getSupabaseAdmin()

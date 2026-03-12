@@ -2,7 +2,7 @@
 INSERT INTO salons (
   id, name, owner_name, plan, phone, address, status, beds
 ) VALUES (
-  'demo0000-0000-0000-0000-000000000001',
+  'de000000-0000-0000-0000-000000000001',
   'デモサロン SOLA',
   'デモ オーナー',
   'pro',

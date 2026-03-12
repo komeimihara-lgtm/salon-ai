@@ -9,7 +9,7 @@ import {
   RefreshCw, AlertTriangle
 } from 'lucide-react'
 
-const DEMO_SALON_ID = 'demo0000-0000-0000-0000-000000000001'
+const DEMO_SALON_ID = 'de000000-0000-0000-0000-000000000001'
 
 const NAV_ITEMS = [
   { href: '/demo/dashboard', icon: LayoutDashboard, label: 'ダッシュボード' },
