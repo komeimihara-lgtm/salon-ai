@@ -29,6 +29,21 @@ export default function LoginPage() {
       return
     }
 
+    // サロンIDを取得してcookieにセット
+    try {
+      const res = await fetch('/api/auth/salon-id', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const { salon_id } = await res.json()
+      if (salon_id) {
+        document.cookie = `salon_id=${salon_id}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`
+      }
+    } catch {
+      // salon_id取得失敗時はデフォルトIDで継続
+    }
+
     router.push('/dashboard')
     router.refresh()
   }

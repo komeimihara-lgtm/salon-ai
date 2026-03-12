@@ -106,6 +106,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const handleLogout = async () => {
     const supabase = createSupabaseBrowser()
     await supabase.auth.signOut()
+    document.cookie = 'salon_id=; path=/; max-age=0'
     router.push('/login')
   }
 

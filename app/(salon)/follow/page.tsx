@@ -174,7 +174,7 @@ export default function FollowPage() {
                   <span className="text-xs font-bold text-[#07C755]">サロン</span>
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-[#1A202C]">エステサロン ルミエール</p>
+                  <p className="text-sm font-bold text-[#1A202C]">サロン</p>
                   <p className="text-xs text-[#1A202C]/80">オンライン</p>
                 </div>
               </div>

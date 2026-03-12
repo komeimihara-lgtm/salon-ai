@@ -30,7 +30,7 @@ export type LeoContext = {
 // 実装後はSupabaseから取得する
 export const DEMO_SALON: SalonProfile = {
   id: 'demo-salon-001',
-  name: 'エステサロン ルミエール',
+  name: '',
   owner_name: 'KOMEI',
   plan: 'pro',
   kpi: {

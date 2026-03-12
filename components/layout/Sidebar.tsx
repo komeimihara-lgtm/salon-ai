@@ -73,8 +73,8 @@ export default function Sidebar() {
         })}
       </nav>
       <div className="p-4 border-t border-[#E8E0F0]">
-        <p className="text-xs text-[#6B7280] truncate">エステサロン ルミエール</p>
-        <p className="text-xs text-[#9B8EC4] font-medium mt-0.5">KOMEIさん</p>
+        <p className="text-xs text-[#6B7280] truncate"></p>
+        <p className="text-xs text-[#9B8EC4] font-medium mt-0.5"></p>
       </div>
     </aside>
   )

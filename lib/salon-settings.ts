@@ -32,7 +32,7 @@ export interface SalonSettings {
 }
 
 const DEFAULT: SalonSettings = {
-  salonName: 'エステサロン ルミエール',
+  salonName: '',
   address: '',
   phone: '',
   businessHours: { openTime: '10:00', closeTime: '21:00' },
