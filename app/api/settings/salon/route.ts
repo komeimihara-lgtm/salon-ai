@@ -7,13 +7,23 @@ export async function GET() {
   const supabase = getSupabaseAdmin()
   const { data: salon, error } = await supabase
     .from('salons')
-    .select('beds, closed_days')
+    .select('id, name, owner_name, plan, phone, address, beds, closed_days, business_hours, targets')
     .eq('id', salonId)
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const beds: string[] = Array.isArray(salon?.beds) ? salon.beds : ['A', 'B']
   const closed_days: number[] = Array.isArray(salon?.closed_days) ? salon.closed_days : []
-  return NextResponse.json({ beds, closed_days })
+  return NextResponse.json({
+    name: salon?.name || '',
+    owner_name: salon?.owner_name || '',
+    plan: salon?.plan || '',
+    phone: salon?.phone || '',
+    address: salon?.address || '',
+    beds,
+    closed_days,
+    business_hours: salon?.business_hours || null,
+    targets: salon?.targets || null,
+  })
 }
 
 export async function PATCH(req: NextRequest) {

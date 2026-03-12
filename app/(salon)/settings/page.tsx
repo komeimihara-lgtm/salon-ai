@@ -27,14 +27,11 @@ export default function SettingsPage() {
     phone: '',
     businessHours: { openTime: '10:00', closeTime: '21:00' },
     beds: [],
-    staff: [],
     targets: { sales: 600000, visits: 60, avgPrice: 10000, productSales: 50000, newCustomers: 10, newReservations: 15 },
     externalUrls: { hotpepper: '', salonHp: '' },
   })
   const [beds, setBeds] = useState<BedsState>([])
   const [newBed, setNewBed] = useState('')
-  const [newStaffName, setNewStaffName] = useState('')
-  const [newStaffColor, setNewStaffColor] = useState('#C4728A')
   const [saved, setSaved] = useState(false)
   const [bedsEditing, setBedsEditing] = useState(false)
   const [editingBedNames, setEditingBedNames] = useState<Record<number, string>>({})
@@ -138,21 +135,6 @@ export default function SettingsPage() {
     } finally {
       setLineSaving(false)
     }
-  }
-
-  const addStaff = () => {
-    if (newStaffName.trim()) {
-      setSettings(s => ({
-        ...s,
-        staff: [...s.staff, { name: newStaffName.trim(), color: newStaffColor }],
-      }))
-      setNewStaffName('')
-      setNewStaffColor('#C4728A')
-    }
-  }
-
-  const removeStaff = (idx: number) => {
-    setSettings(s => ({ ...s, staff: s.staff.filter((_, i) => i !== idx) }))
   }
 
   return (
@@ -347,60 +329,6 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={addBed}
-                className="px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium hover:opacity-90 flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                追加
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* スタッフ設定 */}
-      <section>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="gradient-line rounded-full" />
-          <span className="section-label font-dm-sans">スタッフ設定</span>
-        </div>
-        <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
-          <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
-          <div className="space-y-3">
-            {settings.staff.map((s, i) => (
-              <div key={s.name} className="flex items-center justify-between py-2 px-4 bg-light-lav/50 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                    style={{ backgroundColor: s.color }}
-                  >
-                    {s.name[0]}
-                  </div>
-                  <span className="font-medium text-text-main">{s.name}</span>
-                </div>
-                <button
-                  onClick={() => removeStaff(i)}
-                  className="p-2 text-text-sub hover:text-red-600 rounded-lg hover:bg-red-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))}
-            <div className="flex gap-2 flex-wrap">
-              <input
-                type="text"
-                value={newStaffName}
-                onChange={(e) => setNewStaffName(e.target.value)}
-                placeholder="スタッフ名"
-                className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none"
-              />
-              <input
-                type="color"
-                value={newStaffColor}
-                onChange={(e) => setNewStaffColor(e.target.value)}
-                className="w-12 h-10 rounded-xl border border-gray-200 cursor-pointer"
-              />
-              <button
-                onClick={addStaff}
                 className="px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium hover:opacity-90 flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />

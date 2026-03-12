@@ -16,7 +16,7 @@ export interface SalonSettings {
   phone: string
   businessHours: BusinessHours
   beds: string[]
-  staff: SalonStaff[]
+  staff?: SalonStaff[]
   targets: {
     sales: number           // 月間売上目標（monthlyRevenue）
     visits: number         // 来店人数目標（visitCount）

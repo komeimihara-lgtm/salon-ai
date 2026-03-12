@@ -109,7 +109,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetch('/api/settings/salon')
       .then(r => r.json())
-      .then(j => setSalonName(j.name || 'サロン名未設定'))
+      .then(j => setSalonName(j.name || j.salon?.name || 'サロン名未設定'))
       .catch(() => {})
   }, [])
 

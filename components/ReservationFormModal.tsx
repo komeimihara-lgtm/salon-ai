@@ -204,32 +204,20 @@ export default function ReservationFormModal({
     }
   }, [menuCategory, filteredMenus, form.menu])
 
-  // 担当スタッフ: 親から渡されていれば使用、そうでなければAPIから取得
+  // 担当スタッフ: 親から渡されていれば使用、そうでなければ /api/staff から取得
   useEffect(() => {
     if (staffListProp && staffListProp.length > 0) {
       setStaffList(staffListProp)
       return
     }
-    let cancelled = false
-    const date = form.reservation_date || defaultDate
-    fetch(`/api/staff/attendance?date=${encodeURIComponent(date)}`)
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (cancelled) return
-        const list = data?.staff ?? []
-        if (list.length > 0) {
-          setStaffList(list)
-          return
-        }
-        return fetch('/api/staff').then(r => r.ok ? r.json() : null)
-      })
-      .then(data => {
-        if (cancelled) return
-        if (data?.staff?.length) setStaffList(data.staff)
+    fetch('/api/staff')
+      .then(r => r.json())
+      .then(j => {
+        const list = (j.staff || []).filter((s: { is_active?: boolean }) => s.is_active !== false)
+        if (list.length > 0) setStaffList(list)
       })
       .catch(() => {})
-    return () => { cancelled = true }
-  }, [staffListProp, defaultDate, form.reservation_date])
+  }, [staffListProp])
 
   // 予約表の空き枠クリック時: 日付・開始時間・ベッドを自動入力
   useEffect(() => {
