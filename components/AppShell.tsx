@@ -30,7 +30,6 @@ import {
   ChevronDown,
   ChevronRight,
   LogOut,
-  RefreshCw,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
@@ -102,19 +101,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isSnsExpanded = pathname.startsWith('/sns') || snsExpanded
   const [unreadCount, setUnreadCount] = useState(0)
   const [salonInfo, setSalonInfo] = useState({ name: '', owner_name: '' })
-  const [isDemo, setIsDemo] = useState(false)
-  const [resetting, setResetting] = useState(false)
-
-  useEffect(() => {
-    setIsDemo(document.cookie.split(';').some(c => c.trim().startsWith('demo_mode=true')))
-  }, [])
-
-  const handleResetDemo = async () => {
-    setResetting(true)
-    await fetch('/api/demo/setup', { method: 'POST' })
-    setResetting(false)
-    window.location.reload()
-  }
 
   const handleLogout = async () => {
     const supabase = createSupabaseBrowser()
@@ -366,20 +352,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* メインエリア */}
       <div className="flex-1 flex flex-col min-w-0 lg:pl-[240px]">
-        {/* デモバナー */}
-        {isDemo && (
-          <div className="bg-amber-400 text-amber-900 px-4 py-2 text-center text-sm font-semibold flex items-center justify-center gap-2">
-            <span>🎯 これはデモ環境です</span>
-            <button
-              onClick={handleResetDemo}
-              disabled={resetting}
-              className="ml-4 px-3 py-1 bg-amber-600 text-white rounded-lg text-xs hover:bg-amber-700 disabled:opacity-50 flex items-center gap-1"
-            >
-              <RefreshCw className={`w-3 h-3 ${resetting ? 'animate-spin' : ''}`} />
-              {resetting ? 'リセット中...' : 'デモデータをリセット'}
-            </button>
-          </div>
-        )}
         {/* トップバー */}
         <header className="sticky top-0 z-20 flex items-center justify-between h-16 px-4 lg:px-8 bg-off-white border-b border-gray-200">
           <div className="flex items-center gap-4">

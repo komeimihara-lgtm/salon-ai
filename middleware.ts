@@ -3,12 +3,6 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
-  // デモモードの場合は認証スキップ
-  const demoMode = req.cookies.get('demo_mode')?.value
-  if (demoMode === 'true') {
-    return NextResponse.next()
-  }
-
   let res = NextResponse.next({ request: { headers: req.headers } })
 
   const supabase = createServerClient(
@@ -44,5 +38,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|liff|demo|admin|login|register|api).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|liff|admin|login|register|api).*)'],
 }

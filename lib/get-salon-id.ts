@@ -5,9 +5,8 @@ import { DEMO_SALON_ID } from './supabase'
 export function getSalonIdFromCookie(): string {
   try {
     const cookieStore = cookies()
-    const demoMode = cookieStore.get('demo_mode')?.value
     const cookieSalonId = cookieStore.get('salon_id')?.value
-    if (demoMode === 'true' && cookieSalonId) return cookieSalonId
+    if (cookieSalonId) return cookieSalonId
   } catch {}
   return process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
 }
