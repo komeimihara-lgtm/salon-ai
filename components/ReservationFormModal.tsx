@@ -89,6 +89,7 @@ export default function ReservationFormModal({
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [conflictInfo, setConflictInfo] = useState<{ customer_name: string; start_time: string; end_time: string; type: string } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [candidates, setCandidates] = useState<Customer[]>([])
   const [loadingCandidates, setLoadingCandidates] = useState(false)
@@ -300,6 +301,7 @@ export default function ReservationFormModal({
 
   async function handleSubmit() {
     setError('')
+    setConflictInfo(null)
     if (!form.customer_name.trim()) {
       setError('顧客名は必須です')
       return
@@ -351,6 +353,15 @@ export default function ReservationFormModal({
       })
       if (!res.ok) {
         const err = await res.json()
+        // 409 = 重複エラー
+        if (res.status === 409 && err.conflict) {
+          setConflictInfo({
+            customer_name: err.conflict.customer_name,
+            start_time: err.conflict.start_time,
+            end_time: err.conflict.end_time,
+            type: err.conflictType || 'bed',
+          })
+        }
         throw new Error(err.error || '予約の登録に失敗しました')
       }
       onSaved()
@@ -370,7 +381,18 @@ export default function ReservationFormModal({
           <button onClick={onClose} className="text-[#4A5568] hover:text-[#1A202C]"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-3 overflow-y-auto flex-1">
-          {error && <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 space-y-1">
+              <p className="text-sm text-red-600 font-medium">{error}</p>
+              {conflictInfo && (
+                <p className="text-xs text-red-500">
+                  {conflictInfo.type === 'staff' ? '⚠️ スタッフの予約が重複しています' : '⚠️ ベッドの予約が重複しています'}
+                  ：{conflictInfo.customer_name}様 {conflictInfo.start_time}〜{conflictInfo.end_time}
+                </p>
+              )}
+              <p className="text-xs text-red-400">時間やベッドを変更して再度お試しください</p>
+            </div>
+          )}
 
           {/* 1. 日付 */}
           <div>
