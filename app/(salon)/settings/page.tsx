@@ -42,11 +42,20 @@ export default function SettingsPage() {
   const [lineToast, setLineToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   useEffect(() => {
-    setSettings(getSalonSettings())
-    // ベッドをSupabaseから取得
+    // DBから全設定を取得
     fetch('/api/settings/salon')
       .then(r => r.json())
-      .then(j => setBeds(j.beds || ['A', 'B']))
+      .then(j => {
+        setBeds(j.beds || ['A', 'B'])
+        setSettings(prev => ({
+          ...prev,
+          salonName: j.name || '',
+          address: j.address || '',
+          phone: j.phone || '',
+          businessHours: j.business_hours || prev.businessHours,
+          targets: j.targets || prev.targets,
+        }))
+      })
       .catch(() => setBeds(['A', 'B']))
   }, [])
 
@@ -64,10 +73,25 @@ export default function SettingsPage() {
     }
   }, [lineToast])
 
-  const save = () => {
-    setSalonSettings(settings)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  const save = async () => {
+    try {
+      await fetch('/api/settings/salon', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: settings.salonName,
+          phone: settings.phone,
+          address: settings.address,
+          business_hours: settings.businessHours,
+          targets: settings.targets,
+        }),
+      })
+      setSalonSettings(settings)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch {
+      setSaved(false)
+    }
   }
 
   const saveBeds = async (newBeds: string[]) => {

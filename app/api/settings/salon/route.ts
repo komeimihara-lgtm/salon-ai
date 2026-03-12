@@ -33,8 +33,14 @@ export async function PATCH(req: NextRequest) {
   const update: Record<string, unknown> = {}
   if (Array.isArray(body.beds)) update.beds = body.beds
   if (Array.isArray(body.closed_days)) update.closed_days = body.closed_days
+  if (typeof body.name === 'string') update.name = body.name
+  if (typeof body.owner_name === 'string') update.owner_name = body.owner_name
+  if (typeof body.phone === 'string') update.phone = body.phone
+  if (typeof body.address === 'string') update.address = body.address
+  if (body.business_hours && typeof body.business_hours === 'object') update.business_hours = body.business_hours
+  if (body.targets && typeof body.targets === 'object') update.targets = body.targets
   if (Object.keys(update).length === 0) {
-    return NextResponse.json({ error: 'beds or closed_days must be provided as array' }, { status: 400 })
+    return NextResponse.json({ error: 'No valid fields provided' }, { status: 400 })
   }
   const { error } = await supabase
     .from('salons')
