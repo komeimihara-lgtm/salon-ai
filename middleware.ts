@@ -26,13 +26,8 @@ export async function middleware(req: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
-
-  // 未ログインの場合は /login にリダイレクト
-  if (!session) {
-    const loginUrl = new URL('/login', req.url)
-    return NextResponse.redirect(loginUrl)
-  }
+  // セッション更新のみ行い、未ログインでもリダイレクトしない
+  await supabase.auth.getSession()
 
   return res
 }

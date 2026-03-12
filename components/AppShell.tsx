@@ -101,12 +101,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isSnsExpanded = pathname.startsWith('/sns') || snsExpanded
   const [unreadCount, setUnreadCount] = useState(0)
   const [salonInfo, setSalonInfo] = useState({ name: '', owner_name: '' })
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   const handleLogout = async () => {
     const supabase = createSupabaseBrowser()
     await supabase.auth.signOut()
     router.push('/login')
   }
+
+  useEffect(() => {
+    const supabase = createSupabaseBrowser()
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session)
+    })
+  }, [])
 
   useEffect(() => {
     fetch('/api/announcements')
@@ -224,13 +232,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div className="p-4 border-t border-white/10">
           <p className="text-xs text-white/80 truncate">{salonInfo.name}</p>
           <p className="text-xs text-white/60 truncate">{salonInfo.owner_name ? `${salonInfo.owner_name}さん` : ''}</p>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 mt-2 text-xs text-white/50 hover:text-white/80 transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>ログアウト</span>
-          </button>
+          {isLoggedIn ? (
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 mt-2 text-xs text-white/50 hover:text-white/80 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>ログアウト</span>
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center gap-2 mt-2 text-xs text-white/50 hover:text-white/80 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>ログイン</span>
+            </Link>
+          )}
         </div>
       </aside>
 
@@ -340,13 +358,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div className="p-4 border-t border-white/10">
           <p className="text-xs text-white/80 truncate">{salonInfo.name}</p>
           <p className="text-xs text-white/60 truncate">{salonInfo.owner_name ? `${salonInfo.owner_name}さん` : ''}</p>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 mt-2 text-xs text-white/50 hover:text-white/80 transition-colors"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>ログアウト</span>
-          </button>
+          {isLoggedIn ? (
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 mt-2 text-xs text-white/50 hover:text-white/80 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>ログアウト</span>
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center gap-2 mt-2 text-xs text-white/50 hover:text-white/80 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>ログイン</span>
+            </Link>
+          )}
         </div>
       </aside>
 
