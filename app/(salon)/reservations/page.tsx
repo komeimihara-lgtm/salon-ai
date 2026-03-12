@@ -767,8 +767,8 @@ export default function ReservationsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, status: 'cancelled' }),
     })
+    setReservations(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelled' } : r))
     setDetailTarget(null)
-    fetchReservations()
   }
 
   // 空き枠クリック
