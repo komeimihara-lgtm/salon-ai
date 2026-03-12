@@ -100,7 +100,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [snsExpanded, setSnsExpanded] = useState(false)
   const isSnsExpanded = pathname.startsWith('/sns') || snsExpanded
   const [unreadCount, setUnreadCount] = useState(0)
-  const [salonInfo, setSalonInfo] = useState({ name: '', owner_name: '' })
+  const [salonInfo, setSalonInfo] = useState({ name: '' })
   const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   const handleLogout = async () => {
@@ -129,7 +129,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       .then(r => r.json())
       .then(j => setSalonInfo({
         name: j.name || j.salon?.name || '',
-        owner_name: j.owner_name || j.salon?.owner_name || '',
       }))
       .catch(() => {})
   }, [])
@@ -232,7 +231,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <p className="text-xs text-white/80 truncate">{salonInfo.name}</p>
-          <p className="text-xs text-white/60 truncate">{salonInfo.owner_name ? `${salonInfo.owner_name}さん` : ''}</p>
           {isLoggedIn ? (
             <button
               onClick={handleLogout}
@@ -358,7 +356,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <p className="text-xs text-white/80 truncate">{salonInfo.name}</p>
-          <p className="text-xs text-white/60 truncate">{salonInfo.owner_name ? `${salonInfo.owner_name}さん` : ''}</p>
           {isLoggedIn ? (
             <button
               onClick={handleLogout}
@@ -407,7 +404,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </Link>
             <div className="w-8 h-8 rounded-full bg-gradient-to-r from-rose to-lavender flex items-center justify-center text-white text-xs font-bold">
-              {salonInfo.owner_name ? salonInfo.owner_name.charAt(0) : ''}
+              {salonInfo.name ? salonInfo.name.charAt(0) : ''}
             </div>
           </div>
         </header>
