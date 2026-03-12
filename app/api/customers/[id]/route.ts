@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 export async function GET(
   req: NextRequest,
@@ -10,7 +11,7 @@ export async function GET(
       .from('customers')
       .select('*')
       .eq('id', params.id)
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .single()
     if (error || !data) {
       return NextResponse.json({ error: '顧客が見つかりません' }, { status: 404 })
@@ -32,7 +33,7 @@ export async function PATCH(
       .from('customers')
       .update(body)
       .eq('id', params.id)
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .select()
       .single()
     if (error) throw error

@@ -1,5 +1,4 @@
-import { createClient } from '@/lib/supabase'
-import { DEMO_SALON_ID } from '@/lib/supabase'
+import { createClient, getSalonId } from '@/lib/supabase'
 
 export type Product = {
   id: string
@@ -15,14 +14,12 @@ export type Product = {
   created_at?: string
 }
 
-const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
-
 export async function fetchProducts(): Promise<Product[]> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('products')
     .select('*')
-    .eq('salon_id', salonId)
+    .eq('salon_id', getSalonId())
     .order('created_at', { ascending: false })
   if (error) throw error
   return data || []
@@ -32,7 +29,7 @@ export async function createProduct(data: Omit<Product, 'id' | 'salon_id' | 'cre
   const supabase = createClient()
   const { data: row, error } = await supabase
     .from('products')
-    .insert({ ...data, salon_id: salonId })
+    .insert({ ...data, salon_id: getSalonId() })
     .select()
     .single()
   if (error) throw error
@@ -45,7 +42,7 @@ export async function updateProduct(id: string, data: Partial<Product>): Promise
     .from('products')
     .update(data)
     .eq('id', id)
-    .eq('salon_id', salonId)
+    .eq('salon_id', getSalonId())
     .select()
     .single()
   if (error) throw error
@@ -58,7 +55,7 @@ export async function deleteProduct(id: string): Promise<void> {
     .from('products')
     .delete()
     .eq('id', id)
-    .eq('salon_id', salonId)
+    .eq('salon_id', getSalonId())
   if (error) throw error
 }
 
@@ -86,5 +83,5 @@ export async function adjustStock(
   if (updateError) throw updateError
   await supabase
     .from('product_stock_logs')
-    .insert({ salon_id: salonId, product_id: productId, type, quantity, memo })
+    .insert({ salon_id: getSalonId(), product_id: productId, type, quantity, memo })
 }

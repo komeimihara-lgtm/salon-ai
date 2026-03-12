@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 /** 無断キャンセル: ステータスを no_show に変更、顧客の no_show_count を +1 */
 export async function POST(req: NextRequest) {
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
       .from('reservations')
       .select('customer_id')
       .eq('id', id)
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .single()
 
     if (fetchErr || !reservation) {

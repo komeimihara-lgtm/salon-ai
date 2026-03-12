@@ -3,7 +3,8 @@
  * 重複チェック・購入履歴・回数券の自動登録
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 type ImportCustomer = {
   name: string
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin()
+    const salonId = getSalonIdFromCookie()
     const result = { imported: 0, skipped: 0, errors: [] as string[] }
 
     // 既存顧客を電話・メールで検索
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
     const { data: existing } = await supabase
       .from('customers')
       .select('id, phone, email')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', salonId)
     for (const c of existing || []) {
       if (c.phone) existingByPhone.set(normalizePhone(c.phone), { id: c.id })
       if (c.email) existingByEmail.set((c.email || '').trim().toLowerCase(), { id: c.id })
@@ -69,7 +71,7 @@ export async function POST(req: NextRequest) {
       }
 
       const customerPayload = {
-        salon_id: DEMO_SALON_ID,
+        salon_id: salonId,
         name: row.name.trim(),
         name_kana: row.name_kana?.trim() || null,
         phone: row.phone?.trim() || null,
@@ -119,7 +121,7 @@ export async function POST(req: NextRequest) {
       if (row.purchase_history?.length) {
         for (const ph of row.purchase_history) {
           await supabase.from('purchase_histories').insert({
-            salon_id: DEMO_SALON_ID,
+            salon_id: salonId,
             customer_id: customerId,
             purchase_date: ph.date || null,
             menu_name: ph.menu || null,
@@ -135,7 +137,7 @@ export async function POST(req: NextRequest) {
         const { data: plans } = await supabase
           .from('ticket_plans')
           .select('id, name, menu_name, total_sessions, price, unit_price')
-          .eq('salon_id', DEMO_SALON_ID)
+          .eq('salon_id', salonId)
           .eq('is_active', true)
         let plan = plans?.find((p: { name: string }) => p.name === planName)
 
@@ -144,7 +146,7 @@ export async function POST(req: NextRequest) {
           const { data: created } = await supabase
             .from('ticket_plans')
             .insert({
-              salon_id: DEMO_SALON_ID,
+              salon_id: salonId,
               name: planName,
               menu_name: planName,
               total_sessions: Math.max(rem, 1),
@@ -161,7 +163,7 @@ export async function POST(req: NextRequest) {
           const totalSessions = plan.total_sessions ?? Math.max(row.remaining_sessions ?? 1, 1)
           const unitPrice = plan.unit_price ?? (plan.price ? Math.round(plan.price / totalSessions) : 0)
           await supabase.from('customer_tickets').insert({
-            salon_id: DEMO_SALON_ID,
+            salon_id: salonId,
             customer_id: customerId,
             ticket_plan_id: plan.id,
             plan_name: plan.name,

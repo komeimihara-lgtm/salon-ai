@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 export type MonthlyRow = {
   month: number
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const year = parseInt(searchParams.get('year') ?? '', 10)
-    const salonId = searchParams.get('salon_id') || DEMO_SALON_ID
+    const salonId = searchParams.get('salon_id') || getSalonIdFromCookie()
 
     if (isNaN(year)) {
       return NextResponse.json({ error: 'year が必要です' }, { status: 400 })

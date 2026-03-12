@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 const PAYMENT_METHODS = ['cash', 'card', 'online', 'loan'] as const
@@ -65,13 +65,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (tickets.length === 0 && !salonIdParam && salonId !== DEMO_SALON_ID) {
-      try {
-        tickets = await fetchTickets(supabase, DEMO_SALON_ID, customerId, SELECT_COLS, true)
-      } catch {
-        tickets = await fetchTickets(supabase, DEMO_SALON_ID, customerId, SELECT_COLS_NO_UNIT_PRICE, false)
-      }
-    }
     if (tickets.length === 0 && !salonIdParam) {
       try {
         const { data: fallback } = await supabase

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const date = searchParams.get('date')
-    const salonId = searchParams.get('salon_id') || DEMO_SALON_ID
+    const salonId = searchParams.get('salon_id') || getSalonIdFromCookie()
 
     if (!date) {
       return NextResponse.json({ error: 'date が必要です' }, { status: 400 })

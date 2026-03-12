@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabase
       .from('counseling_sessions')
       .insert({
-        salon_id: DEMO_SALON_ID,
+        salon_id: getSalonIdFromCookie(),
         customer_id: customer_id || null,
         customer_name: customer_name || 'お客様',
         mode: mode || 'online',

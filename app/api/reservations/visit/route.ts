@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 /** 来店処理: ステータスを visited に変更、回数券があれば消化、sales に計上 */
 export async function POST(req: NextRequest) {
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
       .from('reservations')
       .select('*')
       .eq('id', id)
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .single()
 
     if (fetchErr || !reservation) {
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     const { data: tickets } = await supabase
       .from('customer_tickets')
       .select('id, customer_id, menu_name, remaining_sessions, unit_price, ticket_plan_id, customers(name)')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .gt('remaining_sessions', 0)
 
     const matchingTicket = (tickets || []).find((t: Record<string, unknown>) => {
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
       await supabase.from('customer_tickets').update({ remaining_sessions: newRemaining }).eq('id', matchingTicket.id)
 
       await supabase.from('sales').insert({
-        salon_id: DEMO_SALON_ID,
+        salon_id: getSalonIdFromCookie(),
         sale_date: reservationDate,
         amount: unitPrice,
         customer_id: customerId || null,
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest) {
       const amount = price > 0 ? price : 0
       if (amount > 0) {
         await supabase.from('sales').insert({
-          salon_id: DEMO_SALON_ID,
+          salon_id: getSalonIdFromCookie(),
           sale_date: reservationDate,
           amount,
           customer_id: customerId || null,

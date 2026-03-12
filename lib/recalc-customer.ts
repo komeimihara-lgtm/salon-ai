@@ -1,7 +1,6 @@
-import { getSupabaseAdmin, DEMO_SALON_ID } from './supabase'
+import { getSupabaseAdmin } from './supabase'
+import { getSalonIdFromCookie } from './get-salon-id'
 import { calcCustomerStatus } from './customer-status'
-
-const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
 
 /** キャンセル後に顧客データを再集計（visit_count, last_visit_date, status） */
 export async function recalcCustomerAfterCancel(customerId: string) {
@@ -11,7 +10,7 @@ export async function recalcCustomerAfterCancel(customerId: string) {
     .from('reservations')
     .select('reservation_date, status')
     .eq('customer_id', customerId)
-    .eq('salon_id', salonId)
+    .eq('salon_id', getSalonIdFromCookie())
     .neq('status', 'cancelled')
     .in('status', ['completed', 'visited'])
     .order('reservation_date', { ascending: false })

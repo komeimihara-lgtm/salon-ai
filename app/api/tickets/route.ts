@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 function toTicketPlan(row: Record<string, unknown>) {
@@ -37,15 +37,6 @@ export async function GET(req: NextRequest) {
     const { data, error } = await query
     if (error) throw error
     let plans = (data || []).map((r: Record<string, unknown>) => toTicketPlan(r))
-    if (plans.length === 0 && resolvedSalonId !== DEMO_SALON_ID) {
-      const { data: demoData } = await getSupabaseAdmin()
-        .from('ticket_plans')
-        .select('id, name, menu_name, total_sessions, price, unit_price, expiry_days, category, is_active, created_at')
-        .eq('salon_id', DEMO_SALON_ID)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-      plans = (demoData || []).map((r: Record<string, unknown>) => toTicketPlan(r))
-    }
     if (plans.length === 0) {
       const { data: fallback } = await getSupabaseAdmin()
         .from('ticket_plans')

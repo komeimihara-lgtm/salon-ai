@@ -1,5 +1,4 @@
 import { cookies } from 'next/headers'
-import { DEMO_SALON_ID } from './supabase'
 
 /** サーバーサイドAPIルート用: cookieからsalon_idを取得 */
 export function getSalonIdFromCookie(): string {
@@ -8,5 +7,6 @@ export function getSalonIdFromCookie(): string {
     const cookieSalonId = cookieStore.get('salon_id')?.value
     if (cookieSalonId) return cookieSalonId
   } catch {}
-  return process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
+  // 環境変数があればそれを使う（DEMO_SALON_IDへのフォールバックは廃止）
+  return process.env.NEXT_PUBLIC_SALON_ID || ''
 }

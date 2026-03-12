@@ -8,7 +8,6 @@ import {
   UserPlus, Search,
 } from 'lucide-react'
 import { fetchMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, isCampaignActive, type MenuItem, type Campaign } from '@/lib/menus'
-import { DEMO_SALON_ID } from '@/lib/supabase'
 import { fetchStaffList } from '@/lib/staff-management'
 import { fetchTicketPlans, addCustomerTicket, type TicketPlan } from '@/lib/tickets'
 import { fetchSubscriptionPlans, addCustomerSubscription, type SubscriptionPlan } from '@/lib/subscriptions'
@@ -318,7 +317,7 @@ export default function SalesPage() {
       for (const c of cart) {
         const amt = Math.round(c.price * discountRatio)
         const saleBase = {
-          salon_id: process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID,
+          // salon_id is resolved server-side from cookie
           sale_date: saleDate,
           amount: amt,
           customer_id: isUnknownCustomer ? null : (selectedCustomer?.id || null),

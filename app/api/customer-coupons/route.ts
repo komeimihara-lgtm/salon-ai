@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 function toCustomerCoupon(row: Record<string, unknown>): Record<string, unknown> {
   return {
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     let query = getSupabaseAdmin()
       .from('customer_coupons')
       .select('*')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .order('obtained_at', { ascending: false })
 
     if (customerId) query = query.eq('customer_id', customerId)
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await getSupabaseAdmin()
       .from('customer_coupons')
       .insert({
-        salon_id: DEMO_SALON_ID,
+        salon_id: getSalonIdFromCookie(),
         customer_id,
         coupon_id,
         coupon_name,

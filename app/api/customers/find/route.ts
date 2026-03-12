@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
@@ -10,7 +11,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await getSupabaseAdmin()
       .from('customers')
       .select('id, name')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .or(`name.ilike.%${name.trim()}%,name_kana.ilike.%${name.trim()}%`)
       .limit(10)
     if (error) throw error

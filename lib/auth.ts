@@ -1,11 +1,11 @@
 import { createSupabaseBrowser } from './supabase-browser'
-import { DEMO_SALON_ID } from './supabase'
+import { getSalonId } from './supabase'
 
-/** ログイン中ユーザーのサロンIDを取得（未ログインはデモID） */
+/** ログイン中ユーザーのサロンIDを取得（未ログインはcookie/環境変数から） */
 export async function getCurrentSalonId(): Promise<string> {
   const supabase = createSupabaseBrowser()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return DEMO_SALON_ID
+  if (!user) return getSalonId()
 
   const { data: salon } = await supabase
     .from('salons')
@@ -13,5 +13,5 @@ export async function getCurrentSalonId(): Promise<string> {
     .eq('owner_email', user.email)
     .single()
 
-  return salon?.id || DEMO_SALON_ID
+  return salon?.id || getSalonId()
 }

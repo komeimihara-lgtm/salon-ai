@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 /**
  * 売上サマリー取得
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
       const { data: sales, error } = await supabase
         .from('sales')
         .select('amount, sale_type')
-        .eq('salon_id', DEMO_SALON_ID)
+        .eq('salon_id', getSalonIdFromCookie())
         .gte('sale_date', start)
         .lte('sale_date', end)
 
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
     const { data: tickets, error: ticketsError } = await supabase
       .from('customer_tickets')
       .select('remaining_sessions, unit_price')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
 
     if (ticketsError) throw ticketsError
 

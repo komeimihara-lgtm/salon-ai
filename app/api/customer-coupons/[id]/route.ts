@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -17,7 +18,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       .from('customer_coupons')
       .update(updates)
       .eq('id', params.id)
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .select()
       .single()
 

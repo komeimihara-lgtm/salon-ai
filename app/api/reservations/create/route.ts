@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,7 +11,7 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin()
-    const salonId = DEMO_SALON_ID
+    const salonId = getSalonIdFromCookie()
     const durationMin = body.duration_minutes ?? 60
     const [sh = 10, sm = 0] = (body.start_time || '10:00').slice(0, 5).split(':').map(Number)
     const endMin = sh * 60 + sm + durationMin
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await supabase
       .from('reservations')
       .insert({
-        salon_id: DEMO_SALON_ID,
+        salon_id: salonId,
         customer_id: body.customer_id || null,
         customer_name: body.customer_name,
         customer_phone: body.customer_phone || null,

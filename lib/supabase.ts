@@ -2,8 +2,13 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export const DEMO_SALON_ID = 'a0000000-0000-0000-0000-000000000001'
 
-/** 使用するサロンID（環境変数 > デモID） */
+/** 使用するサロンID（cookie > 環境変数 > デモID） */
 export function getSalonId(): string {
+  // ブラウザ: cookieからsalon_idを取得
+  if (typeof document !== 'undefined') {
+    const match = document.cookie.match(/(?:^|;\s*)salon_id=([^;]+)/)
+    if (match?.[1]) return match[1]
+  }
   if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SALON_ID) {
     return process.env.NEXT_PUBLIC_SALON_ID
   }

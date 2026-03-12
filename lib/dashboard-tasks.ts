@@ -1,6 +1,4 @@
-import { createClient, DEMO_SALON_ID } from '@/lib/supabase'
-
-const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
+import { createClient, getSalonId } from '@/lib/supabase'
 
 export interface ManualTask {
   id: string
@@ -18,7 +16,7 @@ export async function fetchTasks(): Promise<ManualTask[]> {
   const { data, error } = await supabase
     .from('tasks')
     .select('*')
-    .eq('salon_id', salonId)
+    .eq('salon_id', getSalonId())
     .order('created_at', { ascending: false })
   if (error) throw error
   return data || []
@@ -28,7 +26,7 @@ export async function addTask(task: Omit<ManualTask, 'id' | 'salon_id' | 'create
   const supabase = createClient()
   const { data, error } = await supabase
     .from('tasks')
-    .insert({ ...task, salon_id: salonId })
+    .insert({ ...task, salon_id: getSalonId() })
     .select()
     .single()
   if (error) throw error

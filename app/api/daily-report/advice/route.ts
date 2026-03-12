@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -20,11 +21,12 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin()
+    const salonId = getSalonIdFromCookie()
 
     const { data: sales } = await supabase
       .from('sales')
       .select('amount, sale_type')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', salonId)
       .eq('sale_date', date)
 
     let cashSales = 0
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
     const { data: tickets } = await supabase
       .from('customer_tickets')
       .select('remaining_sessions, unit_price')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', salonId)
 
     let serviceLiability = 0
     for (const t of tickets || []) {
@@ -60,20 +62,20 @@ export async function POST(req: NextRequest) {
     const { count: newVisitors } = await supabase
       .from('customers')
       .select('*', { count: 'exact', head: true })
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', salonId)
       .eq('first_visit_date', date)
 
     const { count: newReservations } = await supabase
       .from('reservations')
       .select('*', { count: 'exact', head: true })
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', salonId)
       .gte('created_at', `${date}T00:00:00`)
       .lt('created_at', `${date}T23:59:59.999`)
 
     const { data: reservations } = await supabase
       .from('reservations')
       .select('id, status')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', salonId)
       .eq('reservation_date', date)
 
     const totalReservations = (reservations || []).length

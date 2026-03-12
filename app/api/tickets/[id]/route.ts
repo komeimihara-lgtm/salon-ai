@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 function toTicketPlan(row: Record<string, unknown>) {
   const price = Number(row.price ?? 0)
@@ -41,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         .from('ticket_plans')
         .select('price, total_sessions')
         .eq('id', id)
-        .eq('salon_id', DEMO_SALON_ID)
+        .eq('salon_id', getSalonIdFromCookie())
         .single()
       const p = price !== undefined ? Number(price) : Number((current as { price?: number })?.price ?? 0)
       const t = total_sessions !== undefined ? Number(total_sessions) : Number((current as { total_sessions?: number })?.total_sessions ?? 0)
@@ -52,7 +53,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from('ticket_plans')
       .update(updates)
       .eq('id', id)
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .select('id, name, menu_name, total_sessions, price, unit_price, expiry_days, is_active, created_at')
       .single()
 
@@ -72,7 +73,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       .from('ticket_plans')
       .update({ is_active: false })
       .eq('id', id)
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
 
     if (error) throw error
     return NextResponse.json({ ok: true })

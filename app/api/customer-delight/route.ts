@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
     const { data: reservations } = await supabase
       .from('reservations')
       .select('customer_id, customer_name, reservation_date, menu, start_time')
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .eq('status', 'confirmed')
       .gte('reservation_date', today)
       .lte('reservation_date', in3daysStr)

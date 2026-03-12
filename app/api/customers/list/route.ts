@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
     let query = getSupabaseAdmin()
       .from('customers')
       .select('*', { count: 'exact' })
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .order('last_visit_date', { ascending: false })
       .range(offset, offset + limit - 1)
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 /** リスケ: 日時を更新し、ステータスを rescheduled に変更 */
 export async function PATCH(req: NextRequest) {
@@ -21,7 +22,7 @@ export async function PATCH(req: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .select()
       .single()
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 // ペンギンCSVの日付フォーマットを変換（YYYY/MM/DD → YYYY-MM-DD）
 function parseDate(dateStr: string | undefined): string | null {
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
       const totalSpentNum = parseAmount(totalSpent)
 
       return {
-        salon_id: DEMO_SALON_ID,
+        salon_id: getSalonIdFromCookie(),
         name: name.trim(),
         name_kana: nameKana.trim() || null,
         phone: phone.trim() || null,

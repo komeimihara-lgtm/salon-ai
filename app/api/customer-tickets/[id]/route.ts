@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 function toCustomerTicket(row: Record<string, unknown>) {
   const cust = row.customers as { name?: string } | null | undefined
@@ -35,7 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from('customer_tickets')
       .select('id, customer_id, ticket_plan_id, plan_name, unit_price, remaining_sessions, customers(name)')
       .eq('id', id)
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .single()
 
     if (fetchError || !current) {
@@ -66,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const cust = current.customers as { name?: string } | null | undefined
       const customerName = cust?.name ?? ''
       await supabase.from('sales').insert({
-        salon_id: DEMO_SALON_ID,
+        salon_id: getSalonIdFromCookie(),
         sale_date: today,
         amount: unitPrice,
         customer_id: current.customer_id,
@@ -81,7 +82,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .from('customer_tickets')
       .update({ remaining_sessions })
       .eq('id', id)
-      .eq('salon_id', DEMO_SALON_ID)
+      .eq('salon_id', getSalonIdFromCookie())
       .select()
       .single()
 

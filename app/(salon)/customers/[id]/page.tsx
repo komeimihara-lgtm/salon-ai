@@ -13,7 +13,6 @@ import {
   Minus,
   Repeat,
 } from 'lucide-react'
-import { DEMO_SALON_ID } from '@/lib/supabase'
 import {
   fetchCustomerTickets,
   fetchTicketPlans,
@@ -119,9 +118,9 @@ export default function CustomerDetailPage() {
     try {
       const [ticketsResult, packsResult, subsResult, plansResult] = await Promise.allSettled([
         fetchCustomerTickets(id),
-        fetchTicketPlans(DEMO_SALON_ID),
+        fetchTicketPlans(),
         fetchCustomerSubscriptions(id),
-        fetchSubscriptionPlans(DEMO_SALON_ID),
+        fetchSubscriptionPlans(),
       ])
       setTickets(ticketsResult.status === 'fulfilled' ? ticketsResult.value : [])
       setPacks(packsResult.status === 'fulfilled' ? packsResult.value : [])
