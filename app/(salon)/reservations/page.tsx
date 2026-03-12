@@ -18,6 +18,8 @@ const TIMELINE_END   = 21  // 21:00
 const SLOT_MINUTES   = 15
 const SLOTS_COUNT    = ((TIMELINE_END - TIMELINE_START) * 60) / SLOT_MINUTES // 48
 const ROW_HEIGHT     = 28  // px per 15min slot
+const MIN_BED_WIDTH  = 120 // ベッド列の最小幅(px)
+const TIME_COL_WIDTH = 56  // 時間列の幅(px)
 
 // スタッフカラーのフォールバック
 const STAFF_COLORS = [
@@ -149,12 +151,15 @@ function WeekCalendar({
 // ============================================================
 // タイムラインヘッダー
 // ============================================================
-function TimelineHeader({ beds }: { beds: string[] }) {
+function TimelineHeader({ beds, bedWidth }: { beds: string[]; bedWidth: number }) {
   return (
     <div className="flex sticky top-0 z-10 bg-white border-b border-gray-200">
-      <div className="w-14 shrink-0 border-r border-gray-200 bg-gray-50" />
-      {beds.map(bed => (
-        <div key={bed} className="flex-1 text-center py-2 text-xs font-bold text-deep border-r last:border-r-0 border-gray-200 bg-gray-50">
+      <div className="shrink-0 border-r border-gray-200 bg-gray-50" style={{ width: `${TIME_COL_WIDTH}px` }} />
+      {beds.map((bed, i) => (
+        <div key={bed}
+          className={`text-center py-2 text-xs font-bold text-deep shrink-0 ${i < beds.length - 1 ? 'border-r border-gray-200' : ''} bg-gray-50`}
+          style={{ width: `${bedWidth}px` }}
+        >
           ベッド{bed}
         </div>
       ))}
@@ -273,38 +278,62 @@ function Timeline({
     return map
   }, [beds, reservations])
 
+  // ベッド列幅の計算: コンテナに収まる場合は等分、狭すぎる場合は最小幅を保証
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    const obs = new ResizeObserver(entries => {
+      for (const e of entries) setContainerWidth(e.contentRect.width)
+    })
+    obs.observe(containerRef.current)
+    return () => obs.disconnect()
+  }, [])
+
+  const availableWidth = Math.max(containerWidth - TIME_COL_WIDTH, 0)
+  const bedWidth = beds.length > 0
+    ? Math.max(Math.floor(availableWidth / beds.length), MIN_BED_WIDTH)
+    : MIN_BED_WIDTH
+  const totalWidth = TIME_COL_WIDTH + bedWidth * beds.length
+
   return (
-    <div className="bg-white rounded-2xl shadow-sola overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100">
+    <div className="bg-white rounded-2xl shadow-sola overflow-hidden" ref={containerRef}>
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <h2 className="text-sm font-bold text-text-main flex items-center gap-1.5">
           <Clock className="w-4 h-4 text-lavender" />
           タイムライン
         </h2>
+        {beds.length > 0 && (
+          <span className="text-[10px] text-text-sub">{beds.length}台</span>
+        )}
       </div>
       <div className="overflow-auto max-h-[60vh]">
-        <TimelineHeader beds={beds} />
-        <div className="flex relative" style={{ height: `${totalHeight}px` }}>
-          {/* 時間ラベル列 */}
-          <div className="w-14 shrink-0 relative border-r border-gray-200">
-            {Array.from({ length: TIMELINE_END - TIMELINE_START + 1 }, (_, i) => (
-              <div
-                key={i}
-                className="absolute left-0 right-0 flex items-start justify-end pr-2 text-[10px] text-text-sub"
-                style={{ top: `${i * 4 * ROW_HEIGHT - 6}px` }}
-              >
-                {TIMELINE_START + i}:00
-              </div>
-            ))}
-          </div>
+        <div style={{ minWidth: `${totalWidth}px` }}>
+          <TimelineHeader beds={beds} bedWidth={bedWidth} />
+          <div className="flex relative" style={{ height: `${totalHeight}px` }}>
+            {/* 時間ラベル列 */}
+            <div className="shrink-0 relative border-r border-gray-200" style={{ width: `${TIME_COL_WIDTH}px` }}>
+              {Array.from({ length: TIMELINE_END - TIMELINE_START + 1 }, (_, i) => (
+                <div
+                  key={i}
+                  className="absolute left-0 right-0 flex items-start justify-end pr-2 text-[10px] text-text-sub"
+                  style={{ top: `${i * 4 * ROW_HEIGHT - 6}px` }}
+                >
+                  {TIMELINE_START + i}:00
+                </div>
+              ))}
+            </div>
 
-          {/* ベッド列 */}
-          {beds.map((bed, bedIdx) => {
-            const bedReservations = reservationsByBed.get(bed) || []
-            return (
-              <div
-                key={bed}
-                className={`flex-1 relative ${bedIdx < beds.length - 1 ? 'border-r border-gray-200' : ''}`}
-              >
+            {/* ベッド列 */}
+            {beds.map((bed, bedIdx) => {
+              const bedReservations = reservationsByBed.get(bed) || []
+              return (
+                <div
+                  key={bed}
+                  className={`shrink-0 relative ${bedIdx < beds.length - 1 ? 'border-r border-gray-200' : ''}`}
+                  style={{ width: `${bedWidth}px` }}
+                >
                 {/* グリッド線 + シフト背景 */}
                 {Array.from({ length: SLOTS_COUNT }, (_, slot) => {
                   const inShift = isInShift(slot)
@@ -362,6 +391,7 @@ function Timeline({
 
           {/* 現在時刻ライン */}
           <CurrentTimeLine />
+        </div>
         </div>
       </div>
     </div>
