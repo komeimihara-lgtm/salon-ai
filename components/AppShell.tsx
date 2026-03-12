@@ -100,7 +100,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [snsExpanded, setSnsExpanded] = useState(false)
   const isSnsExpanded = pathname.startsWith('/sns') || snsExpanded
   const [unreadCount, setUnreadCount] = useState(0)
-  const [salonName, setSalonName] = useState('サロン名未設定')
+  const [salonInfo, setSalonInfo] = useState({ name: '', owner_name: '' })
 
   const handleLogout = async () => {
     const supabase = createSupabaseBrowser()
@@ -118,7 +118,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetch('/api/settings/salon')
       .then(r => r.json())
-      .then(j => setSalonName(j.name || j.salon?.name || 'サロン名未設定'))
+      .then(j => setSalonInfo({
+        name: j.name || j.salon?.name || '',
+        owner_name: j.owner_name || j.salon?.owner_name || '',
+      }))
       .catch(() => {})
   }, [])
 
@@ -219,7 +222,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="p-4 border-t border-white/10">
-          <p className="text-xs text-white/80 truncate">{salonName}</p>
+          <p className="text-xs text-white/80 truncate">{salonInfo.name}</p>
+          <p className="text-xs text-white/60 truncate">{salonInfo.owner_name ? `${salonInfo.owner_name}さん` : ''}</p>
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 mt-2 text-xs text-white/50 hover:text-white/80 transition-colors"
@@ -334,7 +338,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="p-4 border-t border-white/10">
-          <p className="text-xs text-white/80 truncate">{salonName}</p>
+          <p className="text-xs text-white/80 truncate">{salonInfo.name}</p>
+          <p className="text-xs text-white/60 truncate">{salonInfo.owner_name ? `${salonInfo.owner_name}さん` : ''}</p>
           <button
             onClick={handleLogout}
             className="flex items-center gap-2 mt-2 text-xs text-white/50 hover:text-white/80 transition-colors"
@@ -373,7 +378,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </Link>
             <div className="w-8 h-8 rounded-full bg-gradient-to-r from-rose to-lavender flex items-center justify-center text-white text-xs font-bold">
-              K
+              {salonInfo.owner_name ? salonInfo.owner_name.charAt(0) : ''}
             </div>
           </div>
         </header>
