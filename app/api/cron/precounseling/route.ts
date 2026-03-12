@@ -1,10 +1,8 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
-
-const salonId = getSalonIdFromCookie()
 
 async function sendLinePushMessage(accessToken: string, lineUserId: string, message: string) {
   const res = await fetch('https://api.line.me/v2/bot/message/push', {
@@ -25,6 +23,7 @@ async function sendLinePushMessage(accessToken: string, lineUserId: string, mess
 }
 
 export async function GET() {
+  const salonId = getSalonIdFromCookie()
   const supabase = getSupabaseAdmin()
 
   // サロンのLINEトークン取得

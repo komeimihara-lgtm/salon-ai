@@ -1,10 +1,9 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
-
-const salonId = getSalonIdFromCookie()
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
+  const salonId = getSalonIdFromCookie()
   const supabase = getSupabaseAdmin()
   const { searchParams } = new URL(req.url)
   const month = searchParams.get('month') // YYYY-MM
@@ -31,6 +30,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const salonId = getSalonIdFromCookie()
   const supabase = getSupabaseAdmin()
   const body = await req.json()
 
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const salonId = getSalonIdFromCookie()
   const supabase = getSupabaseAdmin()
   const { staff_id, date } = await req.json()
   const { error } = await supabase

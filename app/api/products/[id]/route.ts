@@ -1,11 +1,9 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
-import { DEMO_SALON_ID } from '@/lib/supabase'
-
-const salonId = getSalonIdFromCookie()
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const salonId = getSalonIdFromCookie()
   const supabase = createClient()
   const body = await req.json()
   const { id } = await params
@@ -21,6 +19,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const salonId = getSalonIdFromCookie()
   const supabase = createClient()
   const { id } = await params
   const { error } = await supabase

@@ -1,12 +1,11 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import Anthropic from '@anthropic-ai/sdk'
 import { recalcCustomerAfterCancel } from '@/lib/recalc-customer'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-const salonId = getSalonIdFromCookie()
 
 // LINE署名検証
 function verifySignature(body: string, signature: string, secret: string): boolean {
@@ -84,6 +83,7 @@ function buildCancelConfirmFlex(reservation: { reservation_date: string; start_t
 }
 
 export async function POST(req: NextRequest) {
+  const salonId = getSalonIdFromCookie()
   try {
     const rawBody = await req.text()
     const signature = req.headers.get('x-line-signature') || ''

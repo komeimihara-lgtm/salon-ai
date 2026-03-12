@@ -1,11 +1,10 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
 import { recalcCustomerAfterCancel } from '@/lib/recalc-customer'
 
-const salonId = getSalonIdFromCookie()
-
 export async function POST(req: NextRequest) {
+  const salonId = getSalonIdFromCookie()
   try {
     const body = await req.json()
     const { reservation_id, line_user_id } = body

@@ -1,14 +1,13 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
-
-const salonId = getSalonIdFromCookie()
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const salonId = getSalonIdFromCookie()
     const { id } = await params
     const supabase = getSupabaseAdmin()
 

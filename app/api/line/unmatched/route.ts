@@ -1,10 +1,9 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
-
-const salonId = getSalonIdFromCookie()
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function GET() {
+  const salonId = getSalonIdFromCookie()
   const supabase = getSupabaseAdmin()
   const { data } = await supabase
     .from('unmatched_line_users')
@@ -15,6 +14,7 @@ export async function GET() {
 }
 
 export async function DELETE(req: NextRequest) {
+  const salonId = getSalonIdFromCookie()
   const supabase = getSupabaseAdmin()
   const { line_user_id } = await req.json()
   await supabase

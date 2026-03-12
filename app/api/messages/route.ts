@@ -1,11 +1,10 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
-
-const salonId = getSalonIdFromCookie()
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function GET(req: NextRequest) {
   try {
+    const salonId = getSalonIdFromCookie()
     const supabase = getSupabaseAdmin()
 
     // LINE連携済みの顧客を取得

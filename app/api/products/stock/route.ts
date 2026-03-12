@@ -1,11 +1,9 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase'
-import { DEMO_SALON_ID } from '@/lib/supabase'
-
-const salonId = getSalonIdFromCookie()
 
 export async function POST(req: Request) {
+  const salonId = getSalonIdFromCookie()
   const supabase = createClient()
   const { product_id, type, quantity, memo } = await req.json()
 

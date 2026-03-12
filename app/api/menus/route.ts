@@ -1,10 +1,9 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
-
-const salonId = getSalonIdFromCookie()
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function GET() {
+  const salonId = getSalonIdFromCookie()
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('menus')
@@ -18,6 +17,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const salonId = getSalonIdFromCookie()
   const supabase = getSupabaseAdmin()
   const body = await req.json()
 
