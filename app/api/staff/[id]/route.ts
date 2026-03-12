@@ -1,10 +1,9 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
-
-const salonId = getSalonIdFromCookie()
+import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const salonId = getSalonIdFromCookie()
   const supabase = getSupabaseAdmin()
   const { id } = await params
   const body = await req.json()
@@ -20,11 +19,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const salonId = getSalonIdFromCookie()
   const supabase = getSupabaseAdmin()
   const { id } = await params
   const { error } = await supabase
     .from('staff')
-    .update({ is_active: false })
+    .delete()
     .eq('id', id)
     .eq('salon_id', salonId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

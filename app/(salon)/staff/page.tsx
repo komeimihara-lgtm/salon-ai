@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Loader2, Copy, Users, Plus, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Loader2, Copy, Users, Plus, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 
 const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
 const WEEKDAY_COLORS = ['text-text-main', 'text-text-main', 'text-text-main', 'text-text-main', 'text-text-main', 'text-blue-500', 'text-red-500']
@@ -243,6 +243,16 @@ export default function StaffPage() {
     showToast('スタッフを追加しました')
   }
 
+  const handleDeleteStaff = async (staffId: string, staffName: string) => {
+    if (!confirm(`「${staffName}」を削除しますか？この操作は取り消せません。`)) return
+    try {
+      const res = await fetch(`/api/staff/${staffId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      await fetchStaff()
+      showToast(`${staffName}を削除しました`)
+    } catch { showToast('削除に失敗しました') }
+  }
+
   const timeOptions = Array.from({ length: TOTAL_SLOTS + 2 }, (_, i) => slotToTime(i, START_HOUR))
   const today = new Date()
 
@@ -397,6 +407,10 @@ export default function StaffPage() {
                           {staff.name.slice(0, 1)}
                         </div>
                         <p className="text-xs text-text-sub mt-1">{staff.name}</p>
+                        <button onClick={() => handleDeleteStaff(staff.id, staff.name)}
+                          className="mt-1 p-1 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                       {weekDates.map((date, di) => {
                         const dateStr = toDateStr(date)
