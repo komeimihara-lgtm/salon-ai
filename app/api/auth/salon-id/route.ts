@@ -15,7 +15,16 @@ export async function POST(req: Request) {
       .eq('owner_email', email)
       .single()
 
-    return NextResponse.json({ salon_id: data?.id || null })
+    const salonId = data?.id || null
+    const response = NextResponse.json({ salon_id: salonId })
+    if (salonId) {
+      response.cookies.set('salon_id', salonId, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: 'lax',
+      })
+    }
+    return response
   } catch {
     return NextResponse.json({ salon_id: null }, { status: 500 })
   }
