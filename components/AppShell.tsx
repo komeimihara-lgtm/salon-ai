@@ -97,6 +97,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [snsExpanded, setSnsExpanded] = useState(false)
   const isSnsExpanded = pathname.startsWith('/sns') || snsExpanded
   const [unreadCount, setUnreadCount] = useState(0)
+  const [salonName, setSalonName] = useState('サロン名未設定')
 
   useEffect(() => {
     fetch('/api/announcements')
@@ -104,6 +105,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       .then(d => setUnreadCount(d.unread_count || 0))
       .catch(() => {})
   }, [pathname])
+
+  useEffect(() => {
+    fetch('/api/settings/salon')
+      .then(r => r.json())
+      .then(j => setSalonName(j.name || 'サロン名未設定'))
+      .catch(() => {})
+  }, [])
 
   // ルートのリダイレクト時はシェルを表示しない
   if (pathname === '/') return <>{children}</>
@@ -202,7 +210,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="p-4 border-t border-white/10">
-          <p className="text-xs text-white/80 truncate">エステサロン ルミエール</p>
+          <p className="text-xs text-white/80 truncate">{salonName}</p>
           <p className="text-xs text-white/60 truncate">KOMEIさん</p>
         </div>
       </aside>
@@ -311,7 +319,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="p-4 border-t border-white/10">
-          <p className="text-xs text-white/80 truncate">エステサロン ルミエール</p>
+          <p className="text-xs text-white/80 truncate">{salonName}</p>
           <p className="text-xs text-white/60 truncate">KOMEIさん</p>
         </div>
       </aside>
