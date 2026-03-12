@@ -97,6 +97,14 @@ export default function ReservationFormModal({
   const [staffList, setStaffList] = useState<StaffOption[]>(staffListProp ?? [])
   const dropdownRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const errorRef = useRef<HTMLDivElement>(null)
+
+  // エラー発生時にスクロールして見えるようにする
+  useEffect(() => {
+    if (error && errorRef.current) {
+      errorRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [error])
 
   // シフト・ベッド・定休日を取得
   useEffect(() => {
@@ -381,19 +389,6 @@ export default function ReservationFormModal({
           <button onClick={onClose} className="text-[#4A5568] hover:text-[#1A202C]"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5 space-y-3 overflow-y-auto flex-1">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 space-y-1">
-              <p className="text-sm text-red-600 font-medium">{error}</p>
-              {conflictInfo && (
-                <p className="text-xs text-red-500">
-                  {conflictInfo.type === 'staff' ? '⚠️ スタッフの予約が重複しています' : '⚠️ ベッドの予約が重複しています'}
-                  ：{conflictInfo.customer_name}様 {conflictInfo.start_time}〜{conflictInfo.end_time}
-                </p>
-              )}
-              <p className="text-xs text-red-400">時間やベッドを変更して再度お試しください</p>
-            </div>
-          )}
-
           {/* 1. 日付 */}
           <div>
             <label className="text-xs text-[#4A5568] mb-1 block">予約日</label>
@@ -621,6 +616,19 @@ export default function ReservationFormModal({
               placeholder="アレルギーや注意事項など" />
           </div>
         </div>
+        {/* エラー表示（保存ボタン直上に固定） */}
+        {error && (
+          <div ref={errorRef} className="px-5 py-3 bg-red-50 border-t border-red-200 shrink-0">
+            <p className="text-sm text-red-600 font-medium">{error}</p>
+            {conflictInfo && (
+              <p className="text-xs text-red-500 mt-1">
+                {conflictInfo.type === 'staff' ? '⚠️ スタッフの予約が重複しています' : '⚠️ ベッドの予約が重複しています'}
+                ：{conflictInfo.customer_name}様 {conflictInfo.start_time}〜{conflictInfo.end_time}
+              </p>
+            )}
+            <p className="text-xs text-red-400 mt-1">時間やベッドを変更して再度お試しください</p>
+          </div>
+        )}
         <div className="flex gap-3 p-5 border-t border-[#BAE6FD] shrink-0">
           <button onClick={onClose} className="flex-1 bg-white border border-[#BAE6FD] text-[#4A5568] rounded-xl py-2.5 text-sm hover:text-[#1A202C] transition-colors">
             キャンセル
