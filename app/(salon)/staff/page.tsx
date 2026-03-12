@@ -248,7 +248,7 @@ export default function StaffPage() {
     try {
       const res = await fetch(`/api/staff/${staffId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
-      setStaffList(prev => prev.filter(s => s.id !== staffId))
+      await fetchStaff()
       showToast(`${staffName}を削除しました`)
     } catch { showToast('削除に失敗しました') }
   }
