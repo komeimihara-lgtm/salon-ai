@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { cookies } from 'next/headers'
 
-const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
+const DEMO_SALON_ID_FIXED = 'de000000-0000-0000-0000-000000000001'
+
+function getSalonIdFromRequest(): string {
+  const cookieStore = cookies()
+  const demoMode = cookieStore.get('demo_mode')?.value
+  if (demoMode === 'true') return DEMO_SALON_ID_FIXED
+  return process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
+}
 
 export async function GET() {
+  const salonId = getSalonIdFromRequest()
   const supabase = getSupabaseAdmin()
   const { data: salon, error } = await supabase
     .from('salons')
@@ -27,6 +36,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
+  const salonId = getSalonIdFromRequest()
   const supabase = getSupabaseAdmin()
   const body = await req.json()
   const update: Record<string, unknown> = {}
