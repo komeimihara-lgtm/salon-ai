@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
@@ -29,8 +29,10 @@ import {
   Package,
   ChevronDown,
   ChevronRight,
+  LogOut,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { createSupabaseBrowser } from '@/lib/supabase-browser'
 
 type NavLink = { type: 'link'; href: string; icon: React.ComponentType<{ className?: string }>; label: string }
 type NavGroup = {
@@ -92,12 +94,19 @@ function getAllNavLabels(): { href: string; label: string }[] {
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [snsExpanded, setSnsExpanded] = useState(false)
   const isSnsExpanded = pathname.startsWith('/sns') || snsExpanded
   const [unreadCount, setUnreadCount] = useState(0)
   const [salonName, setSalonName] = useState('サロン名未設定')
+
+  const handleLogout = async () => {
+    const supabase = createSupabaseBrowser()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
 
   useEffect(() => {
     fetch('/api/announcements')
@@ -211,7 +220,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <p className="text-xs text-white/80 truncate">{salonName}</p>
-          <p className="text-xs text-white/60 truncate">KOMEIさん</p>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 mt-2 text-xs text-white/50 hover:text-white/80 transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>ログアウト</span>
+          </button>
         </div>
       </aside>
 
@@ -320,7 +335,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="p-4 border-t border-white/10">
           <p className="text-xs text-white/80 truncate">{salonName}</p>
-          <p className="text-xs text-white/60 truncate">KOMEIさん</p>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 mt-2 text-xs text-white/50 hover:text-white/80 transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>ログアウト</span>
+          </button>
         </div>
       </aside>
 
