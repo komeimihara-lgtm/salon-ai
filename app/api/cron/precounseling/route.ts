@@ -1,9 +1,10 @@
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
-const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
+const salonId = getSalonIdFromCookie()
 
 async function sendLinePushMessage(accessToken: string, lineUserId: string, message: string) {
   const res = await fetch('https://api.line.me/v2/bot/message/push', {

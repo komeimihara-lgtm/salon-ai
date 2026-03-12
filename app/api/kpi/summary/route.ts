@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 /**
  * KPIサマリー取得
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
     const yearParam = searchParams.get('year')
     const monthParam = searchParams.get('month')
     const salonIdParam = searchParams.get('salon_id')
-    const salonId = salonIdParam || getSalonId()
+    const salonId = salonIdParam || getSalonIdFromCookie()
 
     const supabase = getSupabaseAdmin()
 

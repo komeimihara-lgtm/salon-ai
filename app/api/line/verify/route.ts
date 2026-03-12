@@ -1,7 +1,8 @@
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
 
-const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
+const salonId = getSalonIdFromCookie()
 
 export async function POST() {
   try {

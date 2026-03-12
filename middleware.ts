@@ -3,6 +3,12 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
+  // デモモードの場合は認証スキップ
+  const demoMode = req.cookies.get('demo_mode')?.value
+  if (demoMode === 'true') {
+    return NextResponse.next()
+  }
+
   let res = NextResponse.next({ request: { headers: req.headers } })
 
   const supabase = createServerClient(
@@ -14,7 +20,7 @@ export async function middleware(req: NextRequest) {
           return req.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
+          cookiesToSet.forEach(({ name, value }) => {
             req.cookies.set(name, value)
           })
           res = NextResponse.next({ request: { headers: req.headers } })

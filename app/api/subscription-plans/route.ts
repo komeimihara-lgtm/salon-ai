@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, getSalonId, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 function toSubscriptionPlan(row: Record<string, unknown>) {
   return {
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const salonIdParam = searchParams.get('salon_id')
-    const resolvedSalonId = salonIdParam || getSalonId()
+    const resolvedSalonId = salonIdParam || getSalonIdFromCookie()
     let query = getSupabaseAdmin()
       .from('subscription_plans')
       .select('id, name, menu_name, price, sessions_per_month, billing_day, category, is_active, created_at')
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await getSupabaseAdmin()
       .from('subscription_plans')
       .insert({
-        salon_id: getSalonId(),
+        salon_id: getSalonIdFromCookie(),
         name,
         menu_name,
         price: Number(price),

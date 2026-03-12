@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, getSalonId, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 const PAYMENT_METHODS = ['cash', 'card', 'online', 'loan'] as const
 
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const customerId = searchParams.get('customer_id')
     const salonIdParam = searchParams.get('salon_id')
-    const salonId = salonIdParam || getSalonId()
+    const salonId = salonIdParam || getSalonIdFromCookie()
 
     const supabase = getSupabaseAdmin()
     let tickets: ReturnType<typeof toCustomerTicket>[]
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest) {
       amount: bodyAmount,
     } = body
 
-    const salonId = getSalonId()
+    const salonId = getSalonIdFromCookie()
     if (!customer_id || !plan_name || !menu_name || total_sessions == null || remaining_sessions == null) {
       return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
     }

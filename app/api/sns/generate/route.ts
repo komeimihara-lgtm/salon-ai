@@ -1,9 +1,10 @@
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
+const salonId = getSalonIdFromCookie()
 
 export async function POST(req: NextRequest) {
   try {

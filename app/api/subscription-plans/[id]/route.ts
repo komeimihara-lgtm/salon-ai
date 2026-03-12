@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 export async function DELETE(
   req: NextRequest,
@@ -11,7 +12,7 @@ export async function DELETE(
       .from('subscription_plans')
       .delete()
       .eq('id', id)
-      .eq('salon_id', getSalonId())
+      .eq('salon_id', getSalonIdFromCookie())
 
     if (error) throw error
     return NextResponse.json({ success: true })

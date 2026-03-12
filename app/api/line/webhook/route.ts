@@ -1,3 +1,4 @@
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
@@ -5,7 +6,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { recalcCustomerAfterCancel } from '@/lib/recalc-customer'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
+const salonId = getSalonIdFromCookie()
 
 // LINE署名検証
 function verifySignature(body: string, signature: string, secret: string): boolean {

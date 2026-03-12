@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 /**
  * 期限切れ回数券のチェック・失効処理
@@ -10,7 +11,7 @@ import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
 export async function POST() {
   try {
     const supabase = getSupabaseAdmin()
-    const salonId = getSalonId()
+    const salonId = getSalonIdFromCookie()
     const today = new Date().toISOString().slice(0, 10)
 
     const { data: expiredTickets, error: fetchErr } = await supabase

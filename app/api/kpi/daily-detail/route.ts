@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, getSalonId } from '@/lib/supabase'
+import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 /**
  * 日別売上明細取得
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
     const date = searchParams.get('date')
     const type = searchParams.get('type')
     const salonIdParam = searchParams.get('salon_id')
-    const salonId = salonIdParam || getSalonId()
+    const salonId = salonIdParam || getSalonIdFromCookie()
 
     if (!date || !type) {
       return NextResponse.json({ error: 'date と type が必要です' }, { status: 400 })

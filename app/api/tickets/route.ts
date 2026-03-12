@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, getSalonId, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 function toTicketPlan(row: Record<string, unknown>) {
   const price = Number(row.price ?? 0)
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const salonIdParam = searchParams.get('salon_id')
-    const resolvedSalonId = salonIdParam || getSalonId()
+    const resolvedSalonId = salonIdParam || getSalonIdFromCookie()
     let query = getSupabaseAdmin()
       .from('ticket_plans')
       .select('id, name, menu_name, total_sessions, price, unit_price, expiry_days, category, is_active, created_at')
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await getSupabaseAdmin()
       .from('ticket_plans')
       .insert({
-        salon_id: getSalonId(),
+        salon_id: getSalonIdFromCookie(),
         name,
         menu_name,
         total_sessions,

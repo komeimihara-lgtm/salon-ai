@@ -1,9 +1,10 @@
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
 
 export async function POST() {
   const supabase = getSupabaseAdmin()
-  const salonId = process.env.NEXT_PUBLIC_SALON_ID || DEMO_SALON_ID
+  const salonId = getSalonIdFromCookie()
 
   const { data: customers, error } = await supabase
     .from('customers')

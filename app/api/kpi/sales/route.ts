@@ -1,3 +1,4 @@
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, DEMO_SALON_ID } from '@/lib/supabase'
 
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'salesが必要です' }, { status: 400 })
     }
 
-    const salonId = process.env.NEXT_PUBLIC_SALON_ID || process.env.DEMO_SALON_ID || DEMO_SALON_ID
+    const salonId = getSalonIdFromCookie()
     const cleanedSales = sales.map((s: Record<string, unknown>) => ({
       salon_id: s.salon_id || salonId,
       sale_date: s.sale_date,
