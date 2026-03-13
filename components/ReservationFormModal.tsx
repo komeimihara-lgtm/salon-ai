@@ -82,7 +82,7 @@ export default function ReservationFormModal({
     start_time: defaultStartTime,
     end_time: defaultEndTime ?? calculateEndTime(defaultStartTime, 60),
     bed_id: defaultBed || bedsProp[0] || 'A',
-    menu: '',
+    menus: [] as string[],
     staff_name: '',
     price: '',
     memo: '',
@@ -197,12 +197,15 @@ export default function ReservationFormModal({
     ? menus.filter(m => (m.category || '').trim() === menuCategory)
     : menus
 
-  // カテゴリ変更時に、選択中のメニューがフィルタ結果に含まれなければクリア
+  // カテゴリ変更時に、選択中のメニューがフィルタ結果に含まれなければ除外
   useEffect(() => {
-    if (form.menu && !filteredMenus.some(m => m.name === form.menu)) {
-      setForm(p => ({ ...p, menu: '' }))
+    if (form.menus.length > 0 && menuCategory) {
+      const filtered = form.menus.filter(name => filteredMenus.some(m => m.name === name))
+      if (filtered.length !== form.menus.length) {
+        setForm(p => ({ ...p, menus: filtered }))
+      }
     }
-  }, [menuCategory, filteredMenus, form.menu])
+  }, [menuCategory, filteredMenus, form.menus])
 
   // 担当スタッフ: 親から渡されていれば使用、そうでなければ /api/staff から取得
   useEffect(() => {
@@ -232,14 +235,16 @@ export default function ReservationFormModal({
 
   // 開始時間またはメニューが変わったら終了時間を再計算
   const startTime = form.start_time
-  const selectedMenuName = form.menu
+  const selectedMenuNames = form.menus
   useEffect(() => {
     if (!startTime) return
-    const selectedMenu = menus.find(m => m.name === selectedMenuName)
-    const duration = selectedMenu?.duration ?? 60
-    const end = calculateEndTime(startTime, duration)
+    const totalDuration = selectedMenuNames.reduce((sum, name) => {
+      const m = menus.find(menu => menu.name === name)
+      return sum + (m?.duration ?? 0)
+    }, 0) || 60
+    const end = calculateEndTime(startTime, totalDuration)
     setForm(p => ({ ...p, end_time: end }))
-  }, [startTime, selectedMenuName, menus])
+  }, [startTime, selectedMenuNames, menus])
 
   useEffect(() => {
     if (!searchQuery.trim() || mode !== 'existing') {
@@ -341,7 +346,7 @@ export default function ReservationFormModal({
           end_time: form.end_time,
           bed_id: form.bed_id || undefined,
           duration_minutes: durationMinutes,
-          menu: form.menu || undefined,
+          menu: form.menus.length > 0 ? form.menus.join(', ') : undefined,
           staff_name: form.staff_name || undefined,
           price: parseInt(form.price) || 0,
           memo: form.memo || undefined,
@@ -532,13 +537,38 @@ export default function ReservationFormModal({
                   ))}
                 </div>
               )}
-              <select value={form.menu} onChange={e => setForm(p => ({ ...p, menu: e.target.value }))}
-                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]">
-                <option value="">選択してください</option>
-                {filteredMenus.map(m => (
-                  <option key={m.id} value={m.name}>{m.name}（{m.duration}分）</option>
+              <div className="max-h-40 overflow-y-auto border border-[#BAE6FD] rounded-lg p-2 space-y-1">
+                {filteredMenus.length === 0 ? (
+                  <p className="text-xs text-[#4A5568] py-1">メニューがありません</p>
+                ) : filteredMenus.map(m => (
+                  <label key={m.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-[#F0F9FF] ${form.menus.includes(m.name) ? 'bg-[#F0F9FF] border border-[#0891B2]' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={form.menus.includes(m.name)}
+                      onChange={() => {
+                        setForm(p => {
+                          const newMenus = p.menus.includes(m.name)
+                            ? p.menus.filter(n => n !== m.name)
+                            : [...p.menus, m.name]
+                          const totalPrice = newMenus.reduce((sum, name) => {
+                            const found = menus.find(menu => menu.name === name)
+                            return sum + (found?.price ?? 0)
+                          }, 0)
+                          return { ...p, menus: newMenus, price: totalPrice > 0 ? String(totalPrice) : p.price }
+                        })
+                      }}
+                      className="accent-[#0891B2]"
+                    />
+                    <span className="text-sm text-[#1A202C]">{m.name}</span>
+                    <span className="text-xs text-[#4A5568] ml-auto">{m.duration}分 / ¥{m.price.toLocaleString()}</span>
+                  </label>
                 ))}
-              </select>
+              </div>
+              {form.menus.length > 0 && (
+                <p className="text-xs text-[#0891B2] mt-1">
+                  {form.menus.length}件選択 · 合計{menus.filter(m => form.menus.includes(m.name)).reduce((s, m) => s + m.duration, 0)}分
+                </p>
+              )}
             </div>
           </div>
 

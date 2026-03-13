@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Loader2 } from 'lucide-react'
 import type { Reservation } from '@/types'
 
 const TIMES = ['09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00']
-const MENUS = ['フェイシャル60分', 'フェイシャル90分', 'ボディ60分', 'ボディ90分', '美白コース', 'エイジングケア']
+interface MenuItemSimple { id: string; name: string; duration: number; price: number; category: string }
 
 export function RescheduleModal({ reservation, onClose, onSaved }: { reservation: Reservation; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({
@@ -81,8 +81,9 @@ export function RescheduleModal({ reservation, onClose, onSaved }: { reservation
 }
 
 export function EditReservationModal({ reservation, onClose, onSaved }: { reservation: Reservation; onClose: () => void; onSaved: () => void }) {
+  const initialMenus = reservation.menu ? reservation.menu.split(',').map(s => s.trim()).filter(Boolean) : []
   const [form, setForm] = useState({
-    menu: reservation.menu || '',
+    menus: initialMenus,
     reservation_date: reservation.reservation_date,
     start_time: reservation.start_time?.slice(0, 5) || '10:00',
     end_time: reservation.end_time?.slice(0, 5) || '11:00',
@@ -90,8 +91,13 @@ export function EditReservationModal({ reservation, onClose, onSaved }: { reserv
     price: String(reservation.price || 0),
     memo: reservation.memo || '',
   })
+  const [menuItems, setMenuItems] = useState<MenuItemSimple[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetch('/api/menus').then(r => r.json()).then(j => setMenuItems(j.menus || [])).catch(() => {})
+  }, [])
 
   async function handleSubmit() {
     setSaving(true)
@@ -102,7 +108,7 @@ export function EditReservationModal({ reservation, onClose, onSaved }: { reserv
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: reservation.id,
-          menu: form.menu,
+          menu: form.menus.join(', '),
           reservation_date: form.reservation_date,
           start_time: form.start_time,
           end_time: form.end_time,
@@ -133,11 +139,38 @@ export function EditReservationModal({ reservation, onClose, onSaved }: { reserv
           {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{error}</p>}
           <div>
             <label className="text-xs text-text-sub mb-1 block">メニュー</label>
-            <select value={form.menu} onChange={e => setForm(p => ({ ...p, menu: e.target.value }))}
-              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-rose outline-none">
-              <option value="">選択</option>
-              {MENUS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
+            <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1">
+              {menuItems.length === 0 ? (
+                <p className="text-xs text-text-sub py-1">メニューを読み込み中...</p>
+              ) : menuItems.map(m => (
+                <label key={m.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-[#F0F9FF] ${form.menus.includes(m.name) ? 'bg-[#F0F9FF] border border-[#0891B2]' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={form.menus.includes(m.name)}
+                    onChange={() => {
+                      setForm(p => {
+                        const newMenus = p.menus.includes(m.name)
+                          ? p.menus.filter(n => n !== m.name)
+                          : [...p.menus, m.name]
+                        const totalPrice = newMenus.reduce((sum, name) => {
+                          const found = menuItems.find(mi => mi.name === name)
+                          return sum + (found?.price ?? 0)
+                        }, 0)
+                        return { ...p, menus: newMenus, price: totalPrice > 0 ? String(totalPrice) : p.price }
+                      })
+                    }}
+                    className="accent-[#0891B2]"
+                  />
+                  <span className="text-sm text-[#1A202C]">{m.name}</span>
+                  <span className="text-xs text-[#4A5568] ml-auto">{m.duration}分 / ¥{m.price.toLocaleString()}</span>
+                </label>
+              ))}
+            </div>
+            {form.menus.length > 0 && (
+              <p className="text-xs text-[#0891B2] mt-1">
+                {form.menus.length}件選択 · 合計{menuItems.filter(m => form.menus.includes(m.name)).reduce((s, m) => s + m.duration, 0)}分
+              </p>
+            )}
           </div>
           <div>
             <label className="text-xs text-text-sub mb-1 block">予約日</label>
