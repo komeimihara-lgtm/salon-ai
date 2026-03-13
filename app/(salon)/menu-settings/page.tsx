@@ -180,16 +180,16 @@ export default function MenuSettingsPage() {
                     />
                     <input
                       type="number"
-                      value={editDuration}
-                      onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setEditDuration(val === '' ? 0 : Number(val)) }}
+                      value={editDuration || ''}
+                      onChange={e => setEditDuration(e.target.value === '' ? 0 : Number(e.target.value))}
                       onFocus={e => e.target.select()}
                       className="px-3 py-1.5 rounded-lg border border-gray-200 w-20"
                     />
                     <span className="text-text-sub text-sm">分</span>
                     <input
                       type="number"
-                      value={editPrice}
-                      onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setEditPrice(val === '' ? 0 : Number(val)) }}
+                      value={editPrice || ''}
+                      onChange={e => setEditPrice(e.target.value === '' ? 0 : Number(e.target.value))}
                       onFocus={e => e.target.select()}
                       className="px-3 py-1.5 rounded-lg border border-gray-200 w-24"
                     />
@@ -244,16 +244,16 @@ export default function MenuSettingsPage() {
               />
               <input
                 type="number"
-                value={newDuration}
-                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setNewDuration(val === '' ? 0 : Number(val)) }}
+                value={newDuration || ''}
+                onChange={e => setNewDuration(e.target.value === '' ? 0 : Number(e.target.value))}
                 onFocus={e => e.target.select()}
                 className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-24"
               />
               <span className="self-center text-text-sub text-sm">分</span>
               <input
                 type="number"
-                value={newPrice}
-                onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setNewPrice(val === '' ? 0 : Number(val)) }}
+                value={newPrice || ''}
+                onChange={e => setNewPrice(e.target.value === '' ? 0 : Number(e.target.value))}
                 onFocus={e => e.target.select()}
                 className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-28"
               />
