@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const start = searchParams.get('start')
   const end = searchParams.get('end')
+  const customerId = searchParams.get('customer_id')
   const salonId = searchParams.get('salon_id') || getSalonIdFromCookie()
 
   let query = supabase
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
 
   if (start) query = query.gte('sale_date', start)
   if (end) query = query.lte('sale_date', end)
+  if (customerId) query = query.eq('customer_id', customerId)
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -12,6 +12,11 @@ import {
   Ticket,
   Minus,
   Repeat,
+  Edit2,
+  Receipt,
+  MapPin,
+  Calendar,
+  Mail,
 } from 'lucide-react'
 import {
   fetchCustomerTickets,
@@ -40,10 +45,54 @@ interface Customer {
   name: string
   name_kana?: string
   phone?: string
+  email?: string
+  address?: string
+  birthday?: string
+  gender?: 'female' | 'male' | 'other' | 'unknown'
+  first_visit_date?: string
+  last_visit_date?: string
   visit_count: number
+  total_spent?: number
   avg_unit_price?: number
+  status?: 'active' | 'lost' | 'vip' | 'temporary' | 'at_risk' | 'dormant'
+  memo?: string
   line_user_id?: string
   line_status?: string
+}
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'active', label: 'アクティブ' },
+  { value: 'vip', label: 'VIP' },
+  { value: 'at_risk', label: '失客予備軍' },
+  { value: 'dormant', label: '休眠客' },
+  { value: 'lost', label: '失客' },
+  { value: 'temporary', label: '仮登録' },
+]
+
+function StatusBadge({ status }: { status?: string }) {
+  const map: Record<string, { label: string; color: string }> = {
+    active: { label: 'アクティブ', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+    lost: { label: '失客', color: 'bg-red-500/20 text-red-600 border-red-500/30' },
+    vip: { label: 'VIP', color: 'bg-amber-500/20 text-[#0891B2] border-amber-500/30' },
+    temporary: { label: '仮登録', color: 'bg-sky-500/20 text-sky-600 border-sky-500/30' },
+    at_risk: { label: '失客予備軍', color: 'bg-orange-500/20 text-orange-600 border-orange-500/30' },
+    dormant: { label: '休眠客', color: 'bg-purple-500/20 text-purple-600 border-purple-500/30' },
+  }
+  if (!status || !map[status]) return null
+  const { label, color } = map[status]
+  return (
+    <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${color}`}>
+      {label}
+    </span>
+  )
+}
+
+interface VisitRecord {
+  id: string
+  visit_date: string
+  menu?: string
+  staff_name?: string
+  amount?: number
 }
 
 export default function CustomerDetailPage() {
@@ -72,6 +121,12 @@ export default function CustomerDetailPage() {
   const [unmatchedUsers, setUnmatchedUsers] = useState<{ line_user_id: string; followed_at: string }[]>([])
   const [linkingLine, setLinkingLine] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState<Partial<Customer>>({})
+  const [editSaving, setEditSaving] = useState(false)
+  const [visits, setVisits] = useState<VisitRecord[]>([])
+  const [visitsLoading, setVisitsLoading] = useState(false)
+  const [visitsExpanded, setVisitsExpanded] = useState(false)
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -83,6 +138,58 @@ export default function CustomerDetailPage() {
     const res = await fetch(`/api/customers/${id}`)
     const data = await res.json()
     setCustomer(data.customer ?? null)
+  }, [id])
+
+  const openEdit = () => {
+    if (!customer) return
+    setEditForm({
+      name: customer.name,
+      name_kana: customer.name_kana || '',
+      phone: customer.phone || '',
+      email: customer.email || '',
+      address: customer.address || '',
+      birthday: customer.birthday || '',
+      first_visit_date: customer.first_visit_date || '',
+      visit_count: customer.visit_count,
+      status: customer.status || 'active',
+      memo: customer.memo || '',
+    })
+    setEditOpen(true)
+  }
+
+  const handleEditSave = async () => {
+    if (!customer) return
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/api/customers/${customer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      })
+      if (res.ok) {
+        await fetchCustomer()
+        setEditOpen(false)
+        showToast('更新しました')
+      }
+    } catch {
+      showToast('更新に失敗しました')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const fetchVisits = useCallback(async () => {
+    if (!id) return
+    setVisitsLoading(true)
+    try {
+      const res = await fetch(`/api/customers/${id}/visits`)
+      const data = await res.json()
+      setVisits(data.visits || [])
+    } catch {
+      setVisits([])
+    } finally {
+      setVisitsLoading(false)
+    }
   }, [id])
 
   const fetchUnmatchedUsers = async () => {
@@ -149,8 +256,11 @@ export default function CustomerDetailPage() {
   }, [id])
 
   useEffect(() => {
-    if (customer) refresh()
-  }, [customer, refresh])
+    if (customer) {
+      refresh()
+      fetchVisits()
+    }
+  }, [customer, refresh, fetchVisits])
 
   useEffect(() => {
     if (purchaseOpen) {
@@ -256,12 +366,20 @@ export default function CustomerDetailPage() {
         <Link href="/customers" className="p-2 rounded-lg hover:bg-[#F8F5FF] text-text-main">
           <ChevronLeft className="w-5 h-5" />
         </Link>
-        <Link
-          href={`/chart/${customer.id}`}
-          className="px-3 py-1.5 rounded-lg bg-rose text-white text-sm font-medium hover:opacity-90"
-        >
-          カルテ
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openEdit}
+            className="px-3 py-1.5 rounded-lg border border-gray-300 text-text-main text-sm font-medium hover:bg-gray-50 flex items-center gap-1"
+          >
+            <Edit2 className="w-3.5 h-3.5" /> 編集
+          </button>
+          <Link
+            href={`/karute?customer_id=${customer.id}`}
+            className="px-3 py-1.5 rounded-lg bg-rose text-white text-sm font-medium hover:opacity-90"
+          >
+            カルテを見る
+          </Link>
+        </div>
       </div>
 
       <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-2xl p-5 mb-6">
@@ -270,10 +388,26 @@ export default function CustomerDetailPage() {
             <User className="w-7 h-7 text-rose" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-[#1A202C]">{customer.name} 様</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-[#1A202C]">{customer.name} 様</h1>
+              <StatusBadge status={customer.status} />
+            </div>
+            {customer.name_kana && (
+              <p className="text-xs text-[#4A5568] mt-0.5">{customer.name_kana}</p>
+            )}
             {customer.phone && (
               <p className="text-sm text-[#4A5568] flex items-center gap-1 mt-0.5">
                 <Phone className="w-4 h-4" /> {customer.phone}
+              </p>
+            )}
+            {customer.email && (
+              <p className="text-sm text-[#4A5568] flex items-center gap-1 mt-0.5">
+                <Mail className="w-4 h-4" /> {customer.email}
+              </p>
+            )}
+            {customer.address && (
+              <p className="text-sm text-[#4A5568] flex items-center gap-1 mt-0.5">
+                <MapPin className="w-4 h-4" /> {customer.address}
               </p>
             )}
           </div>
@@ -289,6 +423,34 @@ export default function CustomerDetailPage() {
               ¥{(customer.avg_unit_price ?? 0).toLocaleString()}
             </p>
           </div>
+          <div>
+            <p className="text-xs text-[#4A5568]">累計売上</p>
+            <p className="font-bold text-[#1A202C]">
+              ¥{(customer.total_spent ?? 0).toLocaleString()}
+            </p>
+          </div>
+          {customer.birthday && (
+            <div>
+              <p className="text-xs text-[#4A5568]">生年月日</p>
+              <p className="font-bold text-[#1A202C]">{customer.birthday}</p>
+            </div>
+          )}
+          <div>
+            <p className="text-xs text-[#4A5568]">初回来店日</p>
+            <p className="font-bold text-[#1A202C]">{customer.first_visit_date || '—'}</p>
+          </div>
+          {customer.last_visit_date && (
+            <div>
+              <p className="text-xs text-[#4A5568]">最終来店日</p>
+              <p className="font-bold text-[#1A202C]">{customer.last_visit_date}</p>
+            </div>
+          )}
+          {customer.memo && (
+            <div className="col-span-2">
+              <p className="text-xs text-[#4A5568]">メモ</p>
+              <p className="text-sm text-[#1A202C] whitespace-pre-wrap">{customer.memo}</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -438,6 +600,172 @@ export default function CustomerDetailPage() {
           </div>
         )}
       </div>
+
+      {/* 来店・売上履歴 */}
+      <div className="bg-white rounded-2xl p-5 card-shadow mb-6">
+        <h2 className="font-semibold text-text-main flex items-center gap-2 mb-3">
+          <Receipt className="w-4 h-4 text-rose" />
+          来店・売上履歴
+        </h2>
+        {visitsLoading ? (
+          <p className="text-sm text-text-sub py-4 flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> 読み込み中...
+          </p>
+        ) : visits.length === 0 ? (
+          <p className="text-sm text-[#4A5568] py-2">来店履歴はありません</p>
+        ) : (
+          <>
+            <div className="space-y-2">
+              {(visitsExpanded ? visits : visits.slice(0, 10)).map(v => (
+                <div key={v.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#F8F5FF] border border-[#BAE6FD]">
+                  <div>
+                    <p className="text-sm font-medium text-[#1A202C]">{v.menu || '—'}</p>
+                    <p className="text-xs text-[#4A5568]">
+                      {v.visit_date}{v.staff_name ? ` · ${v.staff_name}` : ''}
+                    </p>
+                  </div>
+                  {v.amount != null && (
+                    <p className="text-sm font-bold text-[#1A202C]">¥{v.amount.toLocaleString()}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+            {visits.length > 10 && !visitsExpanded && (
+              <button
+                onClick={() => setVisitsExpanded(true)}
+                className="w-full mt-3 py-2 text-sm text-rose font-medium hover:underline"
+              >
+                もっと見る（残り{visits.length - 10}件）
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* 編集モーダル */}
+      {editOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">顧客情報を編集</h3>
+              <button onClick={() => setEditOpen(false)} className="p-2 text-text-sub">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">ステータス</label>
+                <select
+                  value={editForm.status || 'active'}
+                  onChange={e => setEditForm(f => ({ ...f, status: e.target.value as Customer['status'] }))}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                >
+                  {STATUS_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">名前</label>
+                <input
+                  type="text"
+                  value={editForm.name || ''}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">カナ</label>
+                <input
+                  type="text"
+                  value={editForm.name_kana || ''}
+                  onChange={e => setEditForm(f => ({ ...f, name_kana: e.target.value }))}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">電話番号</label>
+                <input
+                  type="tel"
+                  value={editForm.phone || ''}
+                  onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">メール</label>
+                <input
+                  type="email"
+                  value={editForm.email || ''}
+                  onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">住所</label>
+                <input
+                  type="text"
+                  value={editForm.address || ''}
+                  onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">生年月日</label>
+                <input
+                  type="date"
+                  value={editForm.birthday || ''}
+                  onChange={e => setEditForm(f => ({ ...f, birthday: e.target.value }))}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">初回来店日</label>
+                <input
+                  type="date"
+                  value={editForm.first_visit_date || ''}
+                  onChange={e => setEditForm(f => ({ ...f, first_visit_date: e.target.value }))}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">来店回数</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editForm.visit_count ?? 0}
+                  onChange={e => setEditForm(f => ({ ...f, visit_count: parseInt(e.target.value) || 0 }))}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">メモ</label>
+                <textarea
+                  value={editForm.memo || ''}
+                  onChange={e => setEditForm(f => ({ ...f, memo: e.target.value }))}
+                  rows={3}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setEditOpen(false)}
+                className="flex-1 py-2 rounded-xl border"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleEditSave}
+                disabled={editSaving}
+                className="flex-1 py-2 rounded-xl bg-rose text-white font-medium disabled:opacity-50"
+              >
+                {editSaving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* コース購入モーダル */}
       {purchaseOpen && (
