@@ -44,19 +44,24 @@ export default function RegisterPage() {
     }
 
     // 2. salons テーブルに新規レコード作成
-    const { error: salonError } = await supabase.from('salons').insert({
+    const { data: salonData, error: salonError } = await supabase.from('salons').insert({
       name: form.salonName,
       owner_name: form.ownerName,
       owner_email: form.email,
       plan: form.plan,
       status: 'active',
       beds: '["A"]',
-    })
+    }).select('id').single()
 
     if (salonError) {
       setError('サロン登録に失敗しました: ' + salonError.message)
       setLoading(false)
       return
+    }
+
+    // 3. salon_id を cookie にセット（新規サロンのデータのみ表示されるように）
+    if (salonData?.id) {
+      document.cookie = `salon_id=${salonData.id}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`
     }
 
     router.push('/dashboard')
