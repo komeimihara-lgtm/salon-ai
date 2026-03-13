@@ -29,6 +29,11 @@ export async function middleware(req: NextRequest) {
   // セッション更新のみ行い、未ログインでもリダイレクトしない
   await supabase.auth.getSession()
 
+  // ルートアクセスは /dashboard にリダイレクト
+  if (req.nextUrl.pathname === '/') {
+    return NextResponse.redirect(new URL('/dashboard', req.url))
+  }
+
   return res
 }
 
