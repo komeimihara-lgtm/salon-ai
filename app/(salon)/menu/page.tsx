@@ -219,7 +219,7 @@ function ImportModal({ onClose, onImport }: {
                       </td>
                       <td className="p-2">
                         {editingId === m.id ? (
-                          <input type="number" value={editRow.duration ?? m.duration} onChange={e => { const v = e.target.value.replace(/^0+(?=\d)/, ''); setEditRow(r => ({ ...r, duration: v === '' ? 0 : Number(v) })) }}
+                          <input type="number" value={(editRow.duration ?? m.duration) || ''} onChange={e => setEditRow(r => ({ ...r, duration: e.target.value === '' ? 0 : Number(e.target.value) }))}
                             onBlur={() => updatePreviewMenu(m.id, { duration: editRow.duration ?? m.duration })}
                             className="w-16 px-2 py-1 border rounded text-sm" />
                         ) : (
@@ -228,7 +228,7 @@ function ImportModal({ onClose, onImport }: {
                       </td>
                       <td className="p-2">
                         {editingId === m.id ? (
-                          <input type="number" value={editRow.price ?? m.price} onChange={e => { const v = e.target.value.replace(/^0+(?=\d)/, ''); setEditRow(r => ({ ...r, price: v === '' ? 0 : Number(v) })) }}
+                          <input type="number" value={(editRow.price ?? m.price) || ''} onChange={e => setEditRow(r => ({ ...r, price: e.target.value === '' ? 0 : Number(e.target.value) }))}
                             onBlur={() => updatePreviewMenu(m.id, { price: editRow.price ?? m.price })}
                             className="w-24 px-2 py-1 border rounded text-sm" />
                         ) : (
@@ -598,10 +598,10 @@ export default function MenuSettingsPage() {
                     <div className="flex-1 flex gap-2 flex-wrap items-center">
                       <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
                         className="px-3 py-1.5 rounded-lg border border-gray-200 min-w-48 flex-1" />
-                      <input type="number" value={editDuration} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setEditDuration(val === '' ? 0 : Number(val)) }}
+                      <input type="number" value={editDuration || ''} onChange={e => setEditDuration(e.target.value === '' ? 0 : Number(e.target.value))}
                         onFocus={e => e.target.select()} className="px-3 py-1.5 rounded-lg border border-gray-200 w-20" />
                       <span className="text-text-sub text-sm">分</span>
-                      <input type="number" value={editPrice} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setEditPrice(val === '' ? 0 : Number(val)) }}
+                      <input type="number" value={editPrice || ''} onChange={e => setEditPrice(e.target.value === '' ? 0 : Number(e.target.value))}
                         onFocus={e => e.target.select()} className="px-3 py-1.5 rounded-lg border border-gray-200 w-24" />
                       <span className="text-text-sub text-sm">円</span>
                       <select value={editCategory} onChange={e => setEditCategory(e.target.value)}
@@ -638,10 +638,10 @@ export default function MenuSettingsPage() {
             <div className="flex gap-2 flex-wrap pt-4 border-t border-gray-100 mt-4">
               <input type="text" value={newName} onChange={e => setNewName(e.target.value)}
                 placeholder="メニュー名" className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none min-w-48 flex-1" />
-              <input type="number" value={newDuration} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setNewDuration(val === '' ? 0 : Number(val)) }}
+              <input type="number" value={newDuration || ''} onChange={e => setNewDuration(e.target.value === '' ? 0 : Number(e.target.value))}
                 onFocus={e => e.target.select()} className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-20" />
               <span className="self-center text-text-sub text-sm">分</span>
-              <input type="number" value={newPrice} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setNewPrice(val === '' ? 0 : Number(val)) }}
+              <input type="number" value={newPrice || ''} onChange={e => setNewPrice(e.target.value === '' ? 0 : Number(e.target.value))}
                 onFocus={e => e.target.select()} className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-28" />
               <span className="self-center text-text-sub text-sm">円</span>
               <select value={newCategory} onChange={e => setNewCategory(e.target.value)}
@@ -755,7 +755,7 @@ export default function MenuSettingsPage() {
                     </div>
                     <div>
                       <label className="block text-xs text-text-sub mb-1">割引額</label>
-                      <input type="number" value={campDiscountValue} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampDiscountValue(val === '' ? 0 : Number(val)) }}
+                      <input type="number" value={campDiscountValue || ''} onChange={e => setCampDiscountValue(e.target.value === '' ? 0 : Number(e.target.value))}
                         onFocus={e => e.target.select()} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
                     </div>
                   </div>
@@ -785,27 +785,27 @@ export default function MenuSettingsPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs text-text-sub mb-1">価格（円）</label>
-                      <input type="number" value={campPrice} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampPrice(val === '' ? 0 : Number(val)) }}
+                      <input type="number" value={campPrice || ''} onChange={e => setCampPrice(e.target.value === '' ? 0 : Number(e.target.value))}
                         onFocus={e => e.target.select()} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
                     </div>
                     {campTargetType === 'menu' && (
                       <div>
                         <label className="block text-xs text-text-sub mb-1">施術時間（分）</label>
-                        <input type="number" value={campDuration} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampDuration(val === '' ? 0 : Number(val)) }}
+                        <input type="number" value={campDuration || ''} onChange={e => setCampDuration(e.target.value === '' ? 0 : Number(e.target.value))}
                           onFocus={e => e.target.select()} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
                       </div>
                     )}
                     {campTargetType === 'ticket' && (
                       <div>
                         <label className="block text-xs text-text-sub mb-1">回数</label>
-                        <input type="number" value={campSessions} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampSessions(val === '' ? 0 : Number(val)) }}
+                        <input type="number" value={campSessions || ''} onChange={e => setCampSessions(e.target.value === '' ? 0 : Number(e.target.value))}
                           onFocus={e => e.target.select()} min={2} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
                       </div>
                     )}
                     {campTargetType === 'subscription' && (
                       <div>
                         <label className="block text-xs text-text-sub mb-1">回数/月</label>
-                        <input type="number" value={campSubSessions} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCampSubSessions(val === '' ? 0 : Number(val)) }}
+                        <input type="number" value={campSubSessions || ''} onChange={e => setCampSubSessions(e.target.value === '' ? 0 : Number(e.target.value))}
                           onFocus={e => e.target.select()} min={1} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" />
                       </div>
                     )}
@@ -888,13 +888,13 @@ export default function MenuSettingsPage() {
                   className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
                   {menus.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                 </select>
-                <input type="number" value={courseSessions} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCourseSessions(val === '' ? 0 : Number(val)) }}
+                <input type="number" value={courseSessions || ''} onChange={e => setCourseSessions(e.target.value === '' ? 0 : Number(e.target.value))}
                   onFocus={e => e.target.select()} min={2} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-20" />
                 <span className="self-center text-text-sub text-sm">回</span>
-                <input type="number" value={coursePrice} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCoursePrice(val === '' ? 0 : Number(val)) }}
+                <input type="number" value={coursePrice || ''} onChange={e => setCoursePrice(e.target.value === '' ? 0 : Number(e.target.value))}
                   onFocus={e => e.target.select()} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-28" />
                 <span className="self-center text-text-sub text-sm">円</span>
-                <input type="number" value={courseExpiryDays} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setCourseExpiryDays(val === '' ? 0 : Number(val)) }}
+                <input type="number" value={courseExpiryDays || ''} onChange={e => setCourseExpiryDays(e.target.value === '' ? 0 : Number(e.target.value))}
                   onFocus={e => e.target.select()} min={1} placeholder="日数" className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-24" />
                 <span className="self-center text-text-sub text-sm">日</span>
                 <button onClick={addTicketPlan}
@@ -959,13 +959,13 @@ export default function MenuSettingsPage() {
               className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
               {menus.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
             </select>
-            <input type="number" value={subPrice} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSubPrice(val === '' ? 0 : Number(val)) }}
+            <input type="number" value={subPrice || ''} onChange={e => setSubPrice(e.target.value === '' ? 0 : Number(e.target.value))}
               onFocus={e => e.target.select()} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-24" />
             <span className="self-center text-text-sub text-sm">円/月</span>
-            <input type="number" value={subSessions} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSubSessions(val === '' ? 0 : Number(val)) }}
+            <input type="number" value={subSessions || ''} onChange={e => setSubSessions(e.target.value === '' ? 0 : Number(e.target.value))}
               onFocus={e => e.target.select()} min={1} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-16" />
             <span className="self-center text-text-sub text-sm">回/月</span>
-            <input type="number" value={subBillingDay} onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSubBillingDay(val === '' ? 0 : Number(val)) }}
+            <input type="number" value={subBillingDay || ''} onChange={e => setSubBillingDay(e.target.value === '' ? 0 : Number(e.target.value))}
               onFocus={e => e.target.select()} min={1} max={28} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-16" />
             <span className="self-center text-text-sub text-sm">日課金</span>
             <button onClick={addSubPlan}
@@ -1002,8 +1002,8 @@ export default function MenuSettingsPage() {
             <div>
               <label className="text-sm font-bold text-text-main block mb-3">消費税率</label>
               <div className="flex items-center gap-3">
-                <input type="number" value={taxSettings.taxRate}
-                  onChange={e => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setTaxSettingsState(prev => ({ ...prev, taxRate: val === '' ? 0 : Number(val) })) }}
+                <input type="number" value={taxSettings.taxRate || ''}
+                  onChange={e => setTaxSettingsState(prev => ({ ...prev, taxRate: e.target.value === '' ? 0 : Number(e.target.value) }))}
                   onFocus={e => e.target.select()} min={0} max={100}
                   className="w-24 px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none text-lg font-bold" />
                 <span className="text-text-main font-bold">%</span>

@@ -376,8 +376,8 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium text-text-main mb-1">売上目標（円）</label>
               <input
                 type="number"
-                value={settings.targets.sales}
-                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, sales: val === '' ? 0 : Number(val) } })) }}
+                value={settings.targets.sales || ''}
+                onChange={e => setSettings(s => ({ ...s, targets: { ...s.targets, sales: e.target.value === '' ? 0 : Number(e.target.value) } }))}
                 onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
@@ -386,8 +386,8 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium text-text-main mb-1">来店数目標（名）</label>
               <input
                 type="number"
-                value={settings.targets.visits}
-                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, visits: val === '' ? 0 : Number(val) } })) }}
+                value={settings.targets.visits || ''}
+                onChange={e => setSettings(s => ({ ...s, targets: { ...s.targets, visits: e.target.value === '' ? 0 : Number(e.target.value) } }))}
                 onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
@@ -396,8 +396,8 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium text-text-main mb-1">客単価目標（円）</label>
               <input
                 type="number"
-                value={settings.targets.avgPrice}
-                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, avgPrice: val === '' ? 0 : Number(val) } })) }}
+                value={settings.targets.avgPrice || ''}
+                onChange={e => setSettings(s => ({ ...s, targets: { ...s.targets, avgPrice: e.target.value === '' ? 0 : Number(e.target.value) } }))}
                 onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
@@ -406,8 +406,8 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium text-text-main mb-1">物販売上目標（円）</label>
               <input
                 type="number"
-                value={settings.targets.productSales ?? 0}
-                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, productSales: val === '' ? 0 : Number(val) } })) }}
+                value={settings.targets.productSales || ''}
+                onChange={e => setSettings(s => ({ ...s, targets: { ...s.targets, productSales: e.target.value === '' ? 0 : Number(e.target.value) } }))}
                 onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
@@ -416,8 +416,8 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium text-text-main mb-1">新規客数目標（名）</label>
               <input
                 type="number"
-                value={settings.targets.newCustomers ?? 0}
-                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, newCustomers: val === '' ? 0 : Number(val) } })) }}
+                value={settings.targets.newCustomers || ''}
+                onChange={e => setSettings(s => ({ ...s, targets: { ...s.targets, newCustomers: e.target.value === '' ? 0 : Number(e.target.value) } }))}
                 onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
@@ -426,8 +426,8 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium text-text-main mb-1">新規予約数目標（件）</label>
               <input
                 type="number"
-                value={settings.targets.newReservations ?? 0}
-                onChange={(e) => { const val = e.target.value.replace(/^0+(?=\d)/, ''); setSettings(s => ({ ...s, targets: { ...s.targets, newReservations: val === '' ? 0 : Number(val) } })) }}
+                value={settings.targets.newReservations || ''}
+                onChange={e => setSettings(s => ({ ...s, targets: { ...s.targets, newReservations: e.target.value === '' ? 0 : Number(e.target.value) } }))}
                 onFocus={e => e.target.select()}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none font-dm-sans"
               />
