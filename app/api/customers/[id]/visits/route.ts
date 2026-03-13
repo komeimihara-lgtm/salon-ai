@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 export async function GET(
   req: NextRequest,
@@ -10,6 +11,7 @@ export async function GET(
       .from('visits')
       .select('*')
       .eq('customer_id', params.id)
+      .eq('salon_id', getSalonIdFromCookie())
       .order('visit_date', { ascending: false })
     if (error) throw error
     return NextResponse.json({ visits: data || [] })
@@ -27,7 +29,7 @@ export async function POST(
     const body = await req.json()
     const { data, error } = await getSupabaseAdmin()
       .from('visits')
-      .insert({ ...body, customer_id: params.id })
+      .insert({ ...body, customer_id: params.id, salon_id: getSalonIdFromCookie() })
       .select()
       .single()
     if (error) throw error

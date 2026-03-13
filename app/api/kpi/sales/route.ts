@@ -7,16 +7,16 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const start = searchParams.get('start')
   const end = searchParams.get('end')
-  const salonId = searchParams.get('salon_id')
+  const salonId = searchParams.get('salon_id') || getSalonIdFromCookie()
 
   let query = supabase
     .from('sales')
     .select('*')
+    .eq('salon_id', salonId)
     .order('sale_date', { ascending: false })
 
   if (start) query = query.gte('sale_date', start)
   if (end) query = query.lte('sale_date', end)
-  if (salonId) query = query.eq('salon_id', salonId)
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

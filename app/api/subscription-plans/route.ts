@@ -33,15 +33,7 @@ export async function GET(req: NextRequest) {
     }
     const { data, error } = await query
     if (error) throw error
-    let plans = (data || []).map((r: Record<string, unknown>) => toSubscriptionPlan(r))
-    if (plans.length === 0) {
-      const { data: fallback } = await getSupabaseAdmin()
-        .from('subscription_plans')
-        .select('id, name, menu_name, price, sessions_per_month, billing_day, category, is_active, created_at')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-      plans = (fallback || []).map((r: Record<string, unknown>) => toSubscriptionPlan(r))
-    }
+    const plans = (data || []).map((r: Record<string, unknown>) => toSubscriptionPlan(r))
     return NextResponse.json({ plans })
   } catch (e) {
     console.error(e)

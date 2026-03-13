@@ -65,25 +65,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (tickets.length === 0 && !salonIdParam) {
-      try {
-        const { data: fallback } = await supabase
-          .from('customer_tickets')
-          .select(SELECT_COLS)
-          .order('purchased_at', { ascending: false })
-        let rows = fallback || []
-        if (customerId) rows = rows.filter((r: Record<string, unknown>) => r.customer_id === customerId)
-        tickets = rows.map((r: Record<string, unknown>) => toCustomerTicket(r, true))
-      } catch {
-        const { data: fallback } = await supabase
-          .from('customer_tickets')
-          .select(SELECT_COLS_NO_UNIT_PRICE)
-          .order('purchased_at', { ascending: false })
-        let rows = fallback || []
-        if (customerId) rows = rows.filter((r: Record<string, unknown>) => r.customer_id === customerId)
-        tickets = rows.map((r: Record<string, unknown>) => toCustomerTicket(r, false))
-      }
-    }
     return NextResponse.json({ tickets })
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e))

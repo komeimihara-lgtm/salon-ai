@@ -12,6 +12,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .from('products')
     .select('stock')
     .eq('id', id)
+    .eq('salon_id', salonId)
     .single()
   if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 })
 
@@ -24,6 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .from('products')
     .update({ stock: newStock })
     .eq('id', id)
+    .eq('salon_id', salonId)
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
   await supabase

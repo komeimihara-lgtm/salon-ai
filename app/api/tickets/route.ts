@@ -36,15 +36,7 @@ export async function GET(req: NextRequest) {
     }
     const { data, error } = await query
     if (error) throw error
-    let plans = (data || []).map((r: Record<string, unknown>) => toTicketPlan(r))
-    if (plans.length === 0) {
-      const { data: fallback } = await getSupabaseAdmin()
-        .from('ticket_plans')
-        .select('id, name, menu_name, total_sessions, price, unit_price, expiry_days, category, is_active, created_at')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-      plans = (fallback || []).map((r: Record<string, unknown>) => toTicketPlan(r))
-    }
+    const plans = (data || []).map((r: Record<string, unknown>) => toTicketPlan(r))
     return NextResponse.json({ plans })
   } catch (e) {
     console.error(e)

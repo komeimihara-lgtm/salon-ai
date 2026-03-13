@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
 export async function PATCH(req: NextRequest) {
   try {
@@ -26,6 +27,7 @@ export async function PATCH(req: NextRequest) {
       .from('reservations')
       .update(updates)
       .eq('id', id)
+      .eq('salon_id', getSalonIdFromCookie())
       .select()
       .single()
 

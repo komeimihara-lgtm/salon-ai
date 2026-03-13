@@ -22,6 +22,7 @@ export async function POST() {
       .from('sales')
       .select('amount')
       .eq('customer_id', customer.id)
+      .eq('salon_id', salonId)
 
     const totalSales = (salesData || []).reduce((sum: number, s: { amount: number }) => sum + s.amount, 0)
     const visitCount = customer.visit_count || 0
