@@ -3,6 +3,10 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+// salon_idのキャッシュ（メール→salon_id）※プロセス単位でキャッシュ
+const salonCache = new Map<string, { id: string; ts: number }>()
+const CACHE_TTL = 5 * 60 * 1000 // 5分
+
 export async function middleware(req: NextRequest) {
   let res = NextResponse.next({ request: { headers: req.headers } })
 
@@ -32,34 +36,52 @@ export async function middleware(req: NextRequest) {
 
   // ルートアクセスは /dashboard にリダイレクト
   if (req.nextUrl.pathname === '/') {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
+    const redirectRes = NextResponse.redirect(new URL('/dashboard', req.url))
+    return redirectRes
   }
 
-  // ログイン済みユーザー: salon_id cookieが未セットなら自動セット
-  if (session?.user?.email && !req.cookies.get('salon_id')?.value) {
-    try {
-      const admin = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      )
-      const { data: salon } = await admin
-        .from('salons')
-        .select('id')
-        .eq('owner_email', session.user.email)
-        .limit(1)
-        .maybeSingle()
+  // ログイン済みユーザー: 常にsalon_idを検証・セット
+  if (session?.user?.email) {
+    const email = session.user.email
+    const currentCookie = req.cookies.get('salon_id')?.value
 
-      if (salon?.id) {
-        // レスポンスを作り直してcookieをセット
-        res = NextResponse.next({ request: { headers: req.headers } })
-        res.cookies.set('salon_id', salon.id, {
-          path: '/',
-          maxAge: 60 * 60 * 24 * 365,
-          sameSite: 'lax',
-        })
+    // キャッシュから取得を試みる
+    const cached = salonCache.get(email)
+    let correctSalonId: string | null = null
+
+    if (cached && Date.now() - cached.ts < CACHE_TTL) {
+      correctSalonId = cached.id
+    } else {
+      // DBから取得
+      try {
+        const admin = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!
+        )
+        const { data: salon } = await admin
+          .from('salons')
+          .select('id')
+          .eq('owner_email', email)
+          .limit(1)
+          .maybeSingle()
+
+        if (salon?.id) {
+          correctSalonId = salon.id
+          salonCache.set(email, { id: salon.id, ts: Date.now() })
+        }
+      } catch {
+        // DB接続失敗時はスキップ
       }
-    } catch {
-      // salon_id取得失敗時はスキップ
+    }
+
+    // cookieが間違っている or 未セットなら修正
+    if (correctSalonId && currentCookie !== correctSalonId) {
+      res = NextResponse.next({ request: { headers: req.headers } })
+      res.cookies.set('salon_id', correctSalonId, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: 'lax',
+      })
     }
   }
 
