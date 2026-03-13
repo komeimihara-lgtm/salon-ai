@@ -27,11 +27,7 @@ import {
   fetchExpiredTickets,
 } from '@/lib/tickets'
 
-const TASKS_AUTO_BASE = [
-  { id: 1, type: 'alert', text: '田中様（92日未来店）に失客防止メッセージを送る', action: '送信する' },
-  { id: 2, type: 'birthday', text: '山田様の誕生日まで7日。特典クーポンを送る', action: '送信する' },
-  { id: 3, type: 'consult', text: '今月の達成率53%。経営会議に戦略を相談する', action: '相談する' },
-]
+const TASKS_AUTO_BASE: { id: number; type: string; text: string; action: string }[] = []
 
 const SLOT_WIDTH_PX = 56
 const ROW_HEIGHT = 72
@@ -308,7 +304,7 @@ export default function DashboardPage() {
           { label: '今月売上', value: `¥${totalSales.toLocaleString()}`, sub: `目標 ¥${salonTargets.sales.toLocaleString()}`, rate: salesRate, diff: 0, diffUp: true },
           { label: '来店数', value: `${visits}名`, sub: `目標 ${salonTargets.visits}名`, rate: visitsRate, diff: 0, diffUp: true },
           { label: '客単価', value: `¥${avgPrice.toLocaleString()}`, sub: `目標 ¥${salonTargets.avgPrice.toLocaleString()}`, rate: avgRate, diff: 0, diffUp: true },
-          { label: '再来店率', value: '68%', sub: '目標 75%', rate: 91, diff: 5, diffUp: true },
+          { label: '再来店率', value: '-%', sub: '目標 75%', rate: 0, diff: 0, diffUp: true },
         ])
         setSalesSummary(summaryJson.cashSales != null ? {
           cashSales: summaryJson.cashSales ?? 0,
