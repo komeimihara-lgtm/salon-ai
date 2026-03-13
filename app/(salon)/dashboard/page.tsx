@@ -20,7 +20,6 @@ import { RescheduleModal, EditReservationModal } from '@/components/ReservationM
 import ReservationFormModal from '@/components/ReservationFormModal'
 import { useReservations } from '@/hooks/useReservations'
 import { fetchTasks, addTask, toggleTask, deleteTask, type ManualTask } from '@/lib/dashboard-tasks'
-import { getSalonSettings } from '@/lib/salon-settings'
 import { getAchievementRate, getAchievementColor, getAchievementBgColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
 import {
   fetchExpiringSoonTickets,
@@ -252,7 +251,7 @@ export default function DashboardPage() {
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; start: string; end: string; bed: string } | null>(null)
   const [showReservationModal, setShowReservationModal] = useState(false)
   const [beds, setBeds] = useState<string[]>(['A', 'B'])
-  const [salonTargets, setSalonTargets] = useState({ sales: 600000, visits: 60, avgPrice: 10000 })
+  const [salonTargets, setSalonTargets] = useState({ sales: 0, visits: 0, avgPrice: 0 })
   const [businessHours, setBusinessHours] = useState({ openTime: '10:00', closeTime: '21:00' })
   const [announcements, setAnnouncements] = useState<{ id: string; title: string; type: string; body: string; is_read: boolean }[]>([])
   const [dismissedAnnouncements, setDismissedAnnouncements] = useState<Set<string>>(new Set())
@@ -260,12 +259,23 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch('/api/settings/salon')
       .then(r => r.json())
-      .then(j => setBeds(j.beds || ['A', 'B']))
+      .then(j => {
+        setBeds(j.beds || ['A', 'B'])
+        if (j.targets) {
+          setSalonTargets({
+            sales: j.targets.sales || 0,
+            visits: j.targets.visits || 0,
+            avgPrice: j.targets.avgPrice || 0,
+          })
+        }
+        if (j.business_hours) {
+          setBusinessHours({
+            openTime: j.business_hours.openTime || '10:00',
+            closeTime: j.business_hours.closeTime || '21:00',
+          })
+        }
+      })
       .catch(() => {})
-    // targets・businessHoursはlocalStorageから一度だけ読み込み
-    const s = getSalonSettings()
-    setSalonTargets({ sales: s.targets.sales, visits: s.targets.visits, avgPrice: s.targets.avgPrice })
-    setBusinessHours(s.businessHours)
   }, [])
 
   useEffect(() => {
@@ -277,6 +287,30 @@ export default function DashboardPage() {
       .then(r => r.json())
       .then(d => setAnnouncements((d.announcements || []).filter((a: { is_read: boolean }) => !a.is_read).slice(0, 3)))
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetchTasks().then(setManualTasksState).catch(() => {})
+    Promise.all([fetchExpiringSoonTickets(14), fetchExpiredTickets()]).then(([expiring, expired]) => {
+      const alerts: { id: string; type: string; text: string; action: string }[] = []
+      if (expired.length > 0) {
+        alerts.push({
+          id: 'course-expired',
+          type: 'alert',
+          text: `${expired.length}件の回数券が期限切れ（残り回数あり）`,
+          action: '確認する',
+        })
+      }
+      if (expiring.length > 0 && alerts.length === 0) {
+        alerts.push({
+          id: 'course-expiring',
+          type: 'alert',
+          text: `${expiring.length}件の回数券が14日以内に期限`,
+          action: '確認する',
+        })
+      }
+      setCourseAlerts(alerts)
+    })
   }, [])
 
   useEffect(() => {
@@ -313,28 +347,7 @@ export default function DashboardPage() {
         } : null)
       })
       .catch(() => {})
-    fetchTasks().then(setManualTasksState).catch(() => {})
-    Promise.all([fetchExpiringSoonTickets(14), fetchExpiredTickets()]).then(([expiring, expired]) => {
-      const alerts: { id: string; type: string; text: string; action: string }[] = []
-      if (expired.length > 0) {
-        alerts.push({
-          id: 'course-expired',
-          type: 'alert',
-          text: `${expired.length}件の回数券が期限切れ（残り回数あり）`,
-          action: '確認する',
-        })
-      }
-      if (expiring.length > 0 && alerts.length === 0) {
-        alerts.push({
-          id: 'course-expiring',
-          type: 'alert',
-          text: `${expiring.length}件の回数券が14日以内に期限`,
-          action: '確認する',
-        })
-      }
-      setCourseAlerts(alerts)
-    })
-  }, [])
+  }, [salonTargets])
 
   const toggleTaskDone = async (id: string, currentDone: boolean) => {
     const next = manualTasks.map(t => (t.id === id ? { ...t, done: !t.done } : t))
