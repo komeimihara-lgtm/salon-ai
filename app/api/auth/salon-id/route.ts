@@ -13,7 +13,9 @@ export async function POST(req: Request) {
       .from('salons')
       .select('id')
       .eq('owner_email', email)
-      .single()
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
     const salonId = data?.id || null
     const response = NextResponse.json({ salon_id: salonId })

@@ -11,6 +11,25 @@ export async function POST(req: Request) {
 
     const supabase = getSupabaseAdmin()
 
+    // 既存サロンチェック（重複防止）
+    const { data: existing } = await supabase
+      .from('salons')
+      .select('id')
+      .eq('owner_email', email)
+      .limit(1)
+      .maybeSingle()
+
+    if (existing) {
+      // 既に存在する場合はそのIDを返す
+      const response = NextResponse.json({ salon_id: existing.id })
+      response.cookies.set('salon_id', existing.id, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: 'lax',
+      })
+      return response
+    }
+
     // salons テーブルに新規レコード作成（admin clientでRLSバイパス）
     const { data: salonData, error: salonError } = await supabase
       .from('salons')
