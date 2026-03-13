@@ -32,7 +32,7 @@ export default function RegisterPage() {
 
     // 1. Supabase Auth でユーザー作成
     const supabase = createSupabaseBrowser()
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const { error: authError } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
     })
@@ -43,25 +43,30 @@ export default function RegisterPage() {
       return
     }
 
-    // 2. salons テーブルに新規レコード作成
-    const { data: salonData, error: salonError } = await supabase.from('salons').insert({
-      name: form.salonName,
-      owner_name: form.ownerName,
-      owner_email: form.email,
-      plan: form.plan,
-      status: 'active',
-      beds: '["A"]',
-    }).select('id').single()
+    // 2. サーバーAPI経由でsalonsテーブルに新規レコード作成（admin clientでRLSバイパス）
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        salonName: form.salonName,
+        ownerName: form.ownerName,
+        email: form.email,
+        plan: form.plan,
+      }),
+    })
 
-    if (salonError) {
-      setError('サロン登録に失敗しました: ' + salonError.message)
+    if (!res.ok) {
+      const { error: regError } = await res.json()
+      setError(regError || 'サロン登録に失敗しました')
       setLoading(false)
       return
     }
 
-    // 3. salon_id を cookie にセット（新規サロンのデータのみ表示されるように）
-    if (salonData?.id) {
-      document.cookie = `salon_id=${salonData.id}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`
+    const { salon_id } = await res.json()
+
+    // 3. salon_id を cookie にセット（サーバー側でもセット済みだがクライアント側でも確実に）
+    if (salon_id) {
+      document.cookie = `salon_id=${salon_id}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`
     }
 
     router.push('/dashboard')
