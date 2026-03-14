@@ -1,7 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Pencil, X, Ticket, Repeat, Tag, Settings2, Loader2, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, Trash2, Pencil, X, Ticket, Repeat, Tag, Settings2, Loader2, ArrowUp, ArrowDown, GripVertical } from 'lucide-react'
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { fetchTicketPlans, createTicketPlan, deleteTicketPlan, type TicketPlan } from '@/lib/tickets'
 import { fetchSubscriptionPlans, createSubscriptionPlan, deleteSubscriptionPlan, type SubscriptionPlan } from '@/lib/subscriptions'
 import {
@@ -11,6 +14,77 @@ import {
   DEFAULT_CATEGORIES, isCampaignActive, isCampaignExpired,
   type MenuItem, type TaxSettings, type Campaign, type CampaignType, type CampaignTargetType
 } from '@/lib/menus'
+
+// ドラッグ可能メニュー行
+function SortableMenuItem({
+  m, idx, total, editingId, editName, editDuration, editPrice, editCategory, categories,
+  setEditName, setEditDuration, setEditPrice, setEditCategory,
+  startEdit, saveEdit, setEditingId, moveMenu, removeMenu,
+}: {
+  m: MenuItem; idx: number; total: number
+  editingId: string | null; editName: string; editDuration: number; editPrice: number; editCategory: string
+  categories: string[]
+  setEditName: (v: string) => void; setEditDuration: (v: number) => void; setEditPrice: (v: number) => void; setEditCategory: (v: string) => void
+  startEdit: (m: MenuItem) => void; saveEdit: () => void; setEditingId: (v: string | null) => void
+  moveMenu: (idx: number, dir: 'up' | 'down') => void; removeMenu: (id: string) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: m.id })
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
+      {editingId === m.id ? (
+        <div className="flex-1 flex gap-2 flex-wrap items-center">
+          <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-gray-200 min-w-48 flex-1" />
+          <input type="number" value={editDuration || ''} onChange={e => setEditDuration(e.target.value === '' ? 0 : Number(e.target.value))}
+            onFocus={e => e.target.select()} className="px-3 py-1.5 rounded-lg border border-gray-200 w-20" />
+          <span className="text-text-sub text-sm">分</span>
+          <input type="number" value={editPrice || ''} onChange={e => setEditPrice(e.target.value === '' ? 0 : Number(e.target.value))}
+            onFocus={e => e.target.select()} className="px-3 py-1.5 rounded-lg border border-gray-200 w-24" />
+          <span className="text-text-sub text-sm">円</span>
+          <select value={editCategory} onChange={e => setEditCategory(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-gray-200">
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <button onClick={saveEdit}
+            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-rose to-lavender text-white text-sm">保存</button>
+          <button onClick={() => setEditingId(null)} className="p-1.5 text-text-sub rounded-lg">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <button {...attributes} {...listeners} className="p-1 text-text-sub cursor-grab active:cursor-grabbing touch-none">
+              <GripVertical className="w-4 h-4" />
+            </button>
+            <div>
+              <p className="font-medium text-text-main">{m.name}</p>
+              <p className="text-xs text-text-sub">{m.category} · {m.duration}分 · ¥{m.price.toLocaleString()}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-0.5">
+            <button onClick={() => moveMenu(idx, 'up')} disabled={idx === 0}
+              className="p-1.5 text-text-sub hover:text-rose rounded-lg disabled:opacity-30">
+              <ArrowUp className="w-4 h-4" />
+            </button>
+            <button onClick={() => moveMenu(idx, 'down')} disabled={idx === total - 1}
+              className="p-1.5 text-text-sub hover:text-rose rounded-lg disabled:opacity-30">
+              <ArrowDown className="w-4 h-4" />
+            </button>
+            <button onClick={() => startEdit(m)} className="p-2 text-text-sub hover:text-rose rounded-lg">
+              <Pencil className="w-4 h-4" />
+            </button>
+            <button onClick={() => removeMenu(m.id)} className="p-2 text-text-sub hover:text-red-600 rounded-lg">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 // インポート用メニュー型（要確認フラグ付き）
 type ImportMenuItem = MenuItem & { needsReview?: boolean }
@@ -388,6 +462,31 @@ export default function MenuSettingsPage() {
     }
   }
 
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = filteredMenus.findIndex(m => m.id === active.id)
+    const newIndex = filteredMenus.findIndex(m => m.id === over.id)
+    if (oldIndex < 0 || newIndex < 0) return
+    const reordered = arrayMove(filteredMenus, oldIndex, newIndex)
+    // ローカル state 更新
+    setMenusState(prev => {
+      const filtered = new Set(filteredMenus.map(m => m.id))
+      const others = prev.filter(m => !filtered.has(m.id))
+      return [...reordered, ...others]
+    })
+    // sort_order をDBに保存
+    try {
+      await Promise.all(reordered.map((m, i) =>
+        updateMenu(m.id, { sort_order: i } as Partial<MenuItem>)
+      ))
+    } catch {
+      alert('並び替えの保存に失敗しました')
+    }
+  }
+
   const moveMenu = async (idx: number, direction: 'up' | 'down') => {
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1
     const currentList = selectedCategory
@@ -615,56 +714,35 @@ export default function MenuSettingsPage() {
             <h3 className="text-sm font-bold text-text-main mb-3">
               メニュー {selectedCategory ? `（${selectedCategory}）` : '（全て）'}
             </h3>
-            <div className="space-y-2 mb-4">
-              {filteredMenus.map((m, idx) => (
-                <div key={m.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
-                  {editingId === m.id ? (
-                    <div className="flex-1 flex gap-2 flex-wrap items-center">
-                      <input type="text" value={editName} onChange={e => setEditName(e.target.value)}
-                        className="px-3 py-1.5 rounded-lg border border-gray-200 min-w-48 flex-1" />
-                      <input type="number" value={editDuration || ''} onChange={e => setEditDuration(e.target.value === '' ? 0 : Number(e.target.value))}
-                        onFocus={e => e.target.select()} className="px-3 py-1.5 rounded-lg border border-gray-200 w-20" />
-                      <span className="text-text-sub text-sm">分</span>
-                      <input type="number" value={editPrice || ''} onChange={e => setEditPrice(e.target.value === '' ? 0 : Number(e.target.value))}
-                        onFocus={e => e.target.select()} className="px-3 py-1.5 rounded-lg border border-gray-200 w-24" />
-                      <span className="text-text-sub text-sm">円</span>
-                      <select value={editCategory} onChange={e => setEditCategory(e.target.value)}
-                        className="px-3 py-1.5 rounded-lg border border-gray-200">
-                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                      <button onClick={saveEdit}
-                        className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-rose to-lavender text-white text-sm">保存</button>
-                      <button onClick={() => setEditingId(null)} className="p-1.5 text-text-sub rounded-lg">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <p className="font-medium text-text-main">{m.name}</p>
-                        <p className="text-xs text-text-sub">{m.category} · {m.duration}分 · ¥{m.price.toLocaleString()}</p>
-                      </div>
-                      <div className="flex items-center gap-0.5">
-                        <button onClick={() => moveMenu(idx, 'up')} disabled={idx === 0}
-                          className="p-1.5 text-text-sub hover:text-rose rounded-lg disabled:opacity-30">
-                          <ArrowUp className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => moveMenu(idx, 'down')} disabled={idx === filteredMenus.length - 1}
-                          className="p-1.5 text-text-sub hover:text-rose rounded-lg disabled:opacity-30">
-                          <ArrowDown className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => startEdit(m)} className="p-2 text-text-sub hover:text-rose rounded-lg">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => removeMenu(m.id)} className="p-2 text-text-sub hover:text-red-600 rounded-lg">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </>
-                  )}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={filteredMenus.map(m => m.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2 mb-4">
+                  {filteredMenus.map((m, idx) => (
+                    <SortableMenuItem
+                      key={m.id}
+                      m={m}
+                      idx={idx}
+                      total={filteredMenus.length}
+                      editingId={editingId}
+                      editName={editName}
+                      editDuration={editDuration}
+                      editPrice={editPrice}
+                      editCategory={editCategory}
+                      categories={categories}
+                      setEditName={setEditName}
+                      setEditDuration={setEditDuration}
+                      setEditPrice={setEditPrice}
+                      setEditCategory={setEditCategory}
+                      startEdit={startEdit}
+                      saveEdit={saveEdit}
+                      setEditingId={setEditingId}
+                      moveMenu={moveMenu}
+                      removeMenu={removeMenu}
+                    />
+                  ))}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+            </DndContext>
 
             {/* メニュー追加フォーム */}
             <div className="flex gap-2 flex-wrap pt-4 border-t border-gray-100 mt-4">
