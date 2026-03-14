@@ -74,6 +74,7 @@ const NAV_ITEMS: NavItem[] = [
   { type: 'link', href: '/products', icon: Package, label: '商品管理' },
   { type: 'link', href: '/courses', icon: Ticket, label: '回数券管理' },
   { type: 'link', href: '/subscriptions', icon: Repeat, label: 'サブスク管理' },
+  { type: 'link', href: '/contracts', icon: FileText, label: '契約書' },
   { type: 'link', href: '/staff', icon: Clock, label: 'スタッフ管理' },
   { type: 'link', href: '/settings', icon: Settings, label: 'サロン設定' },
 ]

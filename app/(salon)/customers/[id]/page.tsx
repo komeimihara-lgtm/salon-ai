@@ -17,6 +17,7 @@ import {
   MapPin,
   Calendar,
   Mail,
+  FileText,
 } from 'lucide-react'
 import {
   fetchCustomerTickets,
@@ -373,6 +374,12 @@ export default function CustomerDetailPage() {
           >
             <Edit2 className="w-3.5 h-3.5" /> 編集
           </button>
+          <Link
+            href={`/contracts/new?customer_id=${customer.id}`}
+            className="px-3 py-1.5 rounded-lg border border-rose text-rose text-sm font-medium hover:bg-rose/5 flex items-center gap-1"
+          >
+            <FileText className="w-3.5 h-3.5" /> 契約書作成
+          </Link>
           <Link
             href={`/karute?customer_id=${customer.id}`}
             className="px-3 py-1.5 rounded-lg bg-rose text-white text-sm font-medium hover:opacity-90"
