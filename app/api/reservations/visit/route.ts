@@ -28,12 +28,13 @@ export async function POST(req: NextRequest) {
     const price = Number(reservation.price ?? 0)
     const reservationDate = reservation.reservation_date
 
-    // 回数券を検索（customer_tickets）
+    // 回数券を検索（customer_tickets）— 期限が近い順に消化
     const { data: tickets } = await supabase
       .from('customer_tickets')
-      .select('id, customer_id, menu_name, remaining_sessions, unit_price, ticket_plan_id, customers(name)')
+      .select('id, customer_id, menu_name, remaining_sessions, unit_price, ticket_plan_id, expiry_date, customers(name)')
       .eq('salon_id', getSalonIdFromCookie())
       .gt('remaining_sessions', 0)
+      .order('expiry_date', { ascending: true, nullsFirst: false })
 
     const matchingTicket = (tickets || []).find((t: Record<string, unknown>) => {
       const cust = t.customers as { name?: string } | { name?: string }[] | null | undefined
@@ -57,7 +58,9 @@ export async function POST(req: NextRequest) {
       }
       if (unitPrice == null) unitPrice = 0
 
-      await supabase.from('customer_tickets').update({ remaining_sessions: newRemaining }).eq('id', matchingTicket.id)
+      const ticketUpdate: Record<string, unknown> = { remaining_sessions: newRemaining }
+      if (newRemaining === 0) ticketUpdate.status = 'expired'
+      await supabase.from('customer_tickets').update(ticketUpdate).eq('id', matchingTicket.id)
 
       await supabase.from('sales').insert({
         salon_id: getSalonIdFromCookie(),

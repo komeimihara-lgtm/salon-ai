@@ -233,15 +233,19 @@ function Timeline({
   reservations,
   shifts,
   staffColorMap,
+  blockedTimes,
   onSlotClick,
   onReservationClick,
+  onBlockDelete,
 }: {
   beds: string[]
   reservations: Reservation[]
   shifts: Shift[]
   staffColorMap: Map<string, string>
+  blockedTimes: { id: string; start_time: string; end_time: string; bed_id: string; reason: string }[]
   onSlotClick: (bed: string, time: string) => void
   onReservationClick: (r: Reservation) => void
+  onBlockDelete: (id: string) => void
 }) {
   const totalHeight = SLOTS_COUNT * ROW_HEIGHT
 
@@ -385,6 +389,27 @@ function Timeline({
                     />
                   )
                 })}
+
+                {/* ブロック時間表示 */}
+                {blockedTimes
+                  .filter(b => !b.bed_id || b.bed_id === bed)
+                  .map(b => {
+                    const bStart = timeToSlot(b.start_time)
+                    const bEnd = timeToSlot(b.end_time)
+                    const bTop = bStart * ROW_HEIGHT
+                    const bHeight = Math.max((bEnd - bStart) * ROW_HEIGHT, ROW_HEIGHT)
+                    return (
+                      <button
+                        key={b.id}
+                        onClick={() => onBlockDelete(b.id)}
+                        className="absolute left-0.5 right-0.5 bg-gray-300/70 border border-gray-400 rounded-lg z-10 flex items-center justify-center text-xs text-gray-600 font-medium cursor-pointer hover:bg-gray-400/70 transition-colors"
+                        style={{ top: `${bTop}px`, height: `${bHeight}px` }}
+                        title={b.reason || 'ブロック中（クリックで解除）'}
+                      >
+                        🚫 {b.reason || 'ブロック中'}
+                      </button>
+                    )
+                  })}
               </div>
             )
           })}
@@ -671,6 +696,12 @@ export default function ReservationsPage() {
 
   // スタッフカラーマップ
   const [staffColorMap, setStaffColorMap] = useState<Map<string, string>>(new Map())
+  const [slotActionMenu, setSlotActionMenu] = useState<{ bed: string; time: string } | null>(null)
+  const [blockModal, setBlockModal] = useState<{ date: string; time: string; bed: string } | null>(null)
+  const [blockReason, setBlockReason] = useState('')
+  const [blockEndTime, setBlockEndTime] = useState('')
+  const [blockSaving, setBlockSaving] = useState(false)
+  const [blockedTimes, setBlockedTimes] = useState<{ id: string; block_date: string; start_time: string; end_time: string; bed_id: string; reason: string }[]>([])
 
   const weekDates = useMemo(() => getWeekDates(currentWeek), [currentWeek])
   const weekStart = toDateStr(weekDates[0])
@@ -711,6 +742,17 @@ export default function ReservationsPage() {
   }, [weekStart, weekEnd])
 
   useEffect(() => { fetchReservations() }, [fetchReservations])
+
+  // ブロック時間取得
+  const fetchBlockedTimes = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/blocked-times?start=${weekStart}&end=${weekEnd}`)
+      const data = await res.json()
+      setBlockedTimes(data.blockedTimes || [])
+    } catch { setBlockedTimes([]) }
+  }, [weekStart, weekEnd])
+
+  useEffect(() => { fetchBlockedTimes() }, [fetchBlockedTimes])
 
   // 選択日のシフト取得
   useEffect(() => {
@@ -771,10 +813,57 @@ export default function ReservationsPage() {
     setDetailTarget(null)
   }
 
-  // 空き枠クリック
+  // 空き枠クリック — アクション選択
   const handleSlotClick = (bed: string, time: string) => {
-    setNewModalDefaults({ date: selectedDate, time, bed })
+    setSlotActionMenu({ bed, time })
+  }
+
+  const handleSlotNewReservation = () => {
+    if (!slotActionMenu) return
+    setNewModalDefaults({ date: selectedDate, time: slotActionMenu.time, bed: slotActionMenu.bed })
     setShowNewModal(true)
+    setSlotActionMenu(null)
+  }
+
+  const handleSlotBlock = () => {
+    if (!slotActionMenu) return
+    setBlockModal({ date: selectedDate, time: slotActionMenu.time, bed: slotActionMenu.bed })
+    setBlockReason('')
+    // デフォルト終了時間: 開始+1時間
+    const [h, m] = slotActionMenu.time.split(':').map(Number)
+    const endH = Math.min(h + 1, 23)
+    setBlockEndTime(`${endH.toString().padStart(2, '0')}:${(m || 0).toString().padStart(2, '0')}`)
+    setSlotActionMenu(null)
+  }
+
+  const handleBlockSave = async () => {
+    if (!blockModal) return
+    setBlockSaving(true)
+    try {
+      await fetch('/api/blocked-times', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          block_date: blockModal.date,
+          start_time: blockModal.time,
+          end_time: blockEndTime,
+          bed_id: blockModal.bed,
+          reason: blockReason,
+        }),
+      })
+      setBlockModal(null)
+      fetchBlockedTimes()
+    } catch {
+      alert('ブロック登録に失敗しました')
+    } finally {
+      setBlockSaving(false)
+    }
+  }
+
+  const handleBlockDelete = async (id: string) => {
+    if (!confirm('ブロックを解除しますか？')) return
+    await fetch(`/api/blocked-times?id=${id}`, { method: 'DELETE' })
+    fetchBlockedTimes()
   }
 
   return (
@@ -823,8 +912,10 @@ export default function ReservationsPage() {
           reservations={selectedReservations}
           shifts={shifts}
           staffColorMap={staffColorMap}
+          blockedTimes={blockedTimes.filter(b => b.block_date === selectedDate)}
           onSlotClick={handleSlotClick}
           onReservationClick={setDetailTarget}
+          onBlockDelete={handleBlockDelete}
         />
       )}
 
@@ -877,6 +968,55 @@ export default function ReservationsPage() {
           onClose={() => setEditTarget(null)}
           onSaved={() => { setEditTarget(null); fetchReservations() }}
         />
+      )}
+
+      {/* 空き枠アクション選択 */}
+      {slotActionMenu && (
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center p-4" onClick={() => setSlotActionMenu(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-xs p-4 space-y-2 card-shadow" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-bold text-text-main text-center mb-2">{slotActionMenu.bed} · {slotActionMenu.time}</p>
+            <button onClick={handleSlotNewReservation}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold text-sm">
+              + 新規予約
+            </button>
+            <button onClick={handleSlotBlock}
+              className="w-full py-3 rounded-xl bg-gray-200 text-text-main font-bold text-sm">
+              🚫 ブロック
+            </button>
+            <button onClick={() => setSlotActionMenu(null)}
+              className="w-full py-2 text-sm text-text-sub">
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ブロック登録モーダル */}
+      {blockModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 space-y-3 card-shadow">
+            <h3 className="font-bold text-text-main">🚫 ブロック時間を設定</h3>
+            <p className="text-xs text-text-sub">{blockModal.date} · {blockModal.bed} · {blockModal.time}〜</p>
+            <div>
+              <label className="text-xs text-text-sub mb-1 block">終了時間</label>
+              <input type="time" value={blockEndTime} onChange={e => setBlockEndTime(e.target.value)}
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-rose outline-none" />
+            </div>
+            <div>
+              <label className="text-xs text-text-sub mb-1 block">理由（任意）</label>
+              <input value={blockReason} onChange={e => setBlockReason(e.target.value)}
+                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-rose outline-none"
+                placeholder="例: 機材メンテナンス" />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => setBlockModal(null)} className="flex-1 py-2 rounded-xl border text-sm">キャンセル</button>
+              <button onClick={handleBlockSave} disabled={blockSaving}
+                className="flex-1 py-2 rounded-xl bg-gray-700 text-white font-medium text-sm disabled:opacity-50">
+                {blockSaving ? '保存中...' : 'ブロック登録'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

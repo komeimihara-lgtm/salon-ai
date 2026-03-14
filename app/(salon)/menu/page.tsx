@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Pencil, X, Ticket, Repeat, Tag, Settings2, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Pencil, X, Ticket, Repeat, Tag, Settings2, Loader2, ArrowUp, ArrowDown } from 'lucide-react'
 import { fetchTicketPlans, createTicketPlan, deleteTicketPlan, type TicketPlan } from '@/lib/tickets'
 import { fetchSubscriptionPlans, createSubscriptionPlan, deleteSubscriptionPlan, type SubscriptionPlan } from '@/lib/subscriptions'
 import {
@@ -298,7 +298,7 @@ export default function MenuSettingsPage() {
   const [coursePrice, setCoursePrice] = useState(40000)
   const [courseExpiryDays, setCourseExpiryDays] = useState(180)
   const [subName, setSubName] = useState('')
-  const [subMenuName, setSubMenuName] = useState('')
+  const [subMenuNames, setSubMenuNames] = useState<string[]>([])
   const [subCategory, setSubCategory] = useState('')
   const [subPrice, setSubPrice] = useState(8000)
   const [subSessions, setSubSessions] = useState(2)
@@ -316,7 +316,7 @@ export default function MenuSettingsPage() {
         setSelectedCategory(c[0] ?? '')
         setNewCategory(c[0] ?? '')
         setCourseMenuName(m[0]?.name ?? '')
-        setSubMenuName(m[0]?.name ?? '')
+        setSubMenuNames(m[0]?.name ? [m[0].name] : [])
         setCourseCategory(c[0] ?? '')
         setSubCategory(c[0] ?? '')
       })
@@ -385,6 +385,30 @@ export default function MenuSettingsPage() {
       setEditingId(null)
     } catch {
       alert('更新に失敗しました')
+    }
+  }
+
+  const moveMenu = async (idx: number, direction: 'up' | 'down') => {
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    const currentList = selectedCategory
+      ? menus.filter(m => m.category === selectedCategory)
+      : menus
+    if (swapIdx < 0 || swapIdx >= currentList.length) return
+    const a = currentList[idx]
+    const b = currentList[swapIdx]
+    try {
+      await updateMenu(a.id, { sort_order: swapIdx } as Partial<MenuItem>)
+      await updateMenu(b.id, { sort_order: idx } as Partial<MenuItem>)
+      // ローカル state を入れ替え
+      setMenusState(prev => {
+        const next = [...prev]
+        const ai = next.findIndex(m => m.id === a.id)
+        const bi = next.findIndex(m => m.id === b.id)
+        if (ai >= 0 && bi >= 0) [next[ai], next[bi]] = [next[bi], next[ai]]
+        return next
+      })
+    } catch {
+      alert('並び替えに失敗しました')
     }
   }
 
@@ -480,7 +504,7 @@ export default function MenuSettingsPage() {
     try {
       const plan = await createSubscriptionPlan({
         name: subName.trim(),
-        menuName: subMenuName,
+        menuName: subMenuNames.join(', '),
         price: subPrice,
         sessionsPerMonth: subSessions,
         billingDay: Math.min(28, Math.max(1, subBillingDay)),
@@ -592,7 +616,7 @@ export default function MenuSettingsPage() {
               メニュー {selectedCategory ? `（${selectedCategory}）` : '（全て）'}
             </h3>
             <div className="space-y-2 mb-4">
-              {filteredMenus.map(m => (
+              {filteredMenus.map((m, idx) => (
                 <div key={m.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
                   {editingId === m.id ? (
                     <div className="flex-1 flex gap-2 flex-wrap items-center">
@@ -620,7 +644,15 @@ export default function MenuSettingsPage() {
                         <p className="font-medium text-text-main">{m.name}</p>
                         <p className="text-xs text-text-sub">{m.category} · {m.duration}分 · ¥{m.price.toLocaleString()}</p>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => moveMenu(idx, 'up')} disabled={idx === 0}
+                          className="p-1.5 text-text-sub hover:text-rose rounded-lg disabled:opacity-30">
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => moveMenu(idx, 'down')} disabled={idx === filteredMenus.length - 1}
+                          className="p-1.5 text-text-sub hover:text-rose rounded-lg disabled:opacity-30">
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
                         <button onClick={() => startEdit(m)} className="p-2 text-text-sub hover:text-rose rounded-lg">
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -955,10 +987,20 @@ export default function MenuSettingsPage() {
               className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
               {(categories.length ? categories : DEFAULT_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select value={subMenuName} onChange={e => setSubMenuName(e.target.value)}
-              className="px-4 py-2 rounded-xl border border-gray-200 outline-none">
-              {menus.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-            </select>
+            <div className="w-full">
+              <p className="text-xs text-text-sub mb-1">メニュー（複数選択可）</p>
+              <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-xl p-2 space-y-1">
+                {menus.map(m => (
+                  <label key={m.id} className={`flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-light-lav ${subMenuNames.includes(m.name) ? 'bg-light-lav' : ''}`}>
+                    <input type="checkbox" checked={subMenuNames.includes(m.name)}
+                      onChange={() => setSubMenuNames(prev => prev.includes(m.name) ? prev.filter(n => n !== m.name) : [...prev, m.name])}
+                      className="accent-rose" />
+                    <span className="text-sm">{m.name}</span>
+                  </label>
+                ))}
+              </div>
+              {subMenuNames.length > 0 && <p className="text-xs text-rose mt-1">{subMenuNames.length}件選択</p>}
+            </div>
             <input type="number" value={subPrice || ''} onChange={e => setSubPrice(e.target.value === '' ? 0 : Number(e.target.value))}
               onFocus={e => e.target.select()} className="px-4 py-2 rounded-xl border border-gray-200 outline-none w-24" />
             <span className="self-center text-text-sub text-sm">円/月</span>

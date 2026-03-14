@@ -453,6 +453,7 @@ function NewCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
     name: '', name_kana: '', phone: '', email: '',
     birthday: '', gender: 'female', memo: '',
     first_visit_date: '', last_visit_date: '',
+    ticket_remaining: '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -461,12 +462,26 @@ function NewCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
     if (!form.name.trim()) { setError('氏名は必須です'); return }
     setSaving(true)
     try {
+      const { ticket_remaining, ...customerData } = form
       const res = await fetch('/api/customers/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(customerData),
       })
       if (!res.ok) throw new Error()
+      const { customer } = await res.json()
+      // 回数券残り回数が入力されていたら登録
+      const remaining = parseInt(ticket_remaining)
+      if (remaining > 0 && customer?.id) {
+        await fetch('/api/customer-tickets/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_id: customer.id,
+            remaining_count: remaining,
+          }),
+        })
+      }
       onSaved()
       onClose()
     } catch {
@@ -572,6 +587,17 @@ function NewCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
               rows={3}
               className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2] resize-none"
               placeholder="肌タイプ、アレルギー、特記事項など"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-[#4A5568] mb-1 block">回数券 残り回数（任意）</label>
+            <input
+              type="number"
+              min={0}
+              value={form.ticket_remaining}
+              onChange={e => setForm(p => ({ ...p, ticket_remaining: e.target.value }))}
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+              placeholder="例: 5"
             />
           </div>
         </div>
