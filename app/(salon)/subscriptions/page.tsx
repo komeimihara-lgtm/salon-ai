@@ -147,27 +147,54 @@ export default function SubscriptionsPage() {
                         </span>
                       </td>
                       <td className="p-3">
-                        {s.status === 'active' && remaining > 0 && (
-                          <button
-                            onClick={() => setUseModalOpen(s)}
-                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded-lg"
-                          >
-                            <Minus className="w-3 h-3" />
-                            1回利用
-                          </button>
-                        )}
-                        {s.status === 'paused' && (
-                          <button
-                            onClick={async () => {
-                              await resumeSubscription(s.id)
-                              refresh()
-                            }}
-                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-600"
-                          >
-                            <Play className="w-3 h-3" />
-                            再開
-                          </button>
-                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {s.status === 'active' && remaining > 0 && (
+                            <button
+                              onClick={() => setUseModalOpen(s)}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded-lg"
+                            >
+                              <Minus className="w-3 h-3" />
+                              利用
+                            </button>
+                          )}
+                          {s.status === 'active' && (
+                            <button
+                              onClick={async () => {
+                                await pauseSubscription(s.id)
+                                refresh()
+                              }}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50 rounded-lg"
+                            >
+                              <Pause className="w-3 h-3" />
+                              停止
+                            </button>
+                          )}
+                          {s.status === 'paused' && (
+                            <button
+                              onClick={async () => {
+                                await resumeSubscription(s.id)
+                                refresh()
+                              }}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg"
+                            >
+                              <Play className="w-3 h-3" />
+                              再開
+                            </button>
+                          )}
+                          {(s.status === 'active' || s.status === 'paused') && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`${s.customerName}の「${s.planName}」を解約しますか？`)) return
+                                await cancelSubscription(s.id)
+                                refresh()
+                              }}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 rounded-lg"
+                            >
+                              <X className="w-3 h-3" />
+                              解約
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )
