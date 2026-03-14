@@ -28,7 +28,7 @@ export default function MenuSettingsPage() {
   const [subPlans, setSubPlansState] = useState<SubscriptionPlan[]>([])
   const [subPlansLoading, setSubPlansLoading] = useState(true)
   const [subName, setSubName] = useState('')
-  const [subMenuName, setSubMenuName] = useState('')
+  const [subMenuNames, setSubMenuNames] = useState<string[]>([])
   const [subPrice, setSubPrice] = useState(8000)
   const [subSessions, setSubSessions] = useState(2)
   const [subBillingDay, setSubBillingDay] = useState(1)
@@ -40,7 +40,7 @@ export default function MenuSettingsPage() {
         setMenusLoading(false)
         if (m.length > 0) {
           setCourseMenuName(m[0].name)
-          setSubMenuName(m[0].name)
+          setSubMenuNames([m[0].name])
         }
       }).catch(() => setMenusLoading(false))
     })
@@ -124,18 +124,18 @@ export default function MenuSettingsPage() {
   }
 
   const addSubPlan = async () => {
-    if (!subName.trim() || !subMenuName.trim()) return
+    if (!subName.trim() || subMenuNames.length === 0) return
     try {
       const plan = await createSubscriptionPlan({
         name: subName.trim(),
-        menuName: subMenuName.trim(),
+        menuName: subMenuNames.join(', '),
         price: subPrice,
         sessionsPerMonth: subSessions,
         billingDay: Math.min(28, Math.max(1, subBillingDay)),
       })
       setSubPlansState(prev => [...prev, plan])
       setSubName('')
-      setSubMenuName(menus[0]?.name ?? '')
+      setSubMenuNames([])
       setSubPrice(8000)
       setSubSessions(2)
       setSubBillingDay(1)
@@ -399,15 +399,20 @@ export default function MenuSettingsPage() {
                 placeholder="例: 月額プレミアム"
                 className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-36"
               />
-              <select
-                value={subMenuName}
-                onChange={e => setSubMenuName(e.target.value)}
-                className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
-              >
-                {menus.map(m => (
-                  <option key={m.id} value={m.name}>{m.name}</option>
-                ))}
-              </select>
+              <div className="w-full">
+                <p className="text-xs text-text-sub mb-1">メニュー（複数選択可）</p>
+                <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-xl p-2 space-y-1">
+                  {menus.map(m => (
+                    <label key={m.id} className={`flex items-center gap-2 px-2 py-1 rounded-lg cursor-pointer hover:bg-rose/5 ${subMenuNames.includes(m.name) ? 'bg-rose/10' : ''}`}>
+                      <input type="checkbox" checked={subMenuNames.includes(m.name)}
+                        onChange={() => setSubMenuNames(prev => prev.includes(m.name) ? prev.filter(n => n !== m.name) : [...prev, m.name])}
+                        className="accent-rose" />
+                      <span className="text-sm">{m.name}</span>
+                    </label>
+                  ))}
+                </div>
+                {subMenuNames.length > 0 && <p className="text-xs text-rose mt-1">{subMenuNames.length}件選択</p>}
+              </div>
               <input
                 type="number"
                 value={subPrice}
