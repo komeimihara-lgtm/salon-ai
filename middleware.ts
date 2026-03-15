@@ -36,8 +36,12 @@ export async function middleware(req: NextRequest) {
 
   // ルートアクセスは /dashboard にリダイレクト
   if (req.nextUrl.pathname === '/') {
-    const redirectRes = NextResponse.redirect(new URL('/dashboard', req.url))
-    return redirectRes
+    return NextResponse.redirect(new URL('/dashboard', req.url))
+  }
+
+  // 未ログインユーザーは /login にリダイレクト
+  if (!session) {
+    return NextResponse.redirect(new URL('/login', req.url))
   }
 
   // ログイン済みユーザー: 常にsalon_idを検証・セット
