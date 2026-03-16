@@ -122,6 +122,12 @@ export default function CustomerDetailPage() {
   const [unmatchedUsers, setUnmatchedUsers] = useState<{ line_user_id: string; followed_at: string }[]>([])
   const [linkingLine, setLinkingLine] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  // 既存コース登録
+  const [existingCourseOpen, setExistingCourseOpen] = useState(false)
+  const [existingCourseName, setExistingCourseName] = useState('')
+  const [existingCourseCount, setExistingCourseCount] = useState(5)
+  const [existingCourseExpiry, setExistingCourseExpiry] = useState('')
+  const [existingCourseSaving, setExistingCourseSaving] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Customer>>({})
   const [editSaving, setEditSaving] = useState(false)
@@ -343,6 +349,38 @@ export default function CustomerDetailPage() {
     }
   }
 
+  const handleExistingCourse = async () => {
+    if (!customer || !existingCourseName.trim() || existingCourseCount <= 0) return
+    setExistingCourseSaving(true)
+    try {
+      const res = await fetch('/api/customer-tickets/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: customer.id,
+          plan_name: existingCourseName.trim(),
+          remaining_count: existingCourseCount,
+          expiry_date: existingCourseExpiry || null,
+          is_existing: true,
+        }),
+      })
+      if (res.ok) {
+        await refresh()
+        setExistingCourseOpen(false)
+        setExistingCourseName('')
+        setExistingCourseCount(5)
+        setExistingCourseExpiry('')
+        showToast('既存コースを登録しました')
+      } else {
+        alert('登録に失敗しました')
+      }
+    } catch {
+      alert('登録に失敗しました')
+    } finally {
+      setExistingCourseSaving(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
@@ -468,12 +506,20 @@ export default function CustomerDetailPage() {
             <Ticket className="w-4 h-4 text-rose" />
             保有回数券
           </h2>
-          <button
-            onClick={() => setPurchaseOpen(true)}
-            className="text-xs font-semibold text-rose hover:underline"
-          >
-            + 購入
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setExistingCourseOpen(true)}
+              className="text-xs font-semibold text-[#0891B2] hover:underline"
+            >
+              + 既存コース
+            </button>
+            <button
+              onClick={() => setPurchaseOpen(true)}
+              className="text-xs font-semibold text-rose hover:underline"
+            >
+              + 購入
+            </button>
+          </div>
         </div>
         {ticketsLoading ? (
           <p className="text-sm text-text-sub py-4 flex items-center gap-2">
@@ -981,6 +1027,67 @@ export default function CustomerDetailPage() {
       {toast && (
         <div className="fixed bottom-6 right-6 z-[70] px-6 py-4 rounded-2xl shadow-lg bg-emerald-600 text-white font-medium">
           {toast}
+        </div>
+      )}
+
+      {/* 既存コース登録モーダル */}
+      {existingCourseOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">既存コースを登録</h3>
+              <button onClick={() => setExistingCourseOpen(false)} className="p-2 text-text-sub">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-text-sub mb-3">他サロンや以前のコースを登録できます（売上計上なし）</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">コース名 *</label>
+                <input
+                  type="text"
+                  value={existingCourseName}
+                  onChange={e => setExistingCourseName(e.target.value)}
+                  placeholder="例: 全身脱毛コース"
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">残り回数 *</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={existingCourseCount}
+                  onChange={e => setExistingCourseCount(parseInt(e.target.value) || 0)}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">有効期限（任意）</label>
+                <input
+                  type="date"
+                  value={existingCourseExpiry}
+                  onChange={e => setExistingCourseExpiry(e.target.value)}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setExistingCourseOpen(false)}
+                className="flex-1 py-2 rounded-xl border"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleExistingCourse}
+                disabled={existingCourseSaving || !existingCourseName.trim() || existingCourseCount <= 0}
+                className="flex-1 py-2 rounded-xl bg-[#0891B2] text-white font-medium disabled:opacity-50"
+              >
+                {existingCourseSaving ? '登録中...' : '登録'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

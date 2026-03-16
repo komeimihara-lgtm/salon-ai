@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     exists: !!data,
+    customer_id: data?.id || null,
     name: data?.name || '',
     phone: data?.phone || '',
   })

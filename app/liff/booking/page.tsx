@@ -9,6 +9,8 @@ declare global {
 
 interface MenuItem { id: string; name: string; duration: number; price: number; category: string }
 interface Slot { staff_id: string; staff_name: string; staff_color: string; start: string; end: string; bed_id?: string }
+interface CourseTicket { id: string; plan_name: string; menu_name: string; remaining_count: number; total_sessions: number; ticket_type: 'ticket' }
+interface CourseSub { id: string; plan_name: string; menu_name: string; sessions_per_month: number; sessions_used: number; ticket_type: 'subscription' }
 
 const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
 
@@ -42,6 +44,12 @@ export default function LiffBookingPage() {
 
   const [menus, setMenus] = useState<MenuItem[]>([])
   const [slots, setSlots] = useState<Slot[]>([])
+
+  // コース消化
+  const [courseTickets, setCourseTickets] = useState<CourseTicket[]>([])
+  const [courseSubs, setCourseSubs] = useState<CourseSub[]>([])
+  const [selectedCourse, setSelectedCourse] = useState<{ type: 'ticket' | 'subscription'; id: string; name: string; duration: number } | null>(null)
+  const [customerId, setCustomerId] = useState<string | null>(null)
 
   // 空き状況カレンダー
   const [weekOffset, setWeekOffset] = useState(0)
@@ -146,8 +154,23 @@ export default function LiffBookingPage() {
     finally { setSlotsLoading(false) }
   }
 
+  // 顧客のコース情報を取得
+  const fetchCourses = async (custId: string) => {
+    try {
+      const res = await fetch(`/api/customers/${custId}/tickets`)
+      const json = await res.json()
+      setCourseTickets(json.tickets || [])
+      setCourseSubs(json.subscriptions || [])
+      setCustomerId(custId)
+    } catch {
+      setCourseTickets([])
+      setCourseSubs([])
+    }
+  }
+
   const handleSelectMenu = async (menu: MenuItem) => {
     setSelectedMenu(menu)
+    setSelectedCourse(null)
     setAvailMap({})
     fetchedRef.current.clear()
     setWeekOffset(0)
@@ -156,10 +179,13 @@ export default function LiffBookingPage() {
       try {
         const res = await fetch(`/api/liff/check-customer?line_user_id=${lineUserId}`)
         const json = await res.json()
-        setStep(json.exists ? 'date' : 'profile')
         if (json.exists && json.name) setProfileName(json.name)
         if (json.exists && json.phone) setProfilePhone(json.phone)
         setIsFirstTime(!json.exists)
+        if (json.exists && json.customer_id) {
+          await fetchCourses(json.customer_id)
+        }
+        setStep(json.exists ? 'date' : 'profile')
       } catch {
         setStep('profile')
         setIsFirstTime(true)
@@ -168,6 +194,16 @@ export default function LiffBookingPage() {
       setStep('profile')
       setIsFirstTime(true)
     }
+  }
+
+  const handleSelectCourse = (course: { type: 'ticket' | 'subscription'; id: string; name: string; duration: number }) => {
+    setSelectedCourse(course)
+    // コース消化用のメニュー情報をセット
+    setSelectedMenu({ id: 'course', name: course.name, duration: course.duration || 60, price: 0, category: 'コース消化' })
+    setAvailMap({})
+    fetchedRef.current.clear()
+    setWeekOffset(0)
+    setStep('date')
   }
 
   const handleSelectDate = (date: Date) => {
@@ -193,7 +229,7 @@ export default function LiffBookingPage() {
           menu_id: selectedMenu.id,
           menu_name: selectedMenu.name,
           duration: selectedMenu.duration,
-          price: selectedMenu.price,
+          price: selectedCourse ? 0 : selectedMenu.price,
           date: toDateStr(selectedDate),
           start_time: selectedSlot.start,
           end_time: selectedSlot.end,
@@ -201,6 +237,9 @@ export default function LiffBookingPage() {
           staff_name: selectedSlot.staff_name,
           bed_id: selectedSlot.bed_id,
           memo,
+          is_course: !!selectedCourse,
+          ticket_id: selectedCourse?.type === 'ticket' ? selectedCourse.id : undefined,
+          subscription_id: selectedCourse?.type === 'subscription' ? selectedCourse.id : undefined,
         })
       })
       if (res.ok) setStep('done')
@@ -282,6 +321,36 @@ export default function LiffBookingPage() {
         {step === 'menu' && (
           <div className="space-y-4">
             <h2 className="font-bold text-gray-700">メニューを選択</h2>
+
+            {/* 保有コース表示 */}
+            {(courseTickets.length > 0 || courseSubs.length > 0) && (
+              <div>
+                <p className="text-xs font-bold text-emerald-500 mb-2">あなたのコース</p>
+                <div className="space-y-2">
+                  {courseTickets.map(t => (
+                    <button key={t.id} onClick={() => handleSelectCourse({ type: 'ticket', id: t.id, name: t.menu_name || t.plan_name, duration: 60 })}
+                      className="w-full bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-left flex items-center justify-between hover:shadow-md transition-all">
+                      <div>
+                        <p className="font-bold text-gray-800">{t.plan_name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">残り{t.remaining_count}/{t.total_sessions}回</p>
+                      </div>
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded-lg">コース消化</span>
+                    </button>
+                  ))}
+                  {courseSubs.map(s => (
+                    <button key={s.id} onClick={() => handleSelectCourse({ type: 'subscription', id: s.id, name: s.menu_name || s.plan_name, duration: 60 })}
+                      className="w-full bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-left flex items-center justify-between hover:shadow-md transition-all">
+                      <div>
+                        <p className="font-bold text-gray-800">{s.plan_name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">今月残り{s.sessions_per_month - s.sessions_used}/{s.sessions_per_month}回</p>
+                      </div>
+                      <span className="text-xs font-bold text-emerald-600 bg-emerald-100 px-2 py-1 rounded-lg">サブスク消化</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {Object.entries(groupedMenus).map(([cat, items]) => (
               <div key={cat}>
                 <p className="text-xs font-bold text-gray-400 mb-2 uppercase">{cat}</p>
@@ -472,7 +541,7 @@ export default function LiffBookingPage() {
                 { label: 'お名前', value: profileName || displayName },
                 { label: '電話番号', value: profilePhone || '未入力' },
                 { label: 'メニュー', value: selectedMenu?.name },
-                { label: '料金', value: `¥${selectedMenu?.price.toLocaleString()}` },
+                { label: '料金', value: selectedCourse ? 'コース消化（¥0）' : `¥${selectedMenu?.price.toLocaleString()}` },
                 { label: '施術時間', value: `${selectedMenu?.duration}分` },
                 { label: '日付', value: `${selectedDate?.getMonth()! + 1}月${selectedDate?.getDate()}日（${WEEKDAYS[(selectedDate?.getDay()! + 6) % 7]}）` },
                 { label: '時間', value: `${selectedSlot?.start} 〜 ${selectedSlot?.end}` },

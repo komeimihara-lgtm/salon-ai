@@ -65,24 +65,29 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const insertData: Record<string, unknown> = {
+      salon_id: salonId,
+      customer_id: body.customer_id || null,
+      customer_name: body.customer_name,
+      customer_phone: body.customer_phone || null,
+      reservation_date,
+      start_time,
+      end_time,
+      menu: body.menu || null,
+      staff_name,
+      price: body.is_course ? 0 : (body.price || 0),
+      status: 'confirmed',
+      memo: body.memo || null,
+      bed_id,
+      duration_minutes: durationMin,
+      is_course: body.is_course || false,
+      ticket_id: body.ticket_id || null,
+      subscription_id: body.subscription_id || null,
+    }
+
     const { data, error } = await supabase
       .from('reservations')
-      .insert({
-        salon_id: salonId,
-        customer_id: body.customer_id || null,
-        customer_name: body.customer_name,
-        customer_phone: body.customer_phone || null,
-        reservation_date,
-        start_time,
-        end_time,
-        menu: body.menu || null,
-        staff_name,
-        price: body.price || 0,
-        status: 'confirmed',
-        memo: body.memo || null,
-        bed_id,
-        duration_minutes: durationMin,
-      })
+      .insert(insertData)
       .select()
       .single()
 

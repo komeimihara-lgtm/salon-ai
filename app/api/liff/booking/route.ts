@@ -62,6 +62,8 @@ export async function POST(req: NextRequest) {
     customer = newCustomer
   }
 
+  const isCourse = body.is_course || false
+
   // 予約を登録
   const { data: reservation, error } = await supabase
     .from('reservations')
@@ -76,10 +78,13 @@ export async function POST(req: NextRequest) {
       menu: menu_name,
       staff_name,
       bed_id: bed_id || null,
-      price: price || 0,
+      price: isCourse ? 0 : (price || 0),
       duration_minutes: duration || 60,
       memo: memo || '',
       status: 'confirmed',
+      is_course: isCourse,
+      ticket_id: body.ticket_id || null,
+      subscription_id: body.subscription_id || null,
     })
     .select()
     .single()
@@ -103,7 +108,7 @@ export async function POST(req: NextRequest) {
           to: line_user_id,
           messages: [{
             type: 'text',
-            text: `✅ ご予約が確定しました！\n\n📋 ${menu_name}\n📅 ${dateLabel}\n⏰ ${start_time}〜${end_time}\n${staff_name ? `👤 担当：${staff_name}\n` : ''}💴 料金：¥${(price ?? 0).toLocaleString()}\n\n${memo ? `📝 ${memo}\n\n` : ''}ご来店をお待ちしております✨\n\n「予約確認」と送っていただくといつでもご予約内容を確認できます😊`
+            text: `✅ ご予約が確定しました！\n\n📋 ${menu_name}\n📅 ${dateLabel}\n⏰ ${start_time}〜${end_time}\n${staff_name ? `👤 担当：${staff_name}\n` : ''}💴 ${isCourse ? 'コース消化（¥0）' : `料金：¥${(price ?? 0).toLocaleString()}`}\n\n${memo ? `📝 ${memo}\n\n` : ''}ご来店をお待ちしております✨\n\n「予約確認」と送っていただくといつでもご予約内容を確認できます😊`
           }]
         })
       })
