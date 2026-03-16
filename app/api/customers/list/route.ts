@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
       .from('customers')
       .select('*', { count: 'exact' })
       .eq('salon_id', getSalonIdFromCookie())
-      .order('name', { ascending: true })
+      .order('sort_kana', { ascending: true })
       .range(offset, offset + limit - 1)
 
     if (search) {
