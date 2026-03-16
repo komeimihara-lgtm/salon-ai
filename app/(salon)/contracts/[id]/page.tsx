@@ -15,6 +15,7 @@ interface ContractData {
   end_date: string | null
   amount: number
   payment_method: string
+  payment_detail: { type: string; count: number; monthly: number; first: number; note: string } | null
   status: string
   signature_image: string | null
   signed_at: string | null
@@ -338,6 +339,19 @@ export default function ContractDetailPage() {
             </p>
             <p>契約金額: ¥{contract.amount.toLocaleString()}（税込）</p>
             <p>支払方法: {contract.payment_method === 'lump_sum' ? '一括払い' : '分割払い'}</p>
+            {contract.payment_method === 'installment' && contract.payment_detail && (
+              <>
+                <p>分割回数: 全{contract.payment_detail.count}回</p>
+                {contract.payment_detail.first > 0 && (
+                  <p>初回金額: ¥{contract.payment_detail.first.toLocaleString()}</p>
+                )}
+                {contract.payment_detail.monthly > 0 && (
+                  <p>月額: ¥{contract.payment_detail.monthly.toLocaleString()}
+                    {contract.payment_detail.note ? `（${contract.payment_detail.note}）` : ''}
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </div>
 

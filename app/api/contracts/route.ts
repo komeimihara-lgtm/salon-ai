@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const salonId = getSalonIdFromCookie()
     const {
       customer_id, course_name, treatment_content,
-      sessions, start_date, end_date, amount, payment_method,
+      sessions, start_date, end_date, amount, payment_method, payment_detail,
     } = body
 
     if (!customer_id || !course_name || amount == null) {
@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
         end_date: end_date || null,
         amount: Number(amount),
         payment_method: payment_method || 'lump_sum',
+        payment_detail: payment_detail || null,
         status: 'draft',
       })
       .select()
