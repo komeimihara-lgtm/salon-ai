@@ -18,6 +18,9 @@ import {
   Calendar,
   Mail,
   FileText,
+  Plus,
+  Trash2,
+  Pencil,
 } from 'lucide-react'
 import {
   fetchCustomerTickets,
@@ -134,6 +137,10 @@ export default function CustomerDetailPage() {
   const [visits, setVisits] = useState<VisitRecord[]>([])
   const [visitsLoading, setVisitsLoading] = useState(false)
   const [visitsExpanded, setVisitsExpanded] = useState(false)
+  const [visitModalOpen, setVisitModalOpen] = useState(false)
+  const [visitEditing, setVisitEditing] = useState<VisitRecord | null>(null)
+  const [visitForm, setVisitForm] = useState({ visit_date: '', menu: '', staff_name: '', amount: '' })
+  const [visitSaving, setVisitSaving] = useState(false)
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -198,6 +205,70 @@ export default function CustomerDetailPage() {
       setVisitsLoading(false)
     }
   }, [id])
+
+  const openVisitAdd = () => {
+    setVisitEditing(null)
+    setVisitForm({ visit_date: new Date().toISOString().slice(0, 10), menu: '', staff_name: '', amount: '' })
+    setVisitModalOpen(true)
+  }
+
+  const openVisitEdit = (v: VisitRecord) => {
+    setVisitEditing(v)
+    setVisitForm({
+      visit_date: v.visit_date || '',
+      menu: v.menu || '',
+      staff_name: v.staff_name || '',
+      amount: v.amount != null ? String(v.amount) : '',
+    })
+    setVisitModalOpen(true)
+  }
+
+  const handleVisitSave = async () => {
+    if (!id) return
+    setVisitSaving(true)
+    try {
+      const payload: Record<string, unknown> = {
+        visit_date: visitForm.visit_date,
+        menu: visitForm.menu,
+        staff_name: visitForm.staff_name,
+        amount: visitForm.amount ? Number(visitForm.amount) : null,
+      }
+      if (visitEditing) {
+        payload.visitId = visitEditing.id
+        await fetch(`/api/customers/${id}/visits`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      } else {
+        await fetch(`/api/customers/${id}/visits`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      }
+      await fetchVisits()
+      await fetchCustomer()
+      setVisitModalOpen(false)
+      showToast(visitEditing ? '来店履歴を更新しました' : '来店履歴を追加しました')
+    } catch {
+      showToast('保存に失敗しました')
+    } finally {
+      setVisitSaving(false)
+    }
+  }
+
+  const handleVisitDelete = async (visitId: string) => {
+    if (!confirm('この来店履歴を削除しますか？')) return
+    try {
+      await fetch(`/api/customers/${id}/visits?visitId=${visitId}`, { method: 'DELETE' })
+      await fetchVisits()
+      await fetchCustomer()
+      showToast('来店履歴を削除しました')
+    } catch {
+      showToast('削除に失敗しました')
+    }
+  }
 
   const fetchUnmatchedUsers = async () => {
     const res = await fetch('/api/line/unmatched')
@@ -656,10 +727,19 @@ export default function CustomerDetailPage() {
 
       {/* 来店・売上履歴 */}
       <div className="bg-white rounded-2xl p-5 card-shadow mb-6">
-        <h2 className="font-semibold text-text-main flex items-center gap-2 mb-3">
-          <Receipt className="w-4 h-4 text-rose" />
-          来店・売上履歴
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-text-main flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-rose" />
+            来店・売上履歴
+          </h2>
+          <button
+            onClick={openVisitAdd}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-rose text-white text-xs font-bold hover:opacity-90 transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            追加
+          </button>
+        </div>
         {visitsLoading ? (
           <p className="text-sm text-text-sub py-4 flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> 読み込み中...
@@ -671,15 +751,23 @@ export default function CustomerDetailPage() {
             <div className="space-y-2">
               {(visitsExpanded ? visits : visits.slice(0, 10)).map(v => (
                 <div key={v.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#F8F5FF] border border-[#BAE6FD]">
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[#1A202C]">{v.menu || '—'}</p>
                     <p className="text-xs text-[#4A5568]">
                       {v.visit_date}{v.staff_name ? ` · ${v.staff_name}` : ''}
                     </p>
                   </div>
-                  {v.amount != null && (
-                    <p className="text-sm font-bold text-[#1A202C]">¥{v.amount.toLocaleString()}</p>
-                  )}
+                  <div className="flex items-center gap-2 ml-2 shrink-0">
+                    {v.amount != null && (
+                      <p className="text-sm font-bold text-[#1A202C]">¥{v.amount.toLocaleString()}</p>
+                    )}
+                    <button onClick={() => openVisitEdit(v)} className="p-1 text-[#4A5568] hover:text-rose transition" title="編集">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => handleVisitDelete(v.id)} className="p-1 text-[#4A5568] hover:text-red-500 transition" title="削除">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -694,6 +782,77 @@ export default function CustomerDetailPage() {
           </>
         )}
       </div>
+
+      {/* 来店履歴 追加/編集モーダル */}
+      {visitModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">{visitEditing ? '来店履歴を編集' : '来店履歴を追加'}</h3>
+              <button onClick={() => setVisitModalOpen(false)} className="p-2 text-text-sub">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">来店日 *</label>
+                <input
+                  type="date"
+                  value={visitForm.visit_date}
+                  onChange={e => setVisitForm(f => ({ ...f, visit_date: e.target.value }))}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">メニュー</label>
+                <input
+                  type="text"
+                  value={visitForm.menu}
+                  onChange={e => setVisitForm(f => ({ ...f, menu: e.target.value }))}
+                  placeholder="例: カット、カラー"
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">担当スタッフ</label>
+                <input
+                  type="text"
+                  value={visitForm.staff_name}
+                  onChange={e => setVisitForm(f => ({ ...f, staff_name: e.target.value }))}
+                  placeholder="例: 山田"
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">金額</label>
+                <input
+                  type="number"
+                  value={visitForm.amount}
+                  onChange={e => setVisitForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="例: 8000"
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setVisitModalOpen(false)}
+                className="flex-1 py-2 rounded-xl border border-gray-300 text-sm font-medium text-[#4A5568]"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleVisitSave}
+                disabled={visitSaving || !visitForm.visit_date}
+                className="flex-1 py-2 rounded-xl bg-rose text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {visitSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {visitEditing ? '更新' : '追加'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 編集モーダル */}
       {editOpen && (
