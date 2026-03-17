@@ -78,9 +78,8 @@ export async function middleware(req: NextRequest) {
       }
     }
 
-    // cookieが間違っている or 未セットなら修正
+    // cookieが間違っている or 未セットなら修正（既存のresに追加して認証cookieを保持）
     if (correctSalonId && currentCookie !== correctSalonId) {
-      res = NextResponse.next({ request: { headers: req.headers } })
       res.cookies.set('salon_id', correctSalonId, {
         path: '/',
         maxAge: 60 * 60 * 24 * 365,

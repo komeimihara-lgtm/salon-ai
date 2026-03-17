@@ -7,7 +7,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin()
   const { data: salon, error } = await supabase
     .from('salons')
-    .select('id, name, owner_name, plan, phone, address, beds, closed_days, business_hours, targets')
+    .select('id, name, owner_name, plan, phone, address, beds, closed_days, business_hours, targets, external_urls')
     .eq('id', salonId)
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -23,6 +23,7 @@ export async function GET() {
     closed_days,
     business_hours: salon?.business_hours || null,
     targets: salon?.targets || null,
+    external_urls: salon?.external_urls || {},
   })
 }
 
@@ -39,6 +40,7 @@ export async function PATCH(req: NextRequest) {
   if (typeof body.address === 'string') update.address = body.address
   if (body.business_hours && typeof body.business_hours === 'object') update.business_hours = body.business_hours
   if (body.targets && typeof body.targets === 'object') update.targets = body.targets
+  if (body.external_urls && typeof body.external_urls === 'object') update.external_urls = body.external_urls
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'No valid fields provided' }, { status: 400 })
   }

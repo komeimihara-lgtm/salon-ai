@@ -804,13 +804,22 @@ export default function ReservationsPage() {
 
   const handleCancel = async (id: string) => {
     if (!confirm('この予約をキャンセルしますか？')) return
-    await fetch('/api/reservations/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status: 'cancelled' }),
-    })
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelled' } : r))
-    setDetailTarget(null)
+    try {
+      const res = await fetch('/api/reservations/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: 'cancelled' }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(`キャンセルに失敗しました: ${err.error || res.statusText}`)
+        return
+      }
+      setReservations(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelled' } : r))
+      setDetailTarget(null)
+    } catch {
+      alert('キャンセル処理中にエラーが発生しました')
+    }
   }
 
   // 空き枠クリック — アクション選択

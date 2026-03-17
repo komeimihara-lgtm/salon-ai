@@ -54,6 +54,7 @@ export default function SettingsPage() {
           phone: j.phone || '',
           businessHours: j.business_hours || prev.businessHours,
           targets: j.targets || prev.targets,
+          externalUrls: j.external_urls || prev.externalUrls,
         }))
       })
       .catch(() => setBeds(['A', 'B']))
@@ -84,6 +85,7 @@ export default function SettingsPage() {
           address: settings.address,
           business_hours: settings.businessHours,
           targets: settings.targets,
+          external_urls: settings.externalUrls,
         }),
       })
       setSalonSettings(settings)

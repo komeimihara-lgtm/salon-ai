@@ -109,16 +109,20 @@ function parsePurchaseHistory(val: string | undefined): { date: string; menu: st
 
 /** CSV文字列をパースして顧客オブジェクトの配列を返す */
 export function parseCSVToCustomers(csvText: string): ImportCustomerRow[] {
-  const lines = csvText.split(/\r?\n/).filter(l => l.trim())
+  // BOM除去
+  const cleaned = csvText.replace(/^\uFEFF/, '')
+  const lines = cleaned.split(/\r?\n/).filter(l => l.trim())
   if (lines.length < 2) return []
 
   const headerLine = lines[0]
-  const headers = headerLine.split(',').map(h => normalizeHeader(h.trim().replace(/^"|"$/g, '')))
+  // タブ区切り or カンマ区切りを自動判定
+  const delimiter = headerLine.includes('\t') ? '\t' : ','
+  const headers = headerLine.split(delimiter).map(h => normalizeHeader(h.trim().replace(/^"|"$/g, '')))
 
   const rows: ImportCustomerRow[] = []
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]
-    const values = parseCSVLine(line)
+    const values = delimiter === '\t' ? line.split('\t').map(v => v.trim().replace(/^"|"$/g, '')) : parseCSVLine(line)
     const row: Record<string, string> = {}
     headers.forEach((h, idx) => { row[h] = values[idx] ?? '' })
     const name = row.name || row['氏名'] || row['顧客名'] || ''
