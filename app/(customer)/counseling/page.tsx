@@ -368,7 +368,19 @@ function CounselingContent() {
     if (step === 5 && data.menus.length === 0) fetchMenus()
   }, [step, data.menus.length, fetchMenus])
 
-  const INITIAL_GREETING = 'はじめまして、私はSOLAのAIビューティーカウンセラーです。今日は施術前に、あなたのお肌やお悩みについてゆっくりお聞きしたいと思います。本日はどんなことでお越しになりましたか？'
+  const customerName = data.customerName || 'お客様'
+  const INITIAL_GREETING = `${customerName}様、本日はご来店いただきありがとうございます😊
+はじめまして、私はSOLAと申します。
+これまで80万件以上の施術に関わってきた経験と知見をもとに、
+${customerName}様の施術をより心地よく、より効果的なものにするために
+サポートさせていただきます。
+お話は、画面のテキストで入力いただくか、
+マイクボタンを押して音声でお話しいただくこともできます😊
+どちらでもお好きな方法でお答えください。
+AIがお伺いするので、
+スタッフには少し話しにくいことも、
+どうか気兼ねなくお話しいただけたら嬉しいです。
+それでは、いくつかお聞かせいただけますか？`
   useEffect(() => {
     if (step === 2 && data.messages.length === 0 && !initialSpokenRef.current) {
       initialSpokenRef.current = true
@@ -643,10 +655,8 @@ function CounselingContent() {
               {data.messages.length === 0 && (
                 <div className="flex gap-2">
                   <SolaAvatarImg size={48} isSpeaking={isSpeaking} />
-                  <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%] leading-relaxed">
-                    はじめまして、私はSOLAのAIビューティーカウンセラーです ✨
-                    今日は施術前に、あなたのお肌やお悩みについてゆっくりお聞きしたいと思います。
-                    本日はどんなことでお越しになりましたか？ 🌸
+                  <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%] leading-relaxed whitespace-pre-line">
+                    {INITIAL_GREETING}
                   </div>
                 </div>
               )}
