@@ -174,6 +174,7 @@ interface MenuItem {
 interface SessionData {
   customerName: string
   customerId?: string
+  courseName: string
   visitPurpose: string
   messages: { role: 'user' | 'assistant'; content: string }[]
   skinAnswers: Record<string, string>
@@ -190,6 +191,7 @@ interface SessionData {
 
 const DEFAULT_SESSION: SessionData = {
   customerName: '',
+  courseName: '',
   visitPurpose: 'first',
   messages: [],
   skinAnswers: {},
@@ -221,6 +223,7 @@ function CounselingContent() {
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [speechError, setSpeechError] = useState<string | null>(null)
+  const [salonMenus, setSalonMenus] = useState<{ id: string; name: string; price?: number }[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
   const initialSpokenRef = useRef(false)
   const audioUnlockedRef = useRef(false)
@@ -257,6 +260,10 @@ function CounselingContent() {
       } catch (_) {}
     }
   }, [step, data, mode, completed])
+
+  useEffect(() => {
+    fetch('/api/menus').then(r => r.json()).then(j => setSalonMenus(j.menus || [])).catch(() => {})
+  }, [])
 
   const scrollChatToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
 
@@ -308,11 +315,12 @@ function CounselingContent() {
     setSearchResults(json.customers || [])
   }, [customerSearch])
 
-  const sendChat = useCallback(async () => {
-    if (!chatInput.trim() || chatLoading) return
+  const sendChat = useCallback(async (overrideMsg?: string) => {
+    const msg = overrideMsg || chatInput
+    if (!msg.trim() || chatLoading) return
     unlockAudio()
-    const userMsg = chatInput.trim()
-    setChatInput('')
+    const userMsg = msg.trim()
+    if (!overrideMsg) setChatInput('')
     const newMessages = [...data.messages, { role: 'user' as const, content: userMsg }]
     setData((d) => ({ ...d, messages: newMessages }))
     setChatLoading(true)
@@ -321,7 +329,12 @@ function CounselingContent() {
       const res = await fetch('/api/counseling/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'chat', messages: newMessages, customer_name: data.customerName || undefined }),
+        body: JSON.stringify({
+          mode: 'chat',
+          messages: newMessages,
+          customer_name: data.customerName || undefined,
+          course_name: data.courseName || undefined,
+        }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'エラー')
@@ -334,7 +347,7 @@ function CounselingContent() {
     } finally {
       setChatLoading(false)
     }
-  }, [chatInput, chatLoading, data.messages, data.customerName, speakMessage, unlockAudio])
+  }, [chatInput, chatLoading, data.messages, data.customerName, data.courseName, speakMessage, unlockAudio])
 
   const diagnoseSkinType = (answers: Record<string, string>): SkinType => {
     const q1 = answers.q1
@@ -369,7 +382,8 @@ function CounselingContent() {
   }, [step, data.menus.length, fetchMenus])
 
   const customerName = data.customerName || 'お客様'
-  const INITIAL_GREETING = `${customerName}様、本日はご来店いただきありがとうございます😊
+  const buildInitialGreeting = useCallback(() => {
+    return `${customerName}様、本日はご来店いただきありがとうございます😊
 はじめまして、私はSOLAと申します。
 これまで80万件以上の施術に関わってきた経験と知見をもとに、
 ${customerName}様の施術をより心地よく、より効果的なものにするために
@@ -381,12 +395,17 @@ AIがお伺いするので、
 スタッフには少し話しにくいことも、
 どうか気兼ねなくお話しいただけたら嬉しいです。
 それでは、いくつかお聞かせいただけますか？`
+  }, [customerName])
+
+  // step 2 に入ったとき、挨拶をassistantメッセージとして追加（会話履歴に含める）
   useEffect(() => {
     if (step === 2 && data.messages.length === 0 && !initialSpokenRef.current) {
       initialSpokenRef.current = true
-      speakMessage(INITIAL_GREETING)
+      const greeting = buildInitialGreeting()
+      setData((d) => ({ ...d, messages: [{ role: 'assistant', content: greeting }] }))
+      speakMessage(greeting)
     }
-  }, [step, data.messages.length, speakMessage])
+  }, [step, data.messages.length, speakMessage, buildInitialGreeting])
 
   const fetchSolaComment = useCallback(async () => {
     const summary = [
@@ -441,6 +460,25 @@ AIがお伺いするので、
       setSaving(false)
     }
   }, [data, mode, solaComment])
+
+  // AIの返答から選択肢を抽出
+  const extractChoices = (text: string): string[] => {
+    const lines = text.split('\n')
+    for (const line of lines) {
+      const trimmed = line.trim()
+      // ／区切り（2つ以上）
+      if (trimmed.includes('／')) {
+        const parts = trimmed.split('／').map(s => s.trim()).filter(s => s.length > 0 && s.length <= 25)
+        if (parts.length >= 2) return parts
+      }
+    }
+    return []
+  }
+
+  // 最後のassistantメッセージの選択肢
+  const lastAssistantMsg = data.messages.filter(m => m.role === 'assistant').at(-1)
+  const lastMsgIsAssistant = data.messages.at(-1)?.role === 'assistant'
+  const choices = lastAssistantMsg && lastMsgIsAssistant && !chatLoading ? extractChoices(lastAssistantMsg.content) : []
 
   const resetAndStartOver = () => {
     setData(DEFAULT_SESSION)
@@ -629,6 +667,27 @@ AIがお伺いするので、
                 ))}
               </div>
             </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-2">本日のメニュー</label>
+              {salonMenus.length === 0 ? (
+                <p className="text-xs text-gray-400">メニューを読み込み中...</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {salonMenus.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setData((d) => ({ ...d, courseName: m.name }))}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium ${data.courseName === m.name ? 'bg-[#C4728A] text-white' : 'bg-[#F8F5FF] text-[#3D3D3D]'}`}
+                    >
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {data.courseName && (
+                <p className="text-xs text-[#C4728A] mt-1">選択中: {data.courseName}</p>
+              )}
+            </div>
           </div>
         )}
 
@@ -652,14 +711,6 @@ AIがお伺いするので、
             {/* 右60% チャットエリア */}
             <div className="flex flex-col flex-1 min-h-0 lg:w-3/5 lg:border-l lg:border-gray-100">
             <div className="flex-1 overflow-y-auto space-y-4 pt-4 pb-4 px-2 lg:px-6 lg:pt-20">
-              {data.messages.length === 0 && (
-                <div className="flex gap-2">
-                  <SolaAvatarImg size={48} isSpeaking={isSpeaking} />
-                  <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%] leading-relaxed whitespace-pre-line">
-                    {INITIAL_GREETING}
-                  </div>
-                </div>
-              )}
               {data.messages.map((m, i) =>
                 m.role === 'user' ? (
                   <div key={i} className="flex justify-end">
@@ -670,7 +721,7 @@ AIがお伺いするので、
                 ) : (
                   <div key={i} className="flex gap-2">
                     <SolaAvatarImg size={48} isSpeaking={isSpeaking} />
-                    <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%] leading-relaxed">
+                    <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%] leading-relaxed whitespace-pre-line">
                       {m.content}
                     </div>
                   </div>
@@ -682,6 +733,19 @@ AIがお伺いするので、
                   <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-sm text-[#3D3D3D]">
                     <TypingDots />
                   </div>
+                </div>
+              )}
+              {choices.length > 0 && (
+                <div className="flex flex-wrap gap-2 pl-14">
+                  {choices.map((choice) => (
+                    <button
+                      key={choice}
+                      onClick={() => sendChat(choice)}
+                      className="px-4 py-2 rounded-xl bg-white border-2 border-[#C4728A]/30 text-sm font-medium text-[#C4728A] hover:bg-[#C4728A] hover:text-white transition-colors"
+                    >
+                      {choice}
+                    </button>
+                  ))}
                 </div>
               )}
               <div ref={chatEndRef} />
@@ -698,7 +762,7 @@ AIがお伺いするので、
                   <VoiceInputField value={chatInput} onChange={setChatInput} onFocus={unlockAudio} placeholder="メッセージを入力..." rows={1} disabled={chatLoading} />
                 </div>
                 <button
-                  onClick={sendChat}
+                  onClick={() => sendChat()}
                   disabled={!chatInput.trim() || chatLoading}
                   className="shrink-0 px-4 py-3 rounded-xl bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white disabled:opacity-50 flex items-center justify-center"
                 >
@@ -852,7 +916,7 @@ AIがお伺いするので、
               setStep((s) => Math.min(6, s + 1))
             }}
             disabled={
-              (step === 1 && !data.customerName.trim()) ||
+              (step === 1 && (!data.customerName.trim() || !data.courseName)) ||
               (step === 2 && data.messages.filter((m) => m.role === 'user').length < 1) ||
               (step === 3 && Object.keys(data.skinAnswers).length < 4) ||
               (step === 5 && !data.selectedMenu)

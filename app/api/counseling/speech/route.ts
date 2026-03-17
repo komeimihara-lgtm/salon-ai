@@ -47,7 +47,7 @@ export async function POST(req: Request) {
           },
           audioConfig: {
             audioEncoding: 'MP3',
-            speakingRate: 1.15,
+            speakingRate: 0.98,
             pitch: 0.5,
             volumeGainDb: 1.5,
           },
