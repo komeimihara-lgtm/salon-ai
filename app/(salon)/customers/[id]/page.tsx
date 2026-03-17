@@ -21,6 +21,8 @@ import {
   Plus,
   Trash2,
   Pencil,
+  MessageCircle,
+  ChevronDown,
 } from 'lucide-react'
 import {
   fetchCustomerTickets,
@@ -141,6 +143,12 @@ export default function CustomerDetailPage() {
   const [visitEditing, setVisitEditing] = useState<VisitRecord | null>(null)
   const [visitForm, setVisitForm] = useState({ visit_date: '', menu: '', staff_name: '', amount: '' })
   const [visitSaving, setVisitSaving] = useState(false)
+  const [counselingSessions, setCounselingSessions] = useState<{
+    id: string; customer_name: string; selected_menu?: string; concerns?: string[];
+    chat_history?: { role: string; content: string }[]; created_at: string;
+  }[]>([])
+  const [counselingLoading, setCounselingLoading] = useState(false)
+  const [expandedSession, setExpandedSession] = useState<string | null>(null)
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -203,6 +211,20 @@ export default function CustomerDetailPage() {
       setVisits([])
     } finally {
       setVisitsLoading(false)
+    }
+  }, [id])
+
+  const fetchCounselingSessions = useCallback(async () => {
+    if (!id) return
+    setCounselingLoading(true)
+    try {
+      const res = await fetch(`/api/counseling/sessions?customer_id=${id}`)
+      const data = await res.json()
+      setCounselingSessions(data.sessions || [])
+    } catch {
+      setCounselingSessions([])
+    } finally {
+      setCounselingLoading(false)
     }
   }, [id])
 
@@ -337,8 +359,9 @@ export default function CustomerDetailPage() {
     if (customer) {
       refresh()
       fetchVisits()
+      fetchCounselingSessions()
     }
-  }, [customer, refresh, fetchVisits])
+  }, [customer, refresh, fetchVisits, fetchCounselingSessions])
 
   useEffect(() => {
     if (purchaseOpen) {
@@ -780,6 +803,60 @@ export default function CustomerDetailPage() {
               </button>
             )}
           </>
+        )}
+      </div>
+
+      {/* カウンセリング履歴 */}
+      <div className="bg-white rounded-2xl p-5 card-shadow mb-6">
+        <h2 className="font-semibold text-text-main flex items-center gap-2 mb-3">
+          <MessageCircle className="w-4 h-4 text-[#9B8EC4]" />
+          カウンセリング履歴
+        </h2>
+        {counselingLoading ? (
+          <p className="text-sm text-text-sub py-4 flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> 読み込み中...
+          </p>
+        ) : counselingSessions.length === 0 ? (
+          <p className="text-sm text-[#4A5568] py-2">カウンセリング履歴はありません</p>
+        ) : (
+          <div className="space-y-3">
+            {counselingSessions.map(s => (
+              <div key={s.id} className="rounded-lg border border-[#9B8EC4]/20 overflow-hidden">
+                <button
+                  onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 bg-[#F8F5FF] hover:bg-[#F0EBFF] transition text-left"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-[#1A202C]">
+                      {new Date(s.created_at).toLocaleDateString('ja-JP')}
+                      {s.selected_menu ? ` — ${s.selected_menu}` : ''}
+                    </p>
+                    {s.concerns && s.concerns.length > 0 && (
+                      <p className="text-xs text-[#4A5568] mt-0.5">
+                        お悩み: {s.concerns.join('、').slice(0, 60)}{s.concerns.join('、').length > 60 ? '...' : ''}
+                      </p>
+                    )}
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-[#4A5568] transition-transform ${expandedSession === s.id ? 'rotate-180' : ''}`} />
+                </button>
+                {expandedSession === s.id && s.chat_history && s.chat_history.length > 0 && (
+                  <div className="px-3 py-3 space-y-2 max-h-80 overflow-y-auto bg-white">
+                    {s.chat_history.map((m, i) => (
+                      <div key={i} className={`text-xs ${m.role === 'user' ? 'text-right' : ''}`}>
+                        <span className={`inline-block px-2.5 py-1.5 rounded-lg max-w-[85%] ${
+                          m.role === 'user'
+                            ? 'bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white'
+                            : 'bg-gray-100 text-[#1A202C]'
+                        }`}>
+                          {m.content.length > 200 ? m.content.slice(0, 200) + '...' : m.content}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

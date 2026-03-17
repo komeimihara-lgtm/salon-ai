@@ -224,9 +224,11 @@ function CounselingContent() {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [speechError, setSpeechError] = useState<string | null>(null)
   const [salonMenus, setSalonMenus] = useState<{ id: string; name: string; price?: number }[]>([])
+  const [autoSaved, setAutoSaved] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const initialSpokenRef = useRef(false)
   const audioUnlockedRef = useRef(false)
+  const autoSaveTriggeredRef = useRef(false)
 
   const unlockAudio = useCallback(() => {
     if (audioUnlockedRef.current) return
@@ -240,18 +242,10 @@ function CounselingContent() {
     } catch (_) {}
   }, [])
 
+  // リロード時は常にリセット（新しいカウンセリングとして開始）
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (parsed.mode === mode && parsed.step > 1) {
-          setData(parsed.data || DEFAULT_SESSION)
-          setStep(parsed.step || 1)
-        }
-      }
-    } catch (_) {}
-  }, [mode])
+    localStorage.removeItem(STORAGE_KEY)
+  }, [])
 
   useEffect(() => {
     if (step > 1 && !completed) {
@@ -348,6 +342,31 @@ function CounselingContent() {
       setChatLoading(false)
     }
   }, [chatInput, chatLoading, data.messages, data.customerName, data.courseName, speakMessage, unlockAudio])
+
+  // PHASE 5 完了検出 → カウンセリング自動保存
+  useEffect(() => {
+    if (autoSaveTriggeredRef.current || data.messages.length < 4) return
+    const lastMsg = data.messages.at(-1)
+    if (lastMsg?.role !== 'assistant') return
+    if (!lastMsg.content.includes('これより施術に入ります')) return
+
+    autoSaveTriggeredRef.current = true
+    const userMsgs = data.messages.filter(m => m.role === 'user').map(m => m.content)
+    const payload = {
+      customer_name: data.customerName || 'お客様',
+      customer_id: data.customerId || null,
+      course_name: data.courseName || null,
+      messages: data.messages,
+      concerns: userMsgs.slice(0, 3).join('、'),
+      chat_history: data.messages,
+      mode: 'salon',
+    }
+    fetch('/api/counseling/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).then(() => setAutoSaved(true)).catch(() => {})
+  }, [data.messages, data.customerName, data.customerId, data.courseName])
 
   const diagnoseSkinType = (answers: Record<string, string>): SkinType => {
     const q1 = answers.q1
@@ -485,7 +504,13 @@ AIがお伺いするので、
     setStep(1)
     setCompleted(false)
     setSolaComment('')
+    setAutoSaved(false)
+    setChatInput('')
+    setCustomerSearch('')
+    setSearchResults([])
+    setNewCustomer(true)
     initialSpokenRef.current = false
+    autoSaveTriggeredRef.current = false
     localStorage.removeItem(STORAGE_KEY)
   }
 
@@ -746,6 +771,13 @@ AIがお伺いするので、
                       {choice}
                     </button>
                   ))}
+                </div>
+              )}
+              {autoSaved && (
+                <div className="text-center py-2">
+                  <span className="inline-flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
+                    <Check className="w-3 h-3" /> カウンセリング内容を保存しました
+                  </span>
                 </div>
               )}
               <div ref={chatEndRef} />
