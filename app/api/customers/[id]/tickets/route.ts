@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { resolveSalonTenantId } from '@/lib/get-salon-id'
 
 /** 顧客の有効な回数券・サブスク一覧を返す */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } },
 ) {
   try {
-    const salonId = getSalonIdFromCookie()
+    const { searchParams } = new URL(req.url)
+    const salonId = resolveSalonTenantId(searchParams)
+    if (!salonId) {
+      return NextResponse.json({ error: 'salon_id が必要です' }, { status: 401 })
+    }
     const customerId = params.id
 
     // 有効な回数券

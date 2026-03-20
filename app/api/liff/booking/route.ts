@@ -1,9 +1,12 @@
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { getLiffSalonId } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
-  const salonId = getSalonIdFromCookie()
+  const salonId = getLiffSalonId()
+  if (!salonId) {
+    return NextResponse.json({ error: 'NEXT_PUBLIC_LIFF_SALON_ID が未設定です' }, { status: 500 })
+  }
   const supabase = getSupabaseAdmin()
   const body = await req.json()
   const {

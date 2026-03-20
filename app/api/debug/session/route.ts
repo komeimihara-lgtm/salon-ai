@@ -50,7 +50,7 @@ export async function GET() {
     }
   }
 
-  const envSalonId = process.env.NEXT_PUBLIC_SALON_ID || 'NOT SET'
+  const liffSalonConfigured = !!process.env.NEXT_PUBLIC_LIFF_SALON_ID?.trim()
   const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY
 
   return NextResponse.json({
@@ -60,7 +60,8 @@ export async function GET() {
     auth_session_error: sessionError,
     salon_from_db: salonFromDb,
     db_error: dbError,
-    env_NEXT_PUBLIC_SALON_ID: envSalonId,
+    /** ダッシュボード用の salon_id は cookie のみ。LIFF は NEXT_PUBLIC_LIFF_SALON_ID */
+    next_public_liff_salon_id_configured: liffSalonConfigured,
     has_SERVICE_ROLE_KEY: hasServiceKey,
   }, { status: 200 })
 }

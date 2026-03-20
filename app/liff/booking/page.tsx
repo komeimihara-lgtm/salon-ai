@@ -14,6 +14,14 @@ interface CourseSub { id: string; plan_name: string; menu_name: string; sessions
 
 const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
 
+/** LIFF 用: メニュー・空き枠等のAPIに salon_id を付与（NEXT_PUBLIC_LIFF_SALON_ID） */
+function withLiffSalonQuery(path: string): string {
+  const id = process.env.NEXT_PUBLIC_LIFF_SALON_ID
+  if (!id) return path
+  const sep = path.includes('?') ? '&' : '?'
+  return `${path}${sep}salon_id=${encodeURIComponent(id)}`
+}
+
 function toDateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
@@ -98,7 +106,7 @@ export default function LiffBookingPage() {
   // メニュー取得
   useEffect(() => {
     if (!liffReady) return
-    fetch('/api/menus')
+    fetch(withLiffSalonQuery('/api/menus'))
       .then(r => r.json())
       .then(j => setMenus(j.menus || []))
       .finally(() => setLoading(false))
@@ -133,7 +141,7 @@ export default function LiffBookingPage() {
 
       setAvailMap(prev => ({ ...prev, [dateStr]: null }))
       try {
-        const res = await fetch(`/api/availability?date=${dateStr}&duration=${selectedMenu.duration}`)
+        const res = await fetch(withLiffSalonQuery(`/api/availability?date=${dateStr}&duration=${selectedMenu.duration}`))
         const json = await res.json()
         const uniqueCount = new Set((json.slots || []).map((s: Slot) => s.start)).size
         setAvailMap(prev => ({ ...prev, [dateStr]: uniqueCount }))
@@ -147,7 +155,7 @@ export default function LiffBookingPage() {
   const fetchSlots = async (date: Date, duration: number) => {
     setSlotsLoading(true)
     try {
-      const res = await fetch(`/api/availability?date=${toDateStr(date)}&duration=${duration}`)
+      const res = await fetch(withLiffSalonQuery(`/api/availability?date=${toDateStr(date)}&duration=${duration}`))
       const json = await res.json()
       setSlots(json.slots || [])
     } catch { }
@@ -157,7 +165,7 @@ export default function LiffBookingPage() {
   // 顧客のコース情報を取得
   const fetchCourses = async (custId: string) => {
     try {
-      const res = await fetch(`/api/customers/${custId}/tickets`)
+      const res = await fetch(withLiffSalonQuery(`/api/customers/${custId}/tickets`))
       const json = await res.json()
       setCourseTickets(json.tickets || [])
       setCourseSubs(json.subscriptions || [])
@@ -177,7 +185,7 @@ export default function LiffBookingPage() {
 
     if (lineUserId) {
       try {
-        const res = await fetch(`/api/liff/check-customer?line_user_id=${lineUserId}`)
+        const res = await fetch(withLiffSalonQuery(`/api/liff/check-customer?line_user_id=${encodeURIComponent(lineUserId)}`))
         const json = await res.json()
         if (json.exists && json.name) setProfileName(json.name)
         if (json.exists && json.phone) setProfilePhone(json.phone)

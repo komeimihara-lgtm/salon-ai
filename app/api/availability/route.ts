@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { resolveSalonTenantId } from '@/lib/get-salon-id'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,8 +8,11 @@ const SLOT_MINUTES = 15
 
 export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin()
-  const salonId = getSalonIdFromCookie()
   const { searchParams } = new URL(req.url)
+  const salonId = resolveSalonTenantId(searchParams)
+  if (!salonId) {
+    return NextResponse.json({ error: 'salon_id が必要です' }, { status: 401 })
+  }
   const date = searchParams.get('date')
   const duration = Number(searchParams.get('duration') || '60')
 

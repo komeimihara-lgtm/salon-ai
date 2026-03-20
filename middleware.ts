@@ -34,9 +34,12 @@ export async function middleware(req: NextRequest) {
   // セッション取得
   const { data: { session } } = await supabase.auth.getSession()
 
-  // ルートアクセスは /dashboard にリダイレクト
+  // トップ: ログイン済みはダッシュボード、未ログインはログインへ（未認証を /dashboard に流さない）
   if (req.nextUrl.pathname === '/') {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
+    if (session) {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+    return NextResponse.redirect(new URL('/login', req.url))
   }
 
   // 未ログインユーザーは /login にリダイレクト

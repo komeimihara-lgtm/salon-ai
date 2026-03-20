@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { getLiffSalonId } from '@/lib/get-salon-id'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin()
-  const salonId = getSalonIdFromCookie()
+  const salonId = getLiffSalonId()
+  if (!salonId) {
+    return NextResponse.json({ error: 'NEXT_PUBLIC_LIFF_SALON_ID が未設定です' }, { status: 500 })
+  }
   const { searchParams } = new URL(req.url)
   const lineUserId = searchParams.get('line_user_id')
   if (!lineUserId) return NextResponse.json({ exists: false })

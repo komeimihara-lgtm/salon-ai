@@ -2,26 +2,22 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export const DEMO_SALON_ID = 'a0000000-0000-0000-0000-000000000001'
 
-/** 使用するサロンID（cookie > 環境変数 > デモID） */
+/** ブラウザ用: document.cookie の salon_id のみ（レジ等・ログイン後） */
 export function getSalonId(): string {
-  // ブラウザ: cookieからsalon_idを取得
   if (typeof document !== 'undefined') {
     const match = document.cookie.match(/(?:^|;\s*)salon_id=([^;]+)/)
-    if (match?.[1]) return match[1]
+    if (match?.[1]) return decodeURIComponent(match[1]).trim()
   }
-  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_SALON_ID) {
-    return process.env.NEXT_PUBLIC_SALON_ID
-  }
-  return DEMO_SALON_ID
+  return ''
 }
 
-/** API Route用: cookieからsalon_idを取得（cookie > 環境変数 > デモID） */
+/** Cookie ヘッダ文字列から salon_id のみ解析 */
 export function getSalonIdFromCookies(cookieHeader?: string | null): string {
   if (cookieHeader) {
     const match = cookieHeader.match(/(?:^|;\s*)salon_id=([^;]+)/)
-    if (match?.[1]) return match[1]
+    if (match?.[1]) return decodeURIComponent(match[1]).trim()
   }
-  return getSalonId()
+  return ''
 }
 
 // 実行時に初期化（ビルド時エラー回避）
