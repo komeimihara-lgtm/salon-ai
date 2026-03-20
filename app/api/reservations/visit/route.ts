@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
-/** 来店処理: ステータスを visited に変更。都度払いは来店時にsales計上。コースは予約作成時計上済みならスキップ */
+/** 来店処理: ステータスを visited に変更、回数券があれば消化、sales に計上 */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -31,13 +31,9 @@ export async function POST(req: NextRequest) {
     const isCourse = reservation.is_course === true
     const ticketId = reservation.ticket_id
     const subscriptionId = reservation.subscription_id
-    /** 予約作成時に既に消化・sales計上済み（回数券・サブスク） */
-    const alreadyConsumedAtBooking = reservation.course_consumed_at_booking === true
 
-    if (alreadyConsumedAtBooking && (ticketId || subscriptionId)) {
-      // --- 予約作成時に回数券/サブスク消化・sales 済み。来店では追加計上しない ---
-    } else if (isCourse && ticketId) {
-      // --- コース消化: 回数券（旧データ・フラグなし予約は来店時に消化） ---
+    if (isCourse && ticketId) {
+      // --- コース消化: 回数券 ---
       const { data: ticket } = await supabase
         .from('customer_tickets')
         .select('id, remaining_sessions, unit_price, ticket_plan_id, plan_name')
@@ -77,7 +73,7 @@ export async function POST(req: NextRequest) {
         })
       }
     } else if (isCourse && subscriptionId) {
-      // --- コース消化: サブスク（旧データは来店時に消化） ---
+      // --- コース消化: サブスク ---
       const { data: sub } = await supabase
         .from('customer_subscriptions')
         .select('id, sessions_used_in_period, plan_name, price, sessions_per_month')

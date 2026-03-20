@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
-import { consumeSubscriptionAtBooking, consumeTicketAtBooking } from '@/lib/reservation-course-consume'
 
 export async function POST(req: NextRequest) {
   try {
@@ -66,47 +65,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const isCourse = body.is_course === true
-    const ticketId = body.ticket_id || null
-    const subscriptionId = body.subscription_id || null
-
-    /** サブスク・回数券は予約作成時に消化＋sales計上（来店時は二重にしない） */
-    let courseConsumedAtBooking = false
-    const consumeCtx = {
-      salonId,
-      reservationDate: reservation_date,
-      customerId: String(body.customer_id || ''),
-      customerName: String(body.customer_name || ''),
-      menu: (body.menu as string | null) || null,
-      staffName: staff_name,
-    }
-
-    if (isCourse && ticketId) {
-      try {
-        await consumeTicketAtBooking(supabase, ticketId, consumeCtx)
-        courseConsumedAtBooking = true
-      } catch (e) {
-        const code = (e as Error & { code?: string }).code
-        if (code === 'TICKET_DEPLETED') {
-          return NextResponse.json({ error: (e as Error).message }, { status: 409 })
-        }
-        console.error('予約作成時コース消化（回数券）:', e)
-        return NextResponse.json({ error: '回数券の消化に失敗しました' }, { status: 500 })
-      }
-    } else if (isCourse && subscriptionId) {
-      try {
-        await consumeSubscriptionAtBooking(supabase, subscriptionId, consumeCtx)
-        courseConsumedAtBooking = true
-      } catch (e) {
-        const code = (e as Error & { code?: string }).code
-        if (code === 'SUB_NOT_FOUND') {
-          return NextResponse.json({ error: (e as Error).message }, { status: 404 })
-        }
-        console.error('予約作成時コース消化（サブスク）:', e)
-        return NextResponse.json({ error: 'サブスクの消化に失敗しました' }, { status: 500 })
-      }
-    }
-
     const insertData: Record<string, unknown> = {
       salon_id: salonId,
       customer_id: body.customer_id || null,
@@ -122,10 +80,9 @@ export async function POST(req: NextRequest) {
       memo: body.memo || null,
       bed_id,
       duration_minutes: durationMin,
-      is_course: isCourse,
-      ticket_id: ticketId,
-      subscription_id: subscriptionId,
-      course_consumed_at_booking: courseConsumedAtBooking,
+      is_course: body.is_course || false,
+      ticket_id: body.ticket_id || null,
+      subscription_id: body.subscription_id || null,
     }
 
     const { data, error } = await supabase

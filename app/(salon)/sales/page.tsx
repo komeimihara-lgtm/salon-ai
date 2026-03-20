@@ -331,21 +331,21 @@ export default function SalesPage() {
           const custId = selectedCustomer!.id
           if (!custId) continue
           for (let i = 0; i < c.qty; i++) {
+            // 売上は app/api/customer-tickets POST（record_sale）のみで1件計上。ここでは二重登録しない
             await addCustomerTicket(custId, selectedCustomer!.name, c.ticketPlan, {
               paymentMethod: paymentMethod as 'cash' | 'card' | 'online' | 'loan',
               campaignId: c.campaign?.id,
             })
-            salesToCreate.push({ ...saleBase })
           }
         } else if (c.type === 'subscription' && c.subPlan) {
           const custId = selectedCustomer!.id
           if (!custId) continue
           for (let i = 0; i < c.qty; i++) {
+            // 売上は app/api/customer-subscriptions POST（record_sale）のみで1件計上
             await addCustomerSubscription(custId, selectedCustomer!.name, c.subPlan, {
               paymentMethod: paymentMethod as 'cash' | 'card' | 'online' | 'loan',
               campaignId: c.campaign?.id,
             })
-            salesToCreate.push({ ...saleBase })
           }
         } else {
           for (let i = 0; i < c.qty; i++) salesToCreate.push({ ...saleBase })

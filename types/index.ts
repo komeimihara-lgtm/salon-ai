@@ -93,11 +93,6 @@ export interface Reservation {
   reminder_sent_at?: string
   bed_id?: string
   duration_minutes?: number
-  is_course?: boolean
-  ticket_id?: string | null
-  subscription_id?: string | null
-  /** 回数券/サブスクの消化・sales を予約作成時に済ませた場合 true */
-  course_consumed_at_booking?: boolean
   created_at: string
   updated_at: string
   /** 顧客JOIN（list API用） */
