@@ -13,6 +13,7 @@ import {
   Receipt,
   Heart,
   Loader2,
+  Bell,
 } from 'lucide-react'
 import type { Reservation } from '@/types'
 import ReservationActionCard from '@/components/ReservationActionCard'
@@ -253,8 +254,8 @@ export default function DashboardPage() {
   const [beds, setBeds] = useState<string[]>(['A', 'B'])
   const [salonTargets, setSalonTargets] = useState({ sales: 0, visits: 0, avgPrice: 0 })
   const [businessHours, setBusinessHours] = useState({ openTime: '10:00', closeTime: '21:00' })
-  const [announcements, setAnnouncements] = useState<{ id: string; title: string; type: string; body: string; is_read: boolean }[]>([])
-  const [dismissedAnnouncements, setDismissedAnnouncements] = useState<Set<string>>(new Set())
+  const [panelAnnouncements, setPanelAnnouncements] = useState<{ id: string; title: string; type: string; body: string; is_read: boolean }[]>([])
+  const [announcementsUnreadCount, setAnnouncementsUnreadCount] = useState(0)
 
   useEffect(() => {
     fetch('/api/settings/salon')
@@ -285,7 +286,11 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch('/api/announcements')
       .then(r => r.json())
-      .then(d => setAnnouncements((d.announcements || []).filter((a: { is_read: boolean }) => !a.is_read).slice(0, 3)))
+      .then((d) => {
+        const list = d.announcements || []
+        setPanelAnnouncements(list.slice(0, 3))
+        setAnnouncementsUnreadCount(typeof d.unread_count === 'number' ? d.unread_count : list.filter((a: { is_read: boolean }) => !a.is_read).length)
+      })
       .catch(() => {})
   }, [])
 
@@ -414,52 +419,92 @@ export default function DashboardPage() {
 
   return (
     <div className="max-w-[1440px] mx-auto space-y-6">
-      {/* お知らせバナー */}
-      {announcements.filter(a => !dismissedAnnouncements.has(a.id)).map(a => {
-        const colors = a.type === 'important' ? 'bg-red-50 border-red-200 text-red-700'
-          : a.type === 'update' ? 'bg-green-50 border-green-200 text-green-700'
-          : a.type === 'maintenance' ? 'bg-yellow-50 border-yellow-200 text-yellow-700'
-          : 'bg-blue-50 border-blue-200 text-blue-700'
-        return (
-          <div key={a.id} className={`rounded-xl border px-4 py-3 flex items-center justify-between ${colors}`}>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium">{a.title}</p>
-              {a.body && <p className="text-xs opacity-80 mt-0.5 truncate">{a.body.slice(0, 60)}</p>}
+      {/* レジバナー + お知らせパネル（lg以上で横2列、スマホは縦積み） */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+        <Link
+          href="/sales"
+          className="block rounded-2xl overflow-hidden card-shadow hover:opacity-95 transition-opacity h-full min-h-[160px] flex flex-col"
+        >
+          <div className="bg-gradient-to-r from-rose to-lavender p-6 sm:p-8 flex items-center justify-between gap-4 flex-1">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                <ShoppingCart className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+              </div>
+              <div>
+                <p className="text-white text-xl sm:text-2xl font-bold font-dm-sans">レジ・売上登録</p>
+                <p className="text-white/90 text-sm sm:text-base mt-0.5">メニュー選択・決済・売上管理</p>
+              </div>
             </div>
-            <button
-              onClick={() => {
-                fetch(`/api/announcements/${a.id}/read`, { method: 'POST' })
-                setDismissedAnnouncements(prev => { const next = new Set(Array.from(prev)); next.add(a.id); return next })
-              }}
-              className="ml-3 p-1 hover:opacity-70 shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2 text-white shrink-0">
+              <Receipt className="w-6 h-6 sm:w-7 sm:h-7" />
+              <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
           </div>
-        )
-      })}
+        </Link>
 
-      {/* レジ・売上登録ボタン（大きめ） */}
-      <Link
-        href="/sales"
-        className="block w-full rounded-2xl overflow-hidden card-shadow hover:opacity-95 transition-opacity"
-      >
-        <div className="bg-gradient-to-r from-rose to-lavender p-6 sm:p-8 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/20 flex items-center justify-center">
-              <ShoppingCart className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+        <div className="bg-white rounded-2xl card-shadow border border-gray-100 overflow-hidden flex flex-col h-full min-h-[160px]">
+          <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender shrink-0" />
+          <div className="p-5 sm:p-6 flex flex-col flex-1 min-h-0">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div className="flex items-center gap-2 min-w-0">
+                <Bell className="w-5 h-5 text-rose shrink-0" />
+                <h2 className="font-dm-sans font-bold text-lg text-text-main truncate">お知らせ</h2>
+                {announcementsUnreadCount > 0 && (
+                  <span
+                    className="shrink-0 text-xs font-bold bg-rose text-white px-2 py-0.5 rounded-full min-w-[1.25rem] text-center"
+                    title={`未読 ${announcementsUnreadCount}件`}
+                  >
+                    {announcementsUnreadCount > 99 ? '99+' : announcementsUnreadCount}
+                  </span>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-white text-xl sm:text-2xl font-bold font-dm-sans">レジ・売上登録</p>
-              <p className="text-white/90 text-sm sm:text-base mt-0.5">メニュー選択・決済・売上管理</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-white">
-            <Receipt className="w-6 h-6 sm:w-7 sm:h-7" />
-            <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6" />
+
+            {panelAnnouncements.length === 0 ? (
+              <p className="text-sm text-text-sub flex-1 flex items-center justify-center py-8 text-center">
+                新しいお知らせはありません
+              </p>
+            ) : (
+              <ul className="space-y-2 flex-1 min-h-0">
+                {panelAnnouncements.map((a) => {
+                  const typeBorder = a.type === 'important' ? 'border-l-red-400'
+                    : a.type === 'update' ? 'border-l-emerald-400'
+                      : a.type === 'maintenance' ? 'border-l-amber-400'
+                        : 'border-l-sky-400'
+                  return (
+                    <li key={a.id}>
+                      <Link
+                        href="/announcements"
+                        className={`block rounded-xl border border-gray-100 pl-3 pr-3 py-2.5 hover:bg-light-lav/60 transition-colors border-l-4 ${typeBorder}`}
+                      >
+                        <div className="flex items-start gap-2">
+                          {!a.is_read && (
+                            <span className="shrink-0 mt-1.5 w-2 h-2 rounded-full bg-rose ring-2 ring-rose/30" aria-label="未読" />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-text-main line-clamp-1">{a.title}</p>
+                            {a.body ? (
+                              <p className="text-xs text-text-sub mt-0.5 line-clamp-2">{a.body}</p>
+                            ) : null}
+                          </div>
+                        </div>
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+
+            <Link
+              href="/announcements"
+              className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-rose hover:text-rose/80 transition-colors"
+            >
+              すべて見る
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
         </div>
-      </Link>
+      </div>
 
       {/* ① 月間KPIカード ×4 */}
       <section>
