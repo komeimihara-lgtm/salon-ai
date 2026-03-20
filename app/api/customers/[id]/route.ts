@@ -43,3 +43,21 @@ export async function PATCH(
     return NextResponse.json({ error: '更新に失敗しました' }, { status: 500 })
   }
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { error } = await getSupabaseAdmin()
+      .from('customers')
+      .delete()
+      .eq('id', params.id)
+      .eq('salon_id', getSalonIdFromCookie())
+    if (error) throw error
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('顧客削除エラー:', error)
+    return NextResponse.json({ error: '削除に失敗しました' }, { status: 500 })
+  }
+}

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   Users, Search, Plus, Upload, Image, ChevronLeft, ChevronRight,
-  AlertTriangle, Crown, Phone, X, Check, Loader2, Ticket, Minus, Repeat
+  AlertTriangle, Crown, Phone, X, Check, Loader2, Ticket, Minus, Repeat, Trash2
 } from 'lucide-react'
 import { Customer } from '@/types'
 import {
@@ -388,17 +388,44 @@ function CustomerDetailModal({
 }
 
 // 顧客カード
-function CustomerCard({ customer, onClick }: { customer: Customer; onClick: () => void }) {
+function CustomerCard({
+  customer,
+  onClick,
+  onDelete,
+  isDeleting,
+}: {
+  customer: Customer
+  onClick: () => void
+  onDelete: (customer: Customer) => void
+  isDeleting?: boolean
+}) {
   const daysSinceVisit = customer.last_visit_date
     ? Math.floor((Date.now() - new Date(customer.last_visit_date).getTime()) / (1000 * 60 * 60 * 24))
     : null
 
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (confirm(`${customer.name}様を削除しますか？\n関連する予約・来店履歴・回数券などのデータも削除されます。`)) {
+      onDelete(customer)
+    }
+  }
+
   return (
     <div
       onClick={onClick}
-      className="bg-[#F0F9FF] hover:bg-[#E0F2FE] border border-[#BAE6FD] hover:border-[#0891B2] rounded-xl p-4 cursor-pointer transition-all group"
+      className="bg-[#F0F9FF] hover:bg-[#E0F2FE] border border-[#BAE6FD] hover:border-[#0891B2] rounded-xl p-4 cursor-pointer transition-all group relative"
     >
-      <div className="flex items-start justify-between mb-3">
+      <div className="absolute top-3 right-3 z-10">
+        <button
+          onClick={handleDelete}
+          disabled={isDeleting}
+          className="p-1.5 rounded-lg text-[#4A5568] hover:text-red-600 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title="削除"
+        >
+          {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+        </button>
+      </div>
+      <div className="flex items-start justify-between mb-3 pr-8">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <Link
@@ -635,6 +662,7 @@ export default function CustomersPage() {
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [showNewModal, setShowNewModal] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true)
@@ -670,6 +698,23 @@ export default function CustomersPage() {
       setLoading(false)
     }
   }, [page, search, statusFilter])
+
+  const handleDeleteCustomer = useCallback(async (customer: Customer) => {
+    setDeletingId(customer.id)
+    try {
+      const res = await fetch(`/api/customers/${customer.id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        throw new Error(json.error || '削除に失敗しました')
+      }
+      setSelectedCustomer((prev) => (prev?.id === customer.id ? null : prev))
+      fetchCustomers()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '削除に失敗しました')
+    } finally {
+      setDeletingId(null)
+    }
+  }, [fetchCustomers])
 
   useEffect(() => { fetchCustomers() }, [fetchCustomers])
 
@@ -844,6 +889,8 @@ export default function CustomersPage() {
                 key={customer.id}
                 customer={customer}
                 onClick={() => setSelectedCustomer(customer)}
+                onDelete={handleDeleteCustomer}
+                isDeleting={deletingId === customer.id}
               />
             ))}
           </div>
