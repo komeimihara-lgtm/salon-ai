@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Loader2, ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { Loader2, ChevronLeft, ChevronRight, Check, AlertCircle } from 'lucide-react'
+import { parseSalonIdQueryValue } from '@/lib/salon-id-format'
 
 declare global {
   interface Window { liff: any }
@@ -14,12 +15,10 @@ interface CourseSub { id: string; plan_name: string; menu_name: string; sessions
 
 const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
 
-/** LIFF 用: メニュー・空き枠等のAPIに salon_id を付与（NEXT_PUBLIC_LIFF_SALON_ID） */
-function withLiffSalonQuery(path: string): string {
-  const id = process.env.NEXT_PUBLIC_LIFF_SALON_ID
-  if (!id) return path
+/** LIFF URL の salon_id を全APIリクエストに付与 */
+function withSalonQuery(path: string, salonId: string): string {
   const sep = path.includes('?') ? '&' : '?'
-  return `${path}${sep}salon_id=${encodeURIComponent(id)}`
+  return `${path}${sep}salon_id=${encodeURIComponent(salonId)}`
 }
 
 function toDateStr(d: Date) {
@@ -36,6 +35,10 @@ function getMonday(d: Date) {
 }
 
 export default function LiffBookingPage() {
+  /** LIFF起動URLの ?salon_id=（マルチテナント） */
+  const [salonParseDone, setSalonParseDone] = useState(false)
+  const [liffSalonId, setLiffSalonId] = useState<string | null>(null)
+
   const [liffReady, setLiffReady] = useState(false)
   const [lineUserId, setLineUserId] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -68,8 +71,17 @@ export default function LiffBookingPage() {
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // LIFF初期化
+  // 起動URLから salon_id を取得（例: https://liff.line.me/xxx?salon_id=<uuid>）
   useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    const id = parseSalonIdQueryValue(sp.get('salon_id'))
+    setLiffSalonId(id || null)
+    setSalonParseDone(true)
+  }, [])
+
+  // salon_id があるときのみ LIFF 初期化
+  useEffect(() => {
+    if (!liffSalonId) return
     const initLiff = async () => {
       try {
         const script = document.createElement('script')
@@ -101,16 +113,16 @@ export default function LiffBookingPage() {
       }
     }
     initLiff()
-  }, [])
+  }, [liffSalonId])
 
   // メニュー取得
   useEffect(() => {
-    if (!liffReady) return
-    fetch(withLiffSalonQuery('/api/menus'))
+    if (!liffReady || !liffSalonId) return
+    fetch(withSalonQuery('/api/menus', liffSalonId))
       .then(r => r.json())
       .then(j => setMenus(j.menus || []))
       .finally(() => setLoading(false))
-  }, [liffReady])
+  }, [liffReady, liffSalonId])
 
   // 週の日付を計算
   const getWeekDays = useCallback((offset: number): Date[] => {
@@ -124,7 +136,7 @@ export default function LiffBookingPage() {
 
   // 表示中の週の空き状況を取得
   useEffect(() => {
-    if (step !== 'date' || !selectedMenu) return
+    if (step !== 'date' || !selectedMenu || !liffSalonId) return
     const days = getWeekDays(weekOffset)
     const now = new Date()
     now.setHours(0, 0, 0, 0)
@@ -141,7 +153,7 @@ export default function LiffBookingPage() {
 
       setAvailMap(prev => ({ ...prev, [dateStr]: null }))
       try {
-        const res = await fetch(withLiffSalonQuery(`/api/availability?date=${dateStr}&duration=${selectedMenu.duration}`))
+        const res = await fetch(withSalonQuery(`/api/availability?date=${dateStr}&duration=${selectedMenu.duration}`, liffSalonId))
         const json = await res.json()
         const uniqueCount = new Set((json.slots || []).map((s: Slot) => s.start)).size
         setAvailMap(prev => ({ ...prev, [dateStr]: uniqueCount }))
@@ -149,13 +161,14 @@ export default function LiffBookingPage() {
         setAvailMap(prev => ({ ...prev, [dateStr]: 0 }))
       }
     })
-  }, [step, weekOffset, selectedMenu, getWeekDays])
+  }, [step, weekOffset, selectedMenu, getWeekDays, liffSalonId])
 
   // 時間枠取得
   const fetchSlots = async (date: Date, duration: number) => {
+    if (!liffSalonId) return
     setSlotsLoading(true)
     try {
-      const res = await fetch(withLiffSalonQuery(`/api/availability?date=${toDateStr(date)}&duration=${duration}`))
+      const res = await fetch(withSalonQuery(`/api/availability?date=${toDateStr(date)}&duration=${duration}`, liffSalonId))
       const json = await res.json()
       setSlots(json.slots || [])
     } catch { }
@@ -164,8 +177,9 @@ export default function LiffBookingPage() {
 
   // 顧客のコース情報を取得
   const fetchCourses = async (custId: string) => {
+    if (!liffSalonId) return
     try {
-      const res = await fetch(withLiffSalonQuery(`/api/customers/${custId}/tickets`))
+      const res = await fetch(withSalonQuery(`/api/customers/${custId}/tickets`, liffSalonId))
       const json = await res.json()
       setCourseTickets(json.tickets || [])
       setCourseSubs(json.subscriptions || [])
@@ -177,6 +191,7 @@ export default function LiffBookingPage() {
   }
 
   const handleSelectMenu = async (menu: MenuItem) => {
+    if (!liffSalonId) return
     setSelectedMenu(menu)
     setSelectedCourse(null)
     setAvailMap({})
@@ -185,7 +200,7 @@ export default function LiffBookingPage() {
 
     if (lineUserId) {
       try {
-        const res = await fetch(withLiffSalonQuery(`/api/liff/check-customer?line_user_id=${encodeURIComponent(lineUserId)}`))
+        const res = await fetch(withSalonQuery(`/api/liff/check-customer?line_user_id=${encodeURIComponent(lineUserId)}`, liffSalonId))
         const json = await res.json()
         if (json.exists && json.name) setProfileName(json.name)
         if (json.exists && json.phone) setProfilePhone(json.phone)
@@ -223,13 +238,14 @@ export default function LiffBookingPage() {
 
   // 予約確定
   const handleSubmit = async () => {
-    if (!selectedMenu || !selectedDate || !selectedSlot) return
+    if (!selectedMenu || !selectedDate || !selectedSlot || !liffSalonId) return
     setSubmitting(true)
     try {
       const res = await fetch('/api/liff/booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          salon_id: liffSalonId,
           line_user_id: lineUserId,
           display_name: displayName,
           customer_name: profileName || displayName,
@@ -278,6 +294,34 @@ export default function LiffBookingPage() {
   const weekDays = getWeekDays(weekOffset)
   const weekStart = weekDays[0]
   const weekEnd = weekDays[6]
+
+  if (!salonParseDone) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 to-purple-50">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 text-pink-400 animate-spin mx-auto mb-3" />
+          <p className="text-sm text-gray-500">読み込み中...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!liffSalonId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 to-purple-50 px-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md text-center">
+          <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h1 className="text-lg font-bold text-gray-800 mb-2">サロン情報が取得できません</h1>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            LINE のリッチメニュー・ボタンに設定する LIFF URL に、当サロンのIDを付けてください。
+          </p>
+          <p className="text-xs text-gray-500 mt-4 font-mono break-all">
+            例: …/liff/booking?salon_id=＜salons.id のUUID＞
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   if (!liffReady || loading) {
     return (

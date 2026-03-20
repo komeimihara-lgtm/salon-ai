@@ -50,7 +50,6 @@ export async function GET() {
     }
   }
 
-  const liffSalonConfigured = !!process.env.NEXT_PUBLIC_LIFF_SALON_ID?.trim()
   const hasServiceKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY
 
   return NextResponse.json({
@@ -60,8 +59,8 @@ export async function GET() {
     auth_session_error: sessionError,
     salon_from_db: salonFromDb,
     db_error: dbError,
-    /** ダッシュボード用の salon_id は cookie のみ。LIFF は NEXT_PUBLIC_LIFF_SALON_ID */
-    next_public_liff_salon_id_configured: liffSalonConfigured,
+    /** LIFF 予約は URL クエリ salon_id（マルチテナント） */
+    liff_salon_hint: 'LIFF: /liff/booking?salon_id=<salons.id>',
     has_SERVICE_ROLE_KEY: hasServiceKey,
   }, { status: 200 })
 }

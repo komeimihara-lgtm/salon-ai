@@ -1,14 +1,20 @@
-import { getLiffSalonId } from '@/lib/get-salon-id'
+import { parseSalonIdQueryValue } from '@/lib/salon-id-format'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
-  const salonId = getLiffSalonId()
-  if (!salonId) {
-    return NextResponse.json({ error: 'NEXT_PUBLIC_LIFF_SALON_ID が未設定です' }, { status: 500 })
-  }
   const supabase = getSupabaseAdmin()
   const body = await req.json()
+  const salonId = parseSalonIdQueryValue(body.salon_id)
+  if (!salonId) {
+    return NextResponse.json({ error: 'salon_id が必要です（有効なUUID）' }, { status: 400 })
+  }
+
+  const { data: salonExists } = await supabase.from('salons').select('id, line_channel_access_token').eq('id', salonId).maybeSingle()
+  if (!salonExists) {
+    return NextResponse.json({ error: 'サロンが見つかりません' }, { status: 404 })
+  }
+
   const {
     line_user_id,
     display_name,
@@ -94,8 +100,10 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // LINE確認メッセージ送信
-  if (line_user_id && process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+  const lineToken = salonExists.line_channel_access_token || process.env.LINE_CHANNEL_ACCESS_TOKEN
+
+  // LINE確認メッセージ送信（サロンごとのトークン優先）
+  if (line_user_id && lineToken) {
     try {
       const dateObj = new Date(date + 'T00:00:00')
       const weekdays = ['日', '月', '火', '水', '木', '金', '土']
@@ -105,7 +113,7 @@ export async function POST(req: NextRequest) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+          'Authorization': `Bearer ${lineToken}`,
         },
         body: JSON.stringify({
           to: line_user_id,

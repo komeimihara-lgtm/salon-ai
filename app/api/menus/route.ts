@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const salonId = resolveSalonTenantId(searchParams)
   if (!salonId) {
-    return NextResponse.json({ error: 'salon_id が必要です（ログインするか、LIFF用 salon_id クエリを付与）' }, { status: 401 })
+    return NextResponse.json({ error: 'salon_id が必要です（ログインするか、LIFF URL に ?salon_id=<UUID> を付与）' }, { status: 401 })
   }
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase

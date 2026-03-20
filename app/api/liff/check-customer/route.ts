@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getLiffSalonId } from '@/lib/get-salon-id'
+import { parseQuerySalonId } from '@/lib/get-salon-id'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin()
-  const salonId = getLiffSalonId()
-  if (!salonId) {
-    return NextResponse.json({ error: 'NEXT_PUBLIC_LIFF_SALON_ID が未設定です' }, { status: 500 })
-  }
   const { searchParams } = new URL(req.url)
+  const salonId = parseQuerySalonId(searchParams)
+  if (!salonId) {
+    return NextResponse.json({ error: 'salon_id クエリが必要です（LIFF URL に ?salon_id=... を付与）' }, { status: 400 })
+  }
   const lineUserId = searchParams.get('line_user_id')
   if (!lineUserId) return NextResponse.json({ exists: false })
 
