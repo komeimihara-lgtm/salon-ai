@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
-/** 来店処理: ステータスを visited に変更、回数券があれば消化、sales に計上 */
+/**
+ * 来店処理: ステータスを visited に変更。
+ * sales への自動計上は ticket_consume / subscription_consume のみ（着金はレジ登録のみ）。
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -26,7 +29,6 @@ export async function POST(req: NextRequest) {
     const customerId = reservation.customer_id ?? ''
     const customerName = reservation.customer_name ?? ''
     const menu = reservation.menu ?? ''
-    const price = Number(reservation.price ?? 0)
     const reservationDate = reservation.reservation_date
     const isCourse = reservation.is_course === true
     const ticketId = reservation.ticket_id
@@ -104,7 +106,7 @@ export async function POST(req: NextRequest) {
         })
       }
     } else {
-      // --- 通常予約: 既存のチケット自動マッチング or 都度払い ---
+      // --- 通常予約: 回数券が自動マッチした場合のみ ticket_consume（都度払いの着金はレジのみ） ---
       const { data: tickets } = await supabase
         .from('customer_tickets')
         .select('id, customer_id, menu_name, remaining_sessions, unit_price, ticket_plan_id, expiry_date, customers(name)')
@@ -148,22 +150,8 @@ export async function POST(req: NextRequest) {
           ticket_id: matchingTicket.id,
           memo: `予約来店: ${menu || '施術'}（残${newRemaining}回）`,
         })
-      } else {
-        const amount = price > 0 ? price : 0
-        if (amount > 0) {
-          await supabase.from('sales').insert({
-            salon_id: salonId,
-            sale_date: reservationDate,
-            amount,
-            customer_id: customerId || null,
-            customer_name: customerName,
-            menu: menu || null,
-            staff_name: reservation.staff_name || null,
-            sale_type: 'cash',
-            memo: `予約来店: ${menu || '施術'}`,
-          })
-        }
       }
+      // 都度払い・マッチなし: sales には書かない（着金は /sales レジで計上）
     }
 
     const { data: updated, error: updateErr } = await supabase
