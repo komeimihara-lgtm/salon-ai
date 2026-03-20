@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,6 +19,7 @@ export async function GET(req: NextRequest) {
       .from('sales')
       .select('amount, sale_type')
       .eq('salon_id', salonId)
+      .eq('status', ACTIVE_SALE_STATUS)
       .eq('sale_date', date)
 
     let cashSales = 0

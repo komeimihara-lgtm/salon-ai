@@ -75,6 +75,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         sale_type: 'ticket_consume',
         ticket_id: id,
         memo: `${current.plan_name} 消化（残${newRemaining}回）`,
+        status: 'active',
       })
     }
 

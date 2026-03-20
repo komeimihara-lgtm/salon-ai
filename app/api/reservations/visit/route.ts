@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
           menu: menu || null,
           staff_name: reservation.staff_name || null,
           memo: `コース消化: ${ticket.plan_name || menu || '施術'}（残${newRemaining}回）`,
+          status: 'active',
         })
       }
     } else if (isCourse && subscriptionId) {
@@ -103,6 +104,7 @@ export async function POST(req: NextRequest) {
           menu: menu || null,
           staff_name: reservation.staff_name || null,
           memo: `サブスク消化: ${sub.plan_name || menu || '施術'}（今月${newUsed}/${sub.sessions_per_month}回）`,
+          status: 'active',
         })
       }
     } else {
@@ -149,6 +151,7 @@ export async function POST(req: NextRequest) {
           sale_type: 'ticket_consume',
           ticket_id: matchingTicket.id,
           memo: `予約来店: ${menu || '施術'}（残${newRemaining}回）`,
+          status: 'active',
         })
       }
       // 都度払い・マッチなし: sales には書かない（着金は /sales レジで計上）

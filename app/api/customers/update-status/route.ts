@@ -1,6 +1,7 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
 
 export async function POST() {
   const supabase = getSupabaseAdmin()
@@ -23,6 +24,7 @@ export async function POST() {
       .select('amount')
       .eq('customer_id', customer.id)
       .eq('salon_id', salonId)
+      .eq('status', ACTIVE_SALE_STATUS)
 
     const totalSales = (salesData || []).reduce((sum: number, s: { amount: number }) => sum + s.amount, 0)
     const visitCount = customer.visit_count || 0

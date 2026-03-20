@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
 
 /**
  * KPIサマリー取得
@@ -44,15 +45,26 @@ export async function GET(req: NextRequest) {
         .from('sales')
         .select('amount, sale_type')
         .eq('salon_id', salonId)
+        .eq('status', ACTIVE_SALE_STATUS)
         .gte('sale_date', rangeStart)
         .lte('sale_date', rangeEnd)
       if (!salesErr) {
         sales = salesWithType
+      } else if (String(salesErr.message ?? '').includes('status')) {
+        const { data: salesLegacy, error: legacyErr } = await supabase
+          .from('sales')
+          .select('amount, sale_type')
+          .eq('salon_id', salonId)
+          .gte('sale_date', rangeStart)
+          .lte('sale_date', rangeEnd)
+        if (legacyErr) throw legacyErr
+        sales = salesLegacy
       } else if (String(salesErr.message ?? '').includes('sale_type') || String(salesErr.message ?? '').includes('column')) {
         const { data: salesNoType } = await supabase
           .from('sales')
           .select('amount')
           .eq('salon_id', salonId)
+          .eq('status', ACTIVE_SALE_STATUS)
           .gte('sale_date', rangeStart)
           .lte('sale_date', rangeEnd)
         sales = (salesNoType || []).map((s) => ({ ...s, sale_type: 'cash' }))
@@ -125,6 +137,7 @@ export async function GET(req: NextRequest) {
         .from('sales')
         .select('customer_id')
         .eq('salon_id', salonId)
+        .eq('status', ACTIVE_SALE_STATUS)
         .gte('sale_date', rangeStart)
         .lte('sale_date', rangeEnd)
       const uniqueVisitorIds = new Set((salesForMonth || []).map((s: { customer_id?: string }) => s.customer_id).filter(Boolean))
@@ -134,6 +147,7 @@ export async function GET(req: NextRequest) {
         .from('sales')
         .select('*', { count: 'exact', head: true })
         .eq('salon_id', salonId)
+        .eq('status', ACTIVE_SALE_STATUS)
         .gte('sale_date', rangeStart)
         .lte('sale_date', rangeEnd)
       const avgUnitPrice = (visitCount ?? 0) > 0 ? Math.round(totalSales / (visitCount ?? 0)) : 0

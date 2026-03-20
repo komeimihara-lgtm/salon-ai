@@ -181,6 +181,7 @@ export async function POST(req: NextRequest) {
             customer_name: customer_name || null,
             memo: `${plan_name} 購入`,
             sale_type: saleType,
+            status: 'active',
           })
       }
     }

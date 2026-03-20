@@ -1,6 +1,9 @@
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
+import { getSalonSaleOperator } from '@/lib/salon-sale-operator'
+import { insertSaleLog, saleRowSnapshot } from '@/lib/sale-audit'
 
 export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin()
@@ -9,6 +12,8 @@ export async function GET(req: NextRequest) {
   const end = searchParams.get('end')
   const customerId = searchParams.get('customer_id')
   const salonId = searchParams.get('salon_id') || getSalonIdFromCookie()
+  const includeCancelled =
+    searchParams.get('include_cancelled') === '1' || searchParams.get('include_cancelled') === 'true'
 
   let query = supabase
     .from('sales')
@@ -16,11 +21,28 @@ export async function GET(req: NextRequest) {
     .eq('salon_id', salonId)
     .order('sale_date', { ascending: false })
 
+  if (!includeCancelled) {
+    query = query.eq('status', ACTIVE_SALE_STATUS)
+  }
+
   if (start) query = query.gte('sale_date', start)
   if (end) query = query.lte('sale_date', end)
   if (customerId) query = query.eq('customer_id', customerId)
 
-  const { data, error } = await query
+  let { data, error } = await query
+  if (error && String(error.message ?? '').includes('status')) {
+    let q2 = supabase
+      .from('sales')
+      .select('*')
+      .eq('salon_id', salonId)
+      .order('sale_date', { ascending: false })
+    if (start) q2 = q2.gte('sale_date', start)
+    if (end) q2 = q2.lte('sale_date', end)
+    if (customerId) q2 = q2.eq('customer_id', customerId)
+    const r2 = await q2
+    data = r2.data
+    error = r2.error
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ sales: data || [] })
 }
@@ -36,6 +58,9 @@ export async function POST(req: NextRequest) {
     }
 
     const salonId = getSalonIdFromCookie()
+    const op = await getSalonSaleOperator()
+    const operatedBy = op.displayName || op.email || 'レジ登録'
+
     const cleanedSales = sales.map((s: Record<string, unknown>) => ({
       salon_id: s.salon_id || salonId,
       sale_date: s.sale_date,
@@ -48,6 +73,7 @@ export async function POST(req: NextRequest) {
       memo: s.memo || null,
       sale_type: s.sale_type || 'cash',
       ticket_id: s.ticket_id || null,
+      status: ACTIVE_SALE_STATUS,
     }))
 
     const { data, error } = await supabase
@@ -58,7 +84,27 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message, code: error.code }, { status: 500 })
     }
-    return NextResponse.json({ sales: data })
+
+    const rows = data || []
+    for (const row of rows) {
+      const { error: logErr } = await insertSaleLog({
+        saleId: row.id,
+        salonId: row.salon_id,
+        action: 'created',
+        beforeData: null,
+        afterData: saleRowSnapshot(row as Record<string, unknown>),
+        operatedBy,
+      })
+      if (logErr) {
+        await supabase.from('sales').delete().in(
+          'id',
+          rows.map((r) => r.id)
+        )
+        return NextResponse.json({ error: '監査ログの記録に失敗しました' }, { status: 500 })
+      }
+    }
+
+    return NextResponse.json({ sales: rows })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }

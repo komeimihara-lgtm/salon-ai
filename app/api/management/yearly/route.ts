@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
 
 export type MonthlyRow = {
   month: number
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
       .from('sales')
       .select('sale_date, amount, sale_type')
       .eq('salon_id', salonId)
+      .eq('status', ACTIVE_SALE_STATUS)
       .gte('sale_date', `${year}-01-01`)
       .lte('sale_date', `${year}-12-31`)
 

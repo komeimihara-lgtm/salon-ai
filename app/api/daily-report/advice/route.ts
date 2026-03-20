@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
       .from('sales')
       .select('amount, sale_type')
       .eq('salon_id', salonId)
+      .eq('status', ACTIVE_SALE_STATUS)
       .eq('sale_date', date)
 
     let cashSales = 0

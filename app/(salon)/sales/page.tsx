@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
-  ShoppingCart, Receipt, Plus, Trash2, Pencil, X,
+  ShoppingCart, Receipt, Plus, X,
   ChevronLeft, ChevronRight, Loader2, Tag, AlertCircle, ArrowLeft,
-  UserPlus, Search,
+  UserPlus, Search, Ban,
 } from 'lucide-react'
 import { fetchMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, isCampaignActive, type MenuItem, type Campaign } from '@/lib/menus'
 import { fetchStaffList } from '@/lib/staff-management'
@@ -30,6 +30,14 @@ interface Sale {
   staff_name?: string
   payment_method: string
   memo?: string
+  sale_type?: string
+  status?: string
+}
+
+type SalePermissions = { canCancel: boolean; canModify: boolean; role: string | null }
+
+function isActiveSale(s: Sale) {
+  return (s.status ?? 'active') === 'active'
 }
 
 type CartItemType = 'menu' | 'ticket' | 'subscription'
@@ -79,12 +87,26 @@ export default function SalesPage() {
   const [showCampaignPanel, setShowCampaignPanel] = useState(false)
   const [confirmModal, setConfirmModal] = useState<{ type: 'card' | 'loan' } | null>(null)
   const [paymentConfirmed, setPaymentConfirmed] = useState(false)
-  const [editSale, setEditSale] = useState<Sale | null>(null)
   const [ticketPlans, setTicketPlans] = useState<TicketPlan[]>([])
   const [subPlans, setSubPlans] = useState<SubscriptionPlan[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<Sale | null>(null)
+  const [salePermissions, setSalePermissions] = useState<SalePermissions | null>(null)
+  const [cancelModalSale, setCancelModalSale] = useState<Sale | null>(null)
+  const [cancelReasonInput, setCancelReasonInput] = useState('')
+  const [cancelSubmitting, setCancelSubmitting] = useState(false)
+  const [modifyModalSale, setModifyModalSale] = useState<Sale | null>(null)
+  const [modifyForm, setModifyForm] = useState({
+    amount: 0,
+    sale_date: '',
+    menu: '',
+    staff_name: '',
+    payment_method: 'cash',
+    memo: '',
+    sale_type: 'cash',
+    modify_reason: '',
+  })
+  const [modifySubmitting, setModifySubmitting] = useState(false)
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [customerSearch, setCustomerSearch] = useState('')
   const [searchResults, setSearchResults] = useState<Array<{ id: string; name: string; phone?: string; visit_count?: number; last_visit_date?: string }>>([])
@@ -96,7 +118,9 @@ export default function SalesPage() {
 
   const fetchSales = useCallback(async () => {
     try {
-      const res = await fetch(`/api/kpi/sales?start=${dateRange.start}&end=${dateRange.end}`)
+      const res = await fetch(
+        `/api/kpi/sales?start=${dateRange.start}&end=${dateRange.end}&include_cancelled=1`
+      )
       const json = await res.json()
       setSales(json.sales || [])
     } catch (e) { console.error(e) } finally { setLoading(false) }
@@ -140,6 +164,16 @@ export default function SalesPage() {
     setTaxSettingsState(getTaxSettings())
     setCampaignsState(getCampaigns())
     fetchCustomers()
+    fetch('/api/sales/permissions')
+      .then(r => r.json())
+      .then((j: SalePermissions) =>
+        setSalePermissions({
+          canCancel: !!j.canCancel,
+          canModify: !!j.canModify,
+          role: j.role ?? null,
+        })
+      )
+      .catch(() => setSalePermissions({ canCancel: false, canModify: false, role: null }))
     fetchTicketPlans().then(setTicketPlans).catch(() => [])
     fetchSubscriptionPlans().then(setSubPlans).catch(() => [])
   }, [fetchCustomers])
@@ -374,13 +408,79 @@ export default function SalesPage() {
     } finally { setSaving(false) }
   }
 
-  const handleDelete = async (id: string) => {
+  const openCancelModal = (s: Sale) => {
+    setCancelReasonInput('')
+    setCancelModalSale(s)
+  }
+
+  const submitCancel = async () => {
+    if (!cancelModalSale) return
+    const reason = cancelReasonInput.trim()
+    if (!reason) {
+      showToast('取消理由を入力してください', 'error')
+      return
+    }
+    setCancelSubmitting(true)
     try {
-      const res = await fetch(`/api/kpi/sales/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error()
-      setDeleteTarget(null)
+      const res = await fetch(`/api/sales/${cancelModalSale.id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cancel_reason: reason }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || '取消に失敗しました')
+      setCancelModalSale(null)
       fetchSales()
-    } catch { showToast('削除に失敗しました', 'error') }
+      showToast('売上を取消しました')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '取消に失敗しました', 'error')
+    } finally {
+      setCancelSubmitting(false)
+    }
+  }
+
+  const openModifyModal = (s: Sale) => {
+    setModifyModalSale(s)
+    setModifyForm({
+      amount: s.amount,
+      sale_date: s.sale_date,
+      menu: s.menu ?? '',
+      staff_name: s.staff_name ?? '',
+      payment_method: s.payment_method ?? 'cash',
+      memo: s.memo ?? '',
+      sale_type: s.sale_type ?? 'cash',
+      modify_reason: '',
+    })
+  }
+
+  const submitModify = async () => {
+    if (!modifyModalSale) return
+    setModifySubmitting(true)
+    try {
+      const res = await fetch(`/api/sales/${modifyModalSale.id}/modify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: modifyForm.amount,
+          sale_date: modifyForm.sale_date,
+          menu: modifyForm.menu || null,
+          staff_name: modifyForm.staff_name || null,
+          payment_method: modifyForm.payment_method,
+          memo: modifyForm.memo || null,
+          sale_type: modifyForm.sale_type,
+          modify_reason: modifyForm.modify_reason.trim() || undefined,
+        }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || '修正に失敗しました')
+      setModifyModalSale(null)
+      fetchSales()
+      showToast('売上を修正しました（差し替え）')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '修正に失敗しました', 'error')
+    } finally {
+      setModifySubmitting(false)
+    }
   }
 
   const prevMonth = () => {
@@ -393,7 +493,7 @@ export default function SalesPage() {
     const d = new Date(y, m)
     setDateRange({ start: new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10), end: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10) })
   }
-  const dayTotal = sales.reduce((sum, s) => sum + s.amount, 0)
+  const dayTotal = sales.filter(isActiveSale).reduce((sum, s) => sum + s.amount, 0)
 
   return (
     <div className="h-screen flex flex-col bg-off-white overflow-hidden">
@@ -663,7 +763,9 @@ export default function SalesPage() {
                 <span className="text-xl font-bold text-text-main">{dateRange.start.slice(0, 7).replace('-', '年')}月</span>
                 <button onClick={nextMonth} className="p-3 rounded-xl hover:bg-light-lav"><ChevronRight className="w-6 h-6" /></button>
               </div>
-              <p className="text-xl font-bold text-rose">合計: ¥{dayTotal.toLocaleString()}</p>
+              <p className="text-xl font-bold text-rose">
+                合計（有効のみ）: ¥{dayTotal.toLocaleString()}
+              </p>
             </div>
             {loading ? (
               <div className="flex justify-center py-16"><Loader2 className="w-12 h-12 text-rose animate-spin" /></div>
@@ -674,24 +776,58 @@ export default function SalesPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {sales.map(s => (
-                  <div key={s.id} className="flex items-center justify-between p-5 bg-white rounded-2xl border border-gray-100 shadow-sm">
-                    <div>
-                      <span className="text-2xl font-bold text-text-main">¥{s.amount.toLocaleString()}</span>
-                      {s.menu && <span className="ml-3 text-base text-text-sub">{s.menu}</span>}
-                      <div className="flex gap-3 mt-1 text-sm text-text-sub">
-                        <span>{s.sale_date}</span>
-                        {s.customer_name && <span>{s.customer_name}様</span>}
-                        {s.staff_name && <span>/ {s.staff_name}</span>}
+                {sales.map(s => {
+                  const active = isActiveSale(s)
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex items-center justify-between p-5 bg-white rounded-2xl border border-gray-100 shadow-sm ${!active ? 'opacity-75' : ''}`}
+                    >
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`text-2xl font-bold ${active ? 'text-text-main' : 'text-text-sub line-through'}`}>
+                            ¥{s.amount.toLocaleString()}
+                          </span>
+                          {!active && (
+                            <span className="px-2 py-0.5 rounded-lg bg-red-100 text-red-700 text-sm font-bold">
+                              取消済み
+                            </span>
+                          )}
+                          {s.menu && <span className="text-base text-text-sub">{s.menu}</span>}
+                        </div>
+                        <div className="flex gap-3 mt-1 text-sm text-text-sub">
+                          <span>{s.sale_date}</span>
+                          {s.customer_name && <span>{s.customer_name}様</span>}
+                          {s.staff_name && <span>/ {s.staff_name}</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="px-3 py-1 rounded-full bg-light-lav text-sm font-medium">
+                          {PAYMENTS.find(p => p.value === s.payment_method)?.label ?? s.payment_method}
+                        </span>
+                        {active && salePermissions?.canModify && (
+                          <button
+                            type="button"
+                            onClick={() => openModifyModal(s)}
+                            className="px-3 py-2 text-sm font-bold text-rose border border-rose/40 rounded-xl hover:bg-rose/10"
+                          >
+                            修正
+                          </button>
+                        )}
+                        {active && salePermissions?.canCancel && (
+                          <button
+                            type="button"
+                            onClick={() => openCancelModal(s)}
+                            className="p-2 text-text-sub hover:text-red-600 rounded-xl"
+                            title="取消"
+                          >
+                            <Ban className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 rounded-full bg-light-lav text-sm font-medium">{PAYMENTS.find(p => p.value === s.payment_method)?.label ?? s.payment_method}</span>
-                      <button onClick={() => setEditSale(s)} className="p-2 text-text-sub hover:text-rose rounded-xl"><Pencil className="w-5 h-5" /></button>
-                      <button onClick={() => setDeleteTarget(s)} className="p-2 text-text-sub hover:text-red-600 rounded-xl"><Trash2 className="w-5 h-5" /></button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
@@ -781,15 +917,160 @@ export default function SalesPage() {
         </div>
       )}
 
-      {/* 削除確認モーダル */}
-      {deleteTarget && (
+      {/* 売上取消（理由入力） */}
+      {cancelModalSale && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm card-shadow">
-            <h3 className="font-bold text-text-main text-lg mb-2">売上を削除</h3>
-            <p className="text-base text-text-main mb-6">この売上を削除しますか？</p>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md card-shadow">
+            <h3 className="font-bold text-text-main text-lg mb-2">売上を取消</h3>
+            <p className="text-sm text-text-sub mb-3">
+              ¥{cancelModalSale.amount.toLocaleString()} {cancelModalSale.menu ? `· ${cancelModalSale.menu}` : ''}
+            </p>
+            <label className="text-xs text-text-sub block mb-1">取消理由（必須）</label>
+            <textarea
+              value={cancelReasonInput}
+              onChange={e => setCancelReasonInput(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base mb-4"
+              placeholder="例: 誤登録のため"
+            />
             <div className="flex gap-3">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 py-3 rounded-xl border border-gray-200 text-text-main font-bold">キャンセル</button>
-              <button onClick={() => handleDelete(deleteTarget.id)} className="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold">削除</button>
+              <button
+                type="button"
+                onClick={() => setCancelModalSale(null)}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-text-main font-bold"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={cancelSubmitting}
+                onClick={() => void submitCancel()}
+                className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold disabled:opacity-50"
+              >
+                {cancelSubmitting ? '処理中...' : '取消する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 売上修正（オーナー） */}
+      {modifyModalSale && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md card-shadow my-8">
+            <h3 className="font-bold text-text-main text-lg mb-4">売上を修正</h3>
+            <p className="text-sm text-text-sub mb-4">元の行は取消され、内容を反映した新しい売上が作成されます。</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-text-sub block mb-1">金額</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={modifyForm.amount}
+                  onChange={e => setModifyForm(f => ({ ...f, amount: Number(e.target.value) }))}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-sub block mb-1">日付</label>
+                <input
+                  type="date"
+                  value={modifyForm.sale_date}
+                  onChange={e => setModifyForm(f => ({ ...f, sale_date: e.target.value }))}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-sub block mb-1">メニュー・品目</label>
+                <input
+                  type="text"
+                  value={modifyForm.menu}
+                  onChange={e => setModifyForm(f => ({ ...f, menu: e.target.value }))}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-sub block mb-1">担当スタッフ</label>
+                <input
+                  type="text"
+                  list="sales-modify-staff-list"
+                  value={modifyForm.staff_name}
+                  onChange={e => setModifyForm(f => ({ ...f, staff_name: e.target.value }))}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200"
+                  placeholder="名前を入力または選択"
+                />
+                <datalist id="sales-modify-staff-list">
+                  {staffList.map(st => (
+                    <option key={st.id} value={st.name} />
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <label className="text-xs text-text-sub block mb-1">支払方法</label>
+                <select
+                  value={modifyForm.payment_method}
+                  onChange={e => setModifyForm(f => ({ ...f, payment_method: e.target.value }))}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200"
+                >
+                  {PAYMENTS.map(p => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-text-sub block mb-1">売上種別（sale_type）</label>
+                <select
+                  value={modifyForm.sale_type}
+                  onChange={e => setModifyForm(f => ({ ...f, sale_type: e.target.value }))}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200"
+                >
+                  <option value="cash">現金</option>
+                  <option value="card">カード</option>
+                  <option value="online">オンライン</option>
+                  <option value="loan">ローン</option>
+                  <option value="product">物販</option>
+                  <option value="ticket_consume">回数券消化</option>
+                  <option value="subscription_consume">サブスク消化</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-text-sub block mb-1">メモ</label>
+                <textarea
+                  value={modifyForm.memo}
+                  onChange={e => setModifyForm(f => ({ ...f, memo: e.target.value }))}
+                  rows={2}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-text-sub block mb-1">修正メモ（元行の取消理由に記録）</label>
+                <input
+                  type="text"
+                  value={modifyForm.modify_reason}
+                  onChange={e => setModifyForm(f => ({ ...f, modify_reason: e.target.value }))}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200"
+                  placeholder="任意"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setModifyModalSale(null)}
+                className="flex-1 py-3 rounded-xl border border-gray-200 text-text-main font-bold"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={modifySubmitting}
+                onClick={() => void submitModify()}
+                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold disabled:opacity-50"
+              >
+                {modifySubmitting ? '処理中...' : '修正を確定'}
+              </button>
             </div>
           </div>
         </div>
