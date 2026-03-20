@@ -51,19 +51,20 @@ export async function getSalonSaleOperator(): Promise<SalonSaleOperator> {
     return { salonId, email, displayName: 'オーナー', role: 'owner' }
   }
 
-  let staffList: { name?: string; role?: string; login_email?: string | null }[] | null = null
+  type StaffRow = { name?: string; role?: string; login_email?: string | null }
+  let staffList: StaffRow[] = []
   const staffRes = await admin
     .from('staff')
     .select('name, role, login_email')
     .eq('salon_id', salonId)
-  if (!staffRes.error) {
-    staffList = staffRes.data as typeof staffList
+  if (!staffRes.error && staffRes.data) {
+    staffList = staffRes.data as StaffRow[]
   } else {
     const legacy = await admin.from('staff').select('name').eq('salon_id', salonId)
-    if (!legacy.error) staffList = legacy.data as typeof staffList
+    if (!legacy.error && legacy.data) staffList = legacy.data as StaffRow[]
   }
 
-  const staffRow = (staffList || []).find(
+  const staffRow = staffList.find(
     (s) => (s.login_email as string | null)?.trim().toLowerCase() === email
   )
   if (staffRow && (staffRow.role === 'owner' || staffRow.role === 'staff')) {
