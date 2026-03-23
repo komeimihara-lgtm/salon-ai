@@ -11,8 +11,12 @@ export function formatSignInError(err: { message: string }): string {
   if (m.includes('email not confirmed')) {
     return 'メールアドレスの確認が完了していません。受信トレイのリンクから認証してからログインしてください。'
   }
-  if (m.includes('too many requests')) {
-    return '試行回数が多すぎます。しばらくしてから再度お試しください。'
+  if (
+    m.includes('too many requests') ||
+    m.includes('rate limit') ||
+    m.includes('email rate limit')
+  ) {
+    return '短時間に試行が多すぎます。数分〜1時間ほど待ってから再度ログインしてください。'
   }
   return err.message
 }
@@ -25,6 +29,15 @@ export function formatSignUpError(err: { message: string }): string {
     m.includes('already been registered')
   ) {
     return 'このメールアドレスは既に登録されています。ログインしてください。'
+  }
+  /** Supabase: 同一メール・IP への signUp / 確認メール送信の上限 */
+  if (
+    m.includes('email rate limit exceeded') ||
+    m.includes('rate limit exceeded') ||
+    m.includes('over_email_send_rate_limit') ||
+    m.includes('too many requests')
+  ) {
+    return '登録・確認メールの送信が一時的に制限されています。しばらく（目安: 1時間）待ってから再度お試しください。既にアカウントをお持ちの場合はログインしてください。'
   }
   if (m.includes('password')) {
     return err.message
