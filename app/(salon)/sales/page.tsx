@@ -617,12 +617,13 @@ export default function SalesPage() {
             </div>
           </div>
 
-          {/* 右パネル 30%: カート */}
-          <div className="flex-[3] min-w-[280px] flex flex-col border-l border-gray-200 bg-white overflow-hidden">
+          {/* 右パネル 30%: カート〜決済まで一体でスクロール（min-h-0 で flex 子の高さ制約を伝播） */}
+          <div className="flex-[3] min-w-[280px] min-h-0 flex flex-col border-l border-gray-200 bg-white overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <div className="p-4 border-b border-gray-100">
               <h3 className="text-lg font-bold text-text-main">カート</h3>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="p-4 space-y-3">
               {cart.length === 0 ? (
                 <p className="text-base text-text-sub py-8">メニュー・回数券・サブスクを選択</p>
               ) : cart.map(c => {
@@ -648,7 +649,7 @@ export default function SalesPage() {
               })}
             </div>
 
-            {/* 割引 */}
+            {/* 割引〜登録ボタンまで同一スクロール領域内 */}
             <div className="p-4 border-t border-gray-100">
               <div className="flex gap-2 mb-2">
                 <button onClick={() => { setShowDiscountPanel(!showDiscountPanel); setShowCampaignPanel(false) }}
@@ -751,6 +752,7 @@ export default function SalesPage() {
                 {saving ? <Loader2 className="w-6 h-6 animate-spin" /> : <Plus className="w-6 h-6" />}
                 {saving ? '登録中...' : '売上を登録'}
               </button>
+            </div>
             </div>
           </div>
         </div>

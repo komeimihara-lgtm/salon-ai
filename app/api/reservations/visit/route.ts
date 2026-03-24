@@ -30,20 +30,22 @@ export async function POST(req: NextRequest) {
     const customerName = reservation.customer_name ?? ''
     const menu = reservation.menu ?? ''
     const reservationDate = reservation.reservation_date
-    const isCourse = reservation.is_course === true
-    const ticketId = reservation.ticket_id
-    const subscriptionId = reservation.subscription_id
+    const ticketId = reservation.ticket_id as string | null | undefined
+    const subscriptionId = reservation.subscription_id as string | null | undefined
 
-    if (isCourse && ticketId) {
+    // ticket_id が付いていれば is_course フラグに依存せず回数券消化（UI/APIの不整合を吸収）
+    if (ticketId) {
       // --- コース消化: 回数券 ---
       const { data: ticket } = await supabase
         .from('customer_tickets')
-        .select('id, remaining_sessions, unit_price, ticket_plan_id, plan_name')
+        .select('id, remaining_sessions, unit_price, ticket_plan_id, plan_name, salon_id')
         .eq('id', ticketId)
-        .single()
+        .eq('salon_id', salonId)
+        .maybeSingle()
 
-      if (ticket && ticket.remaining_sessions > 0) {
-        const newRemaining = ticket.remaining_sessions - 1
+      const remaining = Number(ticket?.remaining_sessions ?? 0)
+      if (ticket && remaining > 0) {
+        const newRemaining = remaining - 1
         let unitPrice = ticket.unit_price != null ? Number(ticket.unit_price) : null
         if (unitPrice == null && ticket.ticket_plan_id) {
           const { data: plan } = await supabase
@@ -75,13 +77,14 @@ export async function POST(req: NextRequest) {
           status: 'active',
         })
       }
-    } else if (isCourse && subscriptionId) {
+    } else if (subscriptionId) {
       // --- コース消化: サブスク ---
       const { data: sub } = await supabase
         .from('customer_subscriptions')
-        .select('id, sessions_used_in_period, plan_name, price, sessions_per_month')
+        .select('id, sessions_used_in_period, plan_name, price, sessions_per_month, salon_id')
         .eq('id', subscriptionId)
-        .single()
+        .eq('salon_id', salonId)
+        .maybeSingle()
 
       if (sub) {
         const newUsed = (sub.sessions_used_in_period || 0) + 1

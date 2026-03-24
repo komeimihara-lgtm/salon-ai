@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
         .eq('reservation_date', reservation_date)
         .eq('bed_id', bed_id)
         .neq('status', 'cancelled')
+        .neq('status', 'no_show')
         .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`)
 
       if (bedConflict && bedConflict.length > 0) {
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
         .eq('reservation_date', reservation_date)
         .eq('staff_name', staff_name)
         .neq('status', 'cancelled')
+        .neq('status', 'no_show')
         .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`)
 
       if (staffConflict && staffConflict.length > 0) {
@@ -63,6 +65,37 @@ export async function POST(req: NextRequest) {
           conflictType: 'staff',
         }, { status: 409 })
       }
+    }
+
+    // --- 重複チェック3: 同一顧客の時間重複（ダブルブッキング防止） ---
+    const customerIdForDup = body.customer_id || null
+    const customerNameTrim = String(body.customer_name || '').trim()
+    let customerDupQuery = supabase
+      .from('reservations')
+      .select('id, customer_name, start_time, end_time')
+      .eq('salon_id', salonId)
+      .eq('reservation_date', reservation_date)
+      .neq('status', 'cancelled')
+      .neq('status', 'no_show')
+      .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`)
+
+    if (customerIdForDup) {
+      customerDupQuery = customerDupQuery.eq('customer_id', customerIdForDup)
+    } else {
+      customerDupQuery = customerDupQuery.eq('customer_name', customerNameTrim)
+    }
+
+    const { data: customerDup } = await customerDupQuery.limit(1)
+    if (customerDup && customerDup.length > 0) {
+      const c = customerDup[0]
+      return NextResponse.json(
+        {
+          error: `このお客様は ${c.start_time}〜${c.end_time} に既に予約があります。別の時間を選ぶか、既存予約を変更してください。`,
+          conflict: c,
+          conflictType: 'customer',
+        },
+        { status: 409 }
+      )
     }
 
     const insertData: Record<string, unknown> = {

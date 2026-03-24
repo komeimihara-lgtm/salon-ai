@@ -755,7 +755,11 @@ export default function ReservationFormModal({
             <p className="text-sm text-red-600 font-medium">{error}</p>
             {conflictInfo && (
               <p className="text-xs text-red-500 mt-1">
-                {conflictInfo.type === 'staff' ? '⚠️ スタッフの予約が重複しています' : '⚠️ ベッドの予約が重複しています'}
+                {conflictInfo.type === 'staff'
+                  ? '⚠️ スタッフの予約が重複しています'
+                  : conflictInfo.type === 'customer'
+                    ? '⚠️ 同一お客様の予約が時間重複しています'
+                    : '⚠️ ベッドの予約が重複しています'}
                 ：{conflictInfo.customer_name}様 {conflictInfo.start_time}〜{conflictInfo.end_time}
               </p>
             )}
