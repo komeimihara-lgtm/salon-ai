@@ -118,8 +118,11 @@ function NewContractForm() {
 
   const courseName = selectedMenus.join(', ')
 
+  const amountNum = Number(amount)
+  const amountOk = !Number.isNaN(amountNum) && amountNum >= 0
+
   const handleSubmit = async () => {
-    if (!customerId || selectedMenus.length === 0 || !amount) return
+    if (!customerId || selectedMenus.length === 0 || !amountOk) return
     setSaving(true)
     try {
       const paymentDetail: PaymentDetail | null = paymentMethod === 'installment'
@@ -136,7 +139,7 @@ function NewContractForm() {
           sessions: sessions || null,
           start_date: startDate || null,
           end_date: endDate || null,
-          amount: Number(amount),
+          amount: amountNum,
           payment_method: paymentMethod,
           payment_detail: paymentDetail,
         }),
@@ -393,7 +396,7 @@ function NewContractForm() {
 
         <button
           onClick={handleSubmit}
-          disabled={saving || !customerId || selectedMenus.length === 0 || !amount}
+          disabled={saving || !customerId || selectedMenus.length === 0 || !amountOk}
           className="w-full py-3 rounded-xl bg-rose text-white font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {saving ? (

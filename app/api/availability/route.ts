@@ -6,6 +6,15 @@ export const dynamic = 'force-dynamic'
 
 const SLOT_MINUTES = 15
 
+type ReservationRow = {
+  start_time: string
+  end_time?: string | null
+  duration_minutes?: number | null
+  staff_name?: string | null
+  bed_id?: string | null
+  status?: string | null
+}
+
 export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin()
   const { searchParams } = new URL(req.url)
@@ -18,7 +27,6 @@ export async function GET(req: NextRequest) {
 
   if (!date) return NextResponse.json({ error: 'date required' }, { status: 400 })
 
-  // 休業日チェック
   const { data: holidays } = await supabase
     .from('salon_holidays')
     .select('*')
@@ -30,7 +38,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ available: false, reason: holidays[0].reason || '休業日', slots: [] })
   }
 
-  // ベッド一覧取得
   const { data: salon } = await supabase
     .from('salons')
     .select('beds')
@@ -38,7 +45,6 @@ export async function GET(req: NextRequest) {
     .single()
   const beds: string[] = Array.isArray(salon?.beds) ? salon.beds : ['A', 'B']
 
-  // シフト取得
   const { data: shifts } = await supabase
     .from('shifts')
     .select('*, staff(id, name, color)')
@@ -49,15 +55,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ available: false, reason: 'シフトなし', slots: [] })
   }
 
-  // 予約取得
   const { data: reservations } = await supabase
     .from('reservations')
     .select('*')
     .eq('salon_id', salonId)
     .eq('reservation_date', date)
-    .not('status', 'eq', 'cancelled')
+    .neq('status', 'cancelled')
+    .neq('status', 'no_show')
 
-  // 時間→分変換
   const toMinutes = (time: string) => {
     const [h, m] = (time || '00:00').slice(0, 5).split(':').map(Number)
     return (h || 0) * 60 + (m || 0)
@@ -68,7 +73,27 @@ export async function GET(req: NextRequest) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
   }
 
-  // スタッフごとの空き枠を計算
+  const resWindow = (r: ReservationRow) => {
+    const resStart = toMinutes(r.start_time)
+    let resEnd = r.end_time ? toMinutes(r.end_time) : resStart + (r.duration_minutes || 60)
+    if (resEnd <= resStart) resEnd = resStart + (r.duration_minutes || 60)
+    return { resStart, resEnd }
+  }
+
+  const overlaps = (aStart: number, aEnd: number, bStart: number, bEnd: number) =>
+    aStart < bEnd && aEnd > bStart
+
+  const blockingReservations: ReservationRow[] = reservations || []
+
+  let globalMin = 24 * 60
+  let globalMax = 0
+  for (const shift of shifts) {
+    const startTime = typeof shift.start_time === 'string' ? shift.start_time : '09:00'
+    const endTime = typeof shift.end_time === 'string' ? shift.end_time : '18:00'
+    globalMin = Math.min(globalMin, toMinutes(startTime))
+    globalMax = Math.max(globalMax, toMinutes(endTime))
+  }
+
   const slots: {
     staff_id: string
     staff_name: string
@@ -78,49 +103,55 @@ export async function GET(req: NextRequest) {
     bed_id: string
   }[] = []
 
-  for (const shift of shifts) {
-    const staff = Array.isArray(shift.staff) ? shift.staff[0] : shift.staff
-    if (!staff) continue
+  for (let t = globalMin; t + duration <= globalMax; t += SLOT_MINUTES) {
+    const slotEnd = t + duration
 
-    const staffReservations = reservations?.filter((r: { staff_name?: string }) =>
-      r.staff_name === staff.name
-    ) || []
-
-    const startTime = typeof shift.start_time === 'string' ? shift.start_time : '09:00'
-    const endTime = typeof shift.end_time === 'string' ? shift.end_time : '18:00'
-    const shiftStart = toMinutes(startTime)
-    const shiftEnd = toMinutes(endTime)
-
-    // 15分刻みで空き枠を生成
-    for (let t = shiftStart; t + duration <= shiftEnd; t += SLOT_MINUTES) {
-      // スタッフの予約との重複チェック
-      const isStaffBooked = staffReservations.some((r: { start_time: string; duration_minutes?: number }) => {
-        const resStart = toMinutes(r.start_time)
-        const resEnd = resStart + (r.duration_minutes || 60)
-        return t < resEnd && t + duration > resStart
-      })
-      if (isStaffBooked) continue
-
-      // ベッドの空きチェック（その時間帯に空いているベッドを探す）
-      const bookedBeds = (reservations || [])
-        .filter((r: { start_time: string; duration_minutes?: number }) => {
-          const resStart = toMinutes(r.start_time)
-          const resEnd = resStart + (r.duration_minutes || 60)
-          return t < resEnd && t + duration > resStart
+    const onDutyById = new Map<string, { id: string; name: string; color: string }>()
+    for (const shift of shifts) {
+      const staff = Array.isArray(shift.staff) ? shift.staff[0] : shift.staff
+      if (!staff) continue
+      const startTime = typeof shift.start_time === 'string' ? shift.start_time : '09:00'
+      const endTime = typeof shift.end_time === 'string' ? shift.end_time : '18:00'
+      const shiftStart = toMinutes(startTime)
+      const shiftEnd = toMinutes(endTime)
+      if (shiftStart <= t && shiftEnd >= slotEnd) {
+        onDutyById.set(staff.id, {
+          id: staff.id,
+          name: staff.name,
+          color: staff.color || '#C4728A',
         })
-        .map((r: { bed_id?: string }) => r.bed_id)
-        .filter(Boolean)
+      }
+    }
 
-      const availableBed = beds.find(b => !bookedBeds.includes(b))
-      if (!availableBed) continue
+    const onDuty = Array.from(onDutyById.values()).sort((a, b) => a.id.localeCompare(b.id))
 
+    const availableStaff = onDuty.filter(staff => {
+      return !blockingReservations.some(r => {
+        if (r.staff_name !== staff.name) return false
+        const { resStart, resEnd } = resWindow(r)
+        return overlaps(t, slotEnd, resStart, resEnd)
+      })
+    })
+
+    const occupiedBeds = new Set<string>()
+    for (const r of blockingReservations) {
+      const { resStart, resEnd } = resWindow(r)
+      if (!overlaps(t, slotEnd, resStart, resEnd)) continue
+      const bid = r.bed_id != null && r.bed_id !== '' ? String(r.bed_id) : null
+      if (bid && beds.includes(bid)) occupiedBeds.add(bid)
+    }
+    const freeBeds = beds.filter(b => !occupiedBeds.has(b))
+
+    const cap = Math.min(freeBeds.length, availableStaff.length)
+    for (let i = 0; i < cap; i++) {
+      const st = availableStaff[i]
       slots.push({
-        staff_id: staff.id,
-        staff_name: staff.name,
-        staff_color: staff.color || '#C4728A',
+        staff_id: st.id,
+        staff_name: st.name,
+        staff_color: st.color,
         start: toTime(t),
-        end: toTime(t + duration),
-        bed_id: availableBed,
+        end: toTime(slotEnd),
+        bed_id: freeBeds[i],
       })
     }
   }

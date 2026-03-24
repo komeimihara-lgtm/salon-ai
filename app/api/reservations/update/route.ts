@@ -5,7 +5,7 @@ import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json()
-    const { id, status, memo, menu, start_time, end_time, staff_name, price, reservation_date } = body
+    const { id, status, memo, menu, start_time, end_time, staff_name, price, reservation_date, bed_id } = body
 
     if (!id) {
       return NextResponse.json({ error: 'IDは必須です' }, { status: 400 })
@@ -22,6 +22,7 @@ export async function PATCH(req: NextRequest) {
     if (end_time !== undefined) updates.end_time = end_time ? (end_time.length === 5 ? end_time : `${end_time}:00`) : null
     if (staff_name !== undefined) updates.staff_name = staff_name
     if (price !== undefined) updates.price = Number(price) || 0
+    if (bed_id !== undefined) updates.bed_id = bed_id || null
 
     const { data, error } = await supabase
       .from('reservations')

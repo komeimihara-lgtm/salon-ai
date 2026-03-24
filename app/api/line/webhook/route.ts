@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
             line_user_id: lineUserId,
             followed_at: new Date().toISOString(),
             salon_id: salonId,
-          }, { onConflict: 'line_user_id' })
+          }, { onConflict: 'salon_id,line_user_id' })
 
           // 歓迎メッセージを送信
           if (accessToken) {
