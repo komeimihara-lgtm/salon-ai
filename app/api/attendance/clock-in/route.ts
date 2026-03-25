@@ -1,13 +1,13 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { todayJstYmd, isLateClockIn } from '@/lib/attendance-utils'
-import { fetchShift, requirePunchContext } from '@/lib/attendance-api-helpers'
+import { fetchShift, requireSalonAndStaffFromPost } from '@/lib/attendance-api-helpers'
 
-export async function POST() {
-  const gate = await requirePunchContext()
+export async function POST(req: NextRequest) {
+  const gate = await requireSalonAndStaffFromPost(req)
   if (!gate.ok) return gate.response
 
-  const { salonId, staffId } = gate.ctx
+  const { salonId, staffId } = gate
   const date = todayJstYmd()
   const admin = getSupabaseAdmin()
 

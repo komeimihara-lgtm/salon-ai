@@ -1,13 +1,22 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { todayJstYmd, deriveAttendanceStatus } from '@/lib/attendance-utils'
-import { fetchShift, requirePunchContext } from '@/lib/attendance-api-helpers'
+import {
+  fetchShift,
+  requireSalonIdFromCookie,
+  resolveStaffForAttendance,
+} from '@/lib/attendance-api-helpers'
 
-export async function GET() {
-  const gate = await requirePunchContext()
-  if (!gate.ok) return gate.response
+export async function GET(req: NextRequest) {
+  const salon = await requireSalonIdFromCookie()
+  if (!salon.ok) return salon.response
 
-  const { salonId, staffId, staffName } = gate.ctx
+  const staffIdParam = new URL(req.url).searchParams.get('staff_id')
+  const staff = await resolveStaffForAttendance(salon.salonId, staffIdParam)
+  if (!staff.ok) return staff.response
+
+  const { staffId, staffName } = staff
+  const salonId = salon.salonId
   const date = todayJstYmd()
   const admin = getSupabaseAdmin()
 
