@@ -22,6 +22,8 @@ import { computeContractRemainingAmount } from '@/lib/contract-payload'
 interface ContractData {
   id: string
   customer_id: string
+  /** 契約作成時に保存したクーリングオフ（電磁的記録）受付メール */
+  cooling_off_email?: string | null
   course_name: string
   treatment_content: string | null
   sessions: number | null
@@ -62,6 +64,8 @@ interface SalonInfo {
   name?: string
   phone?: string
   address?: string
+  email?: string | null
+  postal_code?: string | null
 }
 
 const INSTRUMENT_CODES = new Set(['cash', 'card', 'loan', 'transfer', 'auto_billing'])
@@ -668,8 +672,15 @@ export default function ContractDetailPage() {
           <h3 className="text-sm font-bold text-text-main mb-2 border-b border-gray-300 pb-1">事業者情報</h3>
           <div className="text-sm text-text-sub space-y-0.5">
             <p>サロン名: {salon.name || '—'}</p>
-            <p>住所: {salon.address || '—'}</p>
+            <p>
+              住所:
+              {salon.postal_code?.trim()
+                ? ` 〒${salon.postal_code.trim()}`
+                : ''}{' '}
+              {salon.address || '—'}
+            </p>
             <p>電話番号: {salon.phone || '—'}</p>
+            {salon.email?.trim() ? <p>メール: {salon.email.trim()}</p> : null}
           </div>
         </div>
 
@@ -783,12 +794,29 @@ export default function ContractDetailPage() {
         {/* クーリングオフ */}
         <div className="mb-4">
           <h3 className="text-sm font-bold text-text-main mb-2 border-b border-gray-300 pb-1">
-            クーリングオフに関する事項
+            クーリングオフについて
           </h3>
-          <div className="text-xs text-text-sub leading-relaxed bg-[#F8F5FF] p-3 rounded-lg">
-            <p>契約書面を受領した日から起算して8日間は、書面により無条件で契約の解除（クーリングオフ）を行うことができます。</p>
-            <p className="mt-1">クーリングオフの通知は、上記事業者住所宛に書面（はがき可）にて行ってください。効力は書面を発信した時点で生じます。</p>
-            <p className="mt-1">クーリングオフを行った場合、事業者は損害賠償・違約金を請求することはできません。既に役務が提供されている場合でも、その対価の支払いは不要です。</p>
+          <div className="text-xs text-text-sub leading-relaxed bg-[#F8F5FF] p-3 rounded-lg space-y-2">
+            <p>
+              契約書面を受け取った日から8日以内であれば、書面または電磁的記録（電子メール等）により契約の申込みを撤回または解除することができます。
+            </p>
+            <p className="font-medium text-text-main pt-1">【クーリングオフ受付先】</p>
+            <p>
+              ・書面：
+              {salon.postal_code?.trim() ? `〒${salon.postal_code.trim()} ` : '〒＿＿＿─＿＿＿＿ '}
+              {salon.address?.trim() || '（サロン住所未登録）'}
+            </p>
+            <p>
+              ・電子メール：
+              {(
+                contract.cooling_off_email?.trim() ||
+                salon.email?.trim() ||
+                '（未登録）'
+              )}
+            </p>
+            <p>
+              電子メールでクーリングオフを行う場合は、件名に「クーリングオフ通知」と記載し、契約年月日・契約者名・契約金額・通知日を本文に記載してください。送信メールは必ず保存しておいてください。
+            </p>
           </div>
         </div>
 

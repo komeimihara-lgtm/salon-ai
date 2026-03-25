@@ -144,7 +144,7 @@ export async function GET(
 
     const { data: salon } = await admin
       .from('salons')
-      .select('name, phone, address')
+      .select('name, phone, address, email, postal_code')
       .eq('id', salonId)
       .single()
 

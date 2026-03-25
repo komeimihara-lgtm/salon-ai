@@ -59,8 +59,20 @@ function NewContractForm() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [pd, setPd] = useState(defaultContractPaymentDepositValues)
+  /** 契約書に記載するクーリングオフ（電磁的記録）受付メール。既定は salons.email */
+  const [coolingOffEmail, setCoolingOffEmail] = useState('')
 
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/settings/salon', { credentials: 'include' })
+      .then(r => r.json())
+      .then(j => {
+        const em = typeof j.email === 'string' ? j.email.trim() : ''
+        if (em) setCoolingOffEmail(em)
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     fetch('/api/customers/list?limit=100')
@@ -232,6 +244,7 @@ function NewContractForm() {
           billing_day: pd.instrumentMethod === 'auto_billing' ? pd.billingDay : null,
           billing_method: pd.instrumentMethod === 'auto_billing' ? pd.billingMethod : null,
           first_billing_date: pd.instrumentMethod === 'auto_billing' ? pd.firstBillingDate || null : null,
+          cooling_off_email: coolingOffEmail.trim() || null,
         }),
       })
       const data = await res.json()
@@ -442,6 +455,22 @@ function NewContractForm() {
           values={pd}
           onPatch={patch => setPd(prev => ({ ...prev, ...patch }))}
         />
+
+        <div>
+          <label className="text-xs text-[#4A5568] mb-1 block">
+            クーリングオフ受付メール（契約書に記載）
+          </label>
+          <input
+            type="email"
+            value={coolingOffEmail}
+            onChange={e => setCoolingOffEmail(e.target.value)}
+            placeholder="店舗設定のメールが自動入力されます"
+            className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+          />
+          <p className="text-[11px] text-[#4A5568] mt-1">
+            店舗のメール（設定画面のサロン基本情報）が自動入力されます。必要に応じて変更してください。
+          </p>
+        </div>
 
         <button
           onClick={handleSubmit}

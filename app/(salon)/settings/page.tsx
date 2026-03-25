@@ -24,6 +24,8 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<SalonSettings>({
     salonName: '',
     address: '',
+    postalCode: '',
+    email: '',
     phone: '',
     businessHours: { openTime: '10:00', closeTime: '21:00' },
     beds: [],
@@ -83,6 +85,8 @@ export default function SettingsPage() {
           name: settings.salonName,
           phone: settings.phone,
           address: settings.address,
+          postal_code: settings.postalCode,
+          email: settings.email,
           business_hours: settings.businessHours,
           targets: settings.targets,
           external_urls: settings.externalUrls,
@@ -198,12 +202,34 @@ export default function SettingsPage() {
               />
             </div>
             <div>
+              <label className="block text-sm font-medium text-text-main mb-1">郵便番号</label>
+              <input
+                type="text"
+                value={settings.postalCode}
+                onChange={e => setSettings(s => ({ ...s, postalCode: e.target.value }))}
+                placeholder="123-4567"
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none"
+              />
+            </div>
+            <div>
               <label className="block text-sm font-medium text-text-main mb-1">住所</label>
               <input
                 type="text"
                 value={settings.address}
                 onChange={e => setSettings(s => ({ ...s, address: e.target.value }))}
                 placeholder="東京都〇〇区..."
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-main mb-1">
+                メールアドレス（クーリングオフ受付・店舗連絡）
+              </label>
+              <input
+                type="email"
+                value={settings.email}
+                onChange={e => setSettings(s => ({ ...s, email: e.target.value }))}
+                placeholder="info@example.com"
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose focus:ring-1 focus:ring-rose/30 outline-none"
               />
             </div>

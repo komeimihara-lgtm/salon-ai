@@ -7,7 +7,9 @@ export async function GET() {
   const supabase = getSupabaseAdmin()
   const { data: salon, error } = await supabase
     .from('salons')
-    .select('id, name, owner_name, plan, phone, address, beds, closed_days, business_hours, targets, external_urls')
+    .select(
+      'id, name, owner_name, plan, phone, address, postal_code, email, beds, closed_days, business_hours, targets, external_urls',
+    )
     .eq('id', salonId)
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -19,6 +21,8 @@ export async function GET() {
     plan: salon?.plan || '',
     phone: salon?.phone || '',
     address: salon?.address || '',
+    postal_code: salon?.postal_code || '',
+    email: salon?.email || '',
     beds,
     closed_days,
     business_hours: salon?.business_hours || null,
@@ -38,6 +42,8 @@ export async function PATCH(req: NextRequest) {
   if (typeof body.owner_name === 'string') update.owner_name = body.owner_name
   if (typeof body.phone === 'string') update.phone = body.phone
   if (typeof body.address === 'string') update.address = body.address
+  if (typeof body.postal_code === 'string') update.postal_code = body.postal_code
+  if (typeof body.email === 'string') update.email = body.email
   if (body.business_hours && typeof body.business_hours === 'object') update.business_hours = body.business_hours
   if (body.targets && typeof body.targets === 'object') update.targets = body.targets
   if (body.external_urls && typeof body.external_urls === 'object') update.external_urls = body.external_urls

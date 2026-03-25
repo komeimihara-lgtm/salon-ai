@@ -51,6 +51,7 @@ export function buildContractRowFromBody(
     deposit_paid_at,
     remaining_paid_at,
     deposit_payment_method: depPmRaw,
+    cooling_off_email: coolingOffEmailRaw,
   } = body
 
   if (!ctx.customerId || typeof ctx.customerId !== 'string') {
@@ -138,6 +139,14 @@ export function buildContractRowFromBody(
     billing_method: autoBilling && billing_method ? String(billing_method) : null,
     first_billing_date:
       autoBilling && first_billing_date ? String(first_billing_date).slice(0, 10) : null,
+  }
+
+  if (coolingOffEmailRaw !== undefined) {
+    const s =
+      coolingOffEmailRaw != null && String(coolingOffEmailRaw).trim()
+        ? String(coolingOffEmailRaw).trim()
+        : null
+    row.cooling_off_email = s
   }
 
   if (ctx.mode === 'insert') {
