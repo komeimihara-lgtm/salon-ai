@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromApiRequest, getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { getSalonIdFromApiRequest } from '@/lib/get-salon-id'
+import { resolveSalonIdForOwnerApi } from '@/lib/resolve-salon-id-api'
 import { buildContractRowFromBody, computeContractRemainingAmount } from '@/lib/contract-payload'
+
+export const dynamic = 'force-dynamic'
 
 function withComputedRemaining<C extends { amount?: unknown; deposit_amount?: unknown }>(
   row: C | null,
@@ -48,22 +51,15 @@ export async function GET(
       return NextResponse.json({ error: '契約書IDが不正です' }, { status: 400 })
     }
 
-    const salonId = getSalonIdFromApiRequest(req)
-    let fromHeadersCookie: string | null | 'error' = null
-    try {
-      fromHeadersCookie = getSalonIdFromCookie() || null
-    } catch {
-      fromHeadersCookie = 'error'
-    }
+    const cookieSalonId = getSalonIdFromApiRequest(req)
+    const salonId = await resolveSalonIdForOwnerApi(req)
 
     console.log(
       JSON.stringify({
-        tag: '[contracts GET] salon_id debug',
+        tag: '[contracts GET] tenant',
         contractId: id,
         salonIdResolved: salonId || null,
-        fromNextRequestCookies: req.cookies.get('salon_id')?.value ?? null,
-        fromHeadersCookies: fromHeadersCookie,
-        hasSalonIdInRawHeader: Boolean(req.headers.get('cookie')?.includes('salon_id')),
+        cookieSalonId: cookieSalonId || null,
       }),
     )
 
@@ -160,7 +156,7 @@ export async function PATCH(
       return NextResponse.json({ error: '契約書IDが不正です' }, { status: 400 })
     }
 
-    const salonId = getSalonIdFromApiRequest(req)
+    const salonId = await resolveSalonIdForOwnerApi(req)
     if (!salonId) {
       return NextResponse.json({ error: 'サロンにログインしてください' }, { status: 401 })
     }

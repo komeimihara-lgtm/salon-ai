@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromApiRequest } from '@/lib/get-salon-id'
+import { resolveSalonIdForOwnerApi } from '@/lib/resolve-salon-id-api'
 import { buildContractRowFromBody, computeContractRemainingAmount } from '@/lib/contract-payload'
+
+export const dynamic = 'force-dynamic'
 
 function errorMessage(e: unknown): string {
   if (e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string') {
@@ -13,7 +15,7 @@ function errorMessage(e: unknown): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const salonId = getSalonIdFromApiRequest(req)
+    const salonId = await resolveSalonIdForOwnerApi(req)
     if (!salonId) {
       return NextResponse.json({ error: 'サロンにログインしてください' }, { status: 401 })
     }
@@ -42,7 +44,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as Record<string, unknown>
-    const salonId = getSalonIdFromApiRequest(req)
+    const salonId = await resolveSalonIdForOwnerApi(req)
     if (!salonId) {
       return NextResponse.json({ error: 'サロンにログインしてください' }, { status: 401 })
     }
