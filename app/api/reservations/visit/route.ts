@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { overwriteSaleCustomerNamesFromDb } from '@/lib/sale-customer-display'
 
 /**
  * 来店処理: ステータスを visited に変更。
@@ -29,6 +30,13 @@ export async function POST(req: NextRequest) {
     const customerId = reservation.customer_id ?? ''
     const customerName = reservation.customer_name ?? ''
     const menu = reservation.menu ?? ''
+
+    const visitNameRow = [{ customer_id: customerId || null, customer_name: customerName || null }]
+    await overwriteSaleCustomerNamesFromDb(supabase, salonId, visitNameRow)
+    const saleCustomerName =
+      (typeof visitNameRow[0].customer_name === 'string' && visitNameRow[0].customer_name) ||
+      customerName ||
+      null
     const reservationDate = reservation.reservation_date
     const ticketId = reservation.ticket_id as string | null | undefined
     const subscriptionId = reservation.subscription_id as string | null | undefined
@@ -68,7 +76,7 @@ export async function POST(req: NextRequest) {
           sale_date: reservationDate,
           amount: unitPrice,
           customer_id: customerId || null,
-          customer_name: customerName,
+          customer_name: saleCustomerName,
           sale_type: 'ticket_consume',
           ticket_id: ticketId,
           menu: menu || null,
@@ -102,7 +110,7 @@ export async function POST(req: NextRequest) {
           sale_date: reservationDate,
           amount: unitPrice,
           customer_id: customerId || null,
-          customer_name: customerName,
+          customer_name: saleCustomerName,
           sale_type: 'subscription_consume',
           menu: menu || null,
           staff_name: reservation.staff_name || null,
@@ -150,7 +158,7 @@ export async function POST(req: NextRequest) {
           sale_date: reservationDate,
           amount: unitPrice,
           customer_id: customerId || null,
-          customer_name: customerName,
+          customer_name: saleCustomerName,
           sale_type: 'ticket_consume',
           ticket_id: matchingTicket.id,
           memo: `予約来店: ${menu || '施術'}（残${newRemaining}回）`,

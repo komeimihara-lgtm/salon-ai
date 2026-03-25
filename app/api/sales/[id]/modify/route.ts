@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonSaleOperator, canModifySale } from '@/lib/salon-sale-operator'
 import { insertSaleLog, saleRowSnapshot } from '@/lib/sale-audit'
+import { overwriteSaleCustomerNamesFromDb } from '@/lib/sale-customer-display'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +55,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     status: 'active' as const,
     original_sale_id: oldId,
   }
+
+  await overwriteSaleCustomerNamesFromDb(supabase, op.salonId, [newRow as Record<string, unknown>])
 
   const modifyNote =
     typeof body.modify_reason === 'string' && body.modify_reason.trim()

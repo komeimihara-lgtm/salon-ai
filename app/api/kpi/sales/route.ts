@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
 import { getSalonSaleOperator } from '@/lib/salon-sale-operator'
 import { insertSaleLog, saleRowSnapshot } from '@/lib/sale-audit'
+import { overwriteSaleCustomerNamesFromDb } from '@/lib/sale-customer-display'
 
 export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin()
@@ -44,7 +45,9 @@ export async function GET(req: NextRequest) {
     error = r2.error
   }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ sales: data || [] })
+  const rows = (data || []).map((r) => ({ ...(r as Record<string, unknown>) }))
+  await overwriteSaleCustomerNamesFromDb(supabase, salonId, rows)
+  return NextResponse.json({ sales: rows })
 }
 
 export async function POST(req: NextRequest) {
@@ -75,6 +78,8 @@ export async function POST(req: NextRequest) {
       ticket_id: s.ticket_id || null,
       status: ACTIVE_SALE_STATUS,
     }))
+
+    await overwriteSaleCustomerNamesFromDb(supabase, salonId, cleanedSales)
 
     const { data, error } = await supabase
       .from('sales')
