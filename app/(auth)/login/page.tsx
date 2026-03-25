@@ -3,7 +3,6 @@
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
 import { formatSignInError } from '@/lib/auth-errors'
 import { normalizeOwnerEmail } from '@/lib/normalize-owner-email'
@@ -70,16 +69,6 @@ function LoginForm() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#C4728A] via-[#b07aaa] to-[#9B8EC4] px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <Image
-              src="/favicon.png"
-              alt="SOLA"
-              width={88}
-              height={88}
-              className="drop-shadow-md"
-              priority
-            />
-          </div>
           <h1 className="font-serif-jp text-4xl font-bold text-white tracking-wide">SOLA</h1>
           <p className="text-white/80 text-sm mt-1 tracking-widest font-dm-sans">AI SALON MANAGER</p>
           <p className="text-white/70 text-xs mt-3">AIがサロン経営を、まるごと変える。</p>
