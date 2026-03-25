@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import {
   Users, Search, Plus, Upload, Image, ChevronLeft, ChevronRight,
-  AlertTriangle, Crown, Phone, X, Check, Loader2, Ticket, Minus, Repeat, Trash2
+  AlertTriangle, Crown, Phone, X, Check, Loader2, Ticket, Minus, Repeat, Trash2, Edit2,
 } from 'lucide-react'
 import { Customer } from '@/types'
 import {
@@ -391,17 +391,24 @@ function CustomerDetailModal({
 function CustomerCard({
   customer,
   onClick,
+  onEdit,
   onDelete,
   isDeleting,
 }: {
   customer: Customer
   onClick: () => void
+  onEdit: (customer: Customer) => void
   onDelete: (customer: Customer) => void
   isDeleting?: boolean
 }) {
   const daysSinceVisit = customer.last_visit_date
     ? Math.floor((Date.now() - new Date(customer.last_visit_date).getTime()) / (1000 * 60 * 60 * 24))
     : null
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onEdit(customer)
+  }
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -415,8 +422,17 @@ function CustomerCard({
       onClick={onClick}
       className="bg-[#F0F9FF] hover:bg-[#E0F2FE] border border-[#BAE6FD] hover:border-[#0891B2] rounded-xl p-4 cursor-pointer transition-all group relative"
     >
-      <div className="absolute top-3 right-3 z-10">
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-0.5">
         <button
+          type="button"
+          onClick={handleEdit}
+          className="p-1.5 rounded-lg text-[#4A5568] hover:text-[#0891B2] hover:bg-[#0891B2]/10 transition-colors"
+          title="編集"
+        >
+          <Edit2 className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
           onClick={handleDelete}
           disabled={isDeleting}
           className="p-1.5 rounded-lg text-[#4A5568] hover:text-red-600 hover:bg-red-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -425,7 +441,7 @@ function CustomerCard({
           {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
         </button>
       </div>
-      <div className="flex items-start justify-between mb-3 pr-8">
+      <div className="flex items-start justify-between mb-3 pr-20">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <Link
@@ -649,6 +665,228 @@ function NewCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   )
 }
 
+function EditCustomerModal({
+  customerId,
+  onClose,
+  onSaved,
+}: {
+  customerId: string
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [loading, setLoading] = useState(true)
+  const [form, setForm] = useState({
+    name: '',
+    name_kana: '',
+    phone: '',
+    email: '',
+    address: '',
+    birthday: '',
+    gender: 'female' as Customer['gender'],
+    memo: '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    fetch(`/api/customers/${customerId}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        const c = data.customer as Customer | undefined
+        if (!c) {
+          setError('顧客を取得できませんでした')
+          return
+        }
+        setForm({
+          name: c.name || '',
+          name_kana: c.name_kana || '',
+          phone: c.phone || '',
+          email: c.email || '',
+          address: c.address || '',
+          birthday: c.birthday || '',
+          gender: c.gender || 'female',
+          memo: c.memo || '',
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setError('取得に失敗しました')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [customerId])
+
+  async function handleSubmit() {
+    if (!form.name.trim()) {
+      setError('氏名は必須です')
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/customers/${customerId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          name_kana: form.name_kana.trim() || null,
+          phone: form.phone.trim() || null,
+          email: form.email.trim() || null,
+          address: form.address.trim() || null,
+          birthday: form.birthday || null,
+          gender: form.gender,
+          memo: form.memo.trim() || null,
+        }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(typeof j.error === 'string' ? j.error : '保存に失敗しました')
+      }
+      onSaved()
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '保存に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between p-5 border-b border-[#BAE6FD] shrink-0">
+          <h2 className="text-base font-bold text-[#1A202C]">顧客情報を編集</h2>
+          <button type="button" onClick={onClose} className="text-[#4A5568] hover:text-[#1A202C]">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4 overflow-y-auto flex-1">
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-sm text-red-600">
+              {error}
+            </div>
+          )}
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-8 h-8 text-[#0891B2] animate-spin" />
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-[#4A5568] mb-1 block">氏名 *</label>
+                  <input
+                    value={form.name}
+                    onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                    className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-[#4A5568] mb-1 block">フリガナ</label>
+                  <input
+                    value={form.name_kana}
+                    onChange={e => setForm(p => ({ ...p, name_kana: e.target.value }))}
+                    className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-[#4A5568] mb-1 block">電話番号</label>
+                  <input
+                    type="tel"
+                    value={form.phone}
+                    onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+                    className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-[#4A5568] mb-1 block">性別</label>
+                  <select
+                    value={form.gender || 'female'}
+                    onChange={e =>
+                      setForm(p => ({ ...p, gender: e.target.value as Customer['gender'] }))
+                    }
+                    className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+                  >
+                    <option value="female">女性</option>
+                    <option value="male">男性</option>
+                    <option value="other">その他</option>
+                    <option value="unknown">不明</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">メールアドレス</label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">住所</label>
+                <input
+                  value={form.address}
+                  onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-[#4A5568] mb-1 block">生年月日</label>
+                  <input
+                    type="date"
+                    value={form.birthday}
+                    onChange={e => setForm(p => ({ ...p, birthday: e.target.value }))}
+                    className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2]"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">備考</label>
+                <textarea
+                  value={form.memo}
+                  onChange={e => setForm(p => ({ ...p, memo: e.target.value }))}
+                  rows={3}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm text-[#1A202C] focus:outline-none focus:border-[#0891B2] resize-none"
+                />
+              </div>
+            </>
+          )}
+        </div>
+        <div className="flex gap-3 p-5 border-t border-[#BAE6FD] shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 bg-white border border-[#BAE6FD] text-[#4A5568] rounded-xl py-2.5 text-sm hover:text-[#1A202C] transition-colors"
+          >
+            キャンセル
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving || loading}
+            className="flex-1 bg-gradient-to-r from-[#0891B2] to-[#0e7490] text-white rounded-xl py-2.5 text-sm font-bold hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+            {saving ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ============================================================
 // メインページ
 // ============================================================
@@ -661,6 +899,7 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [showNewModal, setShowNewModal] = useState(false)
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
@@ -702,7 +941,10 @@ export default function CustomersPage() {
   const handleDeleteCustomer = useCallback(async (customer: Customer) => {
     setDeletingId(customer.id)
     try {
-      const res = await fetch(`/api/customers/${customer.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/customers/${customer.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
         throw new Error(json.error || '削除に失敗しました')
@@ -889,6 +1131,7 @@ export default function CustomersPage() {
                 key={customer.id}
                 customer={customer}
                 onClick={() => setSelectedCustomer(customer)}
+                onEdit={() => setEditingCustomerId(customer.id)}
                 onDelete={handleDeleteCustomer}
                 isDeleting={deletingId === customer.id}
               />
@@ -923,6 +1166,13 @@ export default function CustomersPage() {
       {showNewModal && (
         <NewCustomerModal
           onClose={() => setShowNewModal(false)}
+          onSaved={fetchCustomers}
+        />
+      )}
+      {editingCustomerId && (
+        <EditCustomerModal
+          customerId={editingCustomerId}
+          onClose={() => setEditingCustomerId(null)}
           onSaved={fetchCustomers}
         />
       )}

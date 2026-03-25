@@ -209,7 +209,7 @@ export async function consumeTicket(ticketId: string): Promise<boolean> {
   const res = await fetch(`/api/customer-tickets/${ticketId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ remaining_sessions: newRemaining }),
+    body: JSON.stringify({ remaining_sessions: newRemaining, consume_one: true }),
   })
   if (!res.ok) return false
   window.dispatchEvent(new Event('customer-tickets-updated'))

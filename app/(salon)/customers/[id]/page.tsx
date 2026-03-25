@@ -133,6 +133,15 @@ export default function CustomerDetailPage() {
   const [existingCourseCount, setExistingCourseCount] = useState(5)
   const [existingCourseExpiry, setExistingCourseExpiry] = useState('')
   const [existingCourseSaving, setExistingCourseSaving] = useState(false)
+  const [ticketAdjust, setTicketAdjust] = useState<CustomerTicket | null>(null)
+  const [ticketAdjustRemaining, setTicketAdjustRemaining] = useState('')
+  const [ticketAdjustReason, setTicketAdjustReason] = useState('')
+  const [ticketAdjustSaving, setTicketAdjustSaving] = useState(false)
+  const [subAdjust, setSubAdjust] = useState<CustomerSubscription | null>(null)
+  const [subAdjustStatus, setSubAdjustStatus] = useState<'active' | 'paused' | 'cancelled'>('active')
+  const [subAdjustRemaining, setSubAdjustRemaining] = useState('')
+  const [subAdjustReason, setSubAdjustReason] = useState('')
+  const [subAdjustSaving, setSubAdjustSaving] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Customer>>({})
   const [editSaving, setEditSaving] = useState(false)
@@ -157,7 +166,7 @@ export default function CustomerDetailPage() {
 
   const fetchCustomer = useCallback(async () => {
     if (!id) return
-    const res = await fetch(`/api/customers/${id}`)
+    const res = await fetch(`/api/customers/${id}`, { credentials: 'include' })
     const data = await res.json()
     setCustomer(data.customer ?? null)
   }, [id])
@@ -171,6 +180,7 @@ export default function CustomerDetailPage() {
       email: customer.email || '',
       address: customer.address || '',
       birthday: customer.birthday || '',
+      gender: customer.gender || 'unknown',
       first_visit_date: customer.first_visit_date || '',
       visit_count: customer.visit_count,
       status: customer.status || 'active',
@@ -185,6 +195,7 @@ export default function CustomerDetailPage() {
     try {
       const res = await fetch(`/api/customers/${customer.id}`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm),
       })
@@ -192,6 +203,8 @@ export default function CustomerDetailPage() {
         await fetchCustomer()
         setEditOpen(false)
         showToast('更新しました')
+      } else {
+        showToast('更新に失敗しました')
       }
     } catch {
       showToast('更新に失敗しました')
@@ -304,6 +317,7 @@ export default function CustomerDetailPage() {
     try {
       await fetch(`/api/customers/${customer.id}`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ line_user_id: lineUserId, line_status: 'followed' })
       })
@@ -345,7 +359,7 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    fetch(`/api/customers/${id}`)
+    fetch(`/api/customers/${id}`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
         if (!cancelled) setCustomer(data.customer ?? null)
@@ -411,6 +425,93 @@ export default function CustomerDetailPage() {
       setConsumeTarget(null)
     } finally {
       setActionLoading(false)
+    }
+  }
+
+  const openTicketAdjustModal = (c: CustomerTicket) => {
+    setTicketAdjust(c)
+    setTicketAdjustRemaining(String(c.remainingSessions))
+    setTicketAdjustReason('')
+  }
+
+  const handleTicketAdjustSave = async () => {
+    if (!ticketAdjust || !ticketAdjustReason.trim()) {
+      showToast('変更理由を入力してください')
+      return
+    }
+    const r = parseInt(ticketAdjustRemaining, 10)
+    if (!Number.isFinite(r) || r < 0) {
+      showToast('残回数が不正です')
+      return
+    }
+    setTicketAdjustSaving(true)
+    try {
+      const res = await fetch(`/api/customer-tickets/${ticketAdjust.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          remaining_sessions: r,
+          reason: ticketAdjustReason.trim(),
+        }),
+      })
+      if (res.ok) {
+        await refresh()
+        setTicketAdjust(null)
+        showToast('回数券を更新しました')
+      } else {
+        const j = await res.json().catch(() => ({}))
+        showToast(typeof j.error === 'string' ? j.error : '更新に失敗しました')
+      }
+    } catch {
+      showToast('更新に失敗しました')
+    } finally {
+      setTicketAdjustSaving(false)
+    }
+  }
+
+  const openSubAdjustModal = (s: CustomerSubscription) => {
+    const z = ensureBillingPeriodCurrent(s)
+    setSubAdjust(z)
+    setSubAdjustStatus(z.status)
+    setSubAdjustRemaining(String(getRemainingSessions(z)))
+    setSubAdjustReason('')
+  }
+
+  const handleSubAdjustSave = async () => {
+    if (!subAdjust || !subAdjustReason.trim()) {
+      showToast('変更理由を入力してください')
+      return
+    }
+    const rem = parseInt(subAdjustRemaining, 10)
+    if (!Number.isFinite(rem) || rem < 0) {
+      showToast('残回数が不正です')
+      return
+    }
+    setSubAdjustSaving(true)
+    try {
+      const res = await fetch(`/api/customer-subscriptions/${subAdjust.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: subAdjustStatus,
+          remaining_sessions: rem,
+          reason: subAdjustReason.trim(),
+        }),
+      })
+      if (res.ok) {
+        await refresh()
+        setSubAdjust(null)
+        showToast('サブスクを更新しました')
+      } else {
+        const j = await res.json().catch(() => ({}))
+        showToast(typeof j.error === 'string' ? j.error : '更新に失敗しました')
+      }
+    } catch {
+      showToast('更新に失敗しました')
+    } finally {
+      setSubAdjustSaving(false)
     }
   }
 
@@ -640,15 +741,27 @@ export default function CustomerDetailPage() {
                       {!expired && c.remainingSessions > 0 && ` (残${days}日)`}
                     </p>
                   </div>
-                  {c.remainingSessions > 0 && !expired && (
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => setConsumeTarget(c)}
+                      type="button"
+                      onClick={() => openTicketAdjustModal(c)}
                       disabled={actionLoading}
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded disabled:opacity-50"
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-[#4A5568] hover:bg-gray-100 rounded disabled:opacity-50"
                     >
-                      <Minus className="w-3 h-3" />消化
+                      <Pencil className="w-3 h-3" />
+                      調整
                     </button>
-                  )}
+                    {c.remainingSessions > 0 && !expired && (
+                      <button
+                        type="button"
+                        onClick={() => setConsumeTarget(c)}
+                        disabled={actionLoading}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded disabled:opacity-50"
+                      >
+                        <Minus className="w-3 h-3" />消化
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -692,15 +805,27 @@ export default function CustomerDetailPage() {
                       今月残り{remaining}/{s.sessionsPerMonth}回 · 次回課金{s.nextBillingDate}（残{days}日）
                     </p>
                   </div>
-                  {remaining > 0 && (
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => setSubUseTarget(s)}
+                      type="button"
+                      onClick={() => openSubAdjustModal(s)}
                       disabled={actionLoading}
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded disabled:opacity-50"
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-[#4A5568] hover:bg-gray-100 rounded disabled:opacity-50"
                     >
-                      <Minus className="w-3 h-3" />利用
+                      <Pencil className="w-3 h-3" />
+                      調整
                     </button>
-                  )}
+                    {remaining > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSubUseTarget(s)}
+                        disabled={actionLoading}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded disabled:opacity-50"
+                      >
+                        <Minus className="w-3 h-3" />利用
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -1007,6 +1132,24 @@ export default function CustomerDetailPage() {
                   onChange={e => setEditForm(f => ({ ...f, birthday: e.target.value }))}
                   className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
                 />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">性別</label>
+                <select
+                  value={editForm.gender || 'unknown'}
+                  onChange={e =>
+                    setEditForm(f => ({
+                      ...f,
+                      gender: e.target.value as Customer['gender'],
+                    }))
+                  }
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="female">女性</option>
+                  <option value="male">男性</option>
+                  <option value="other">その他</option>
+                  <option value="unknown">不明</option>
+                </select>
               </div>
               <div>
                 <label className="text-xs text-[#4A5568] mb-1 block">初回来店日</label>
@@ -1346,6 +1489,120 @@ export default function CustomerDetailPage() {
                 className="flex-1 py-2 rounded-lg bg-rose text-white font-medium disabled:opacity-50"
               >
                 {actionLoading ? '処理中...' : '利用する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {ticketAdjust && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-xl p-5 max-w-sm w-full max-h-[85vh] overflow-y-auto">
+            <h3 className="font-semibold text-sm mb-1">回数券の手動調整</h3>
+            <p className="text-xs text-text-sub mb-3">{ticketAdjust.planName}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">残回数（最大{ticketAdjust.totalSessions}回）</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={ticketAdjust.totalSessions}
+                  value={ticketAdjustRemaining}
+                  onChange={e => setTicketAdjustRemaining(e.target.value)}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">変更理由 *</label>
+                <textarea
+                  value={ticketAdjustReason}
+                  onChange={e => setTicketAdjustReason(e.target.value)}
+                  rows={3}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  placeholder="例: 誤登録の修正"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setTicketAdjust(null)}
+                className="flex-1 py-2 rounded-lg border"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleTicketAdjustSave}
+                disabled={ticketAdjustSaving}
+                className="flex-1 py-2 rounded-lg bg-rose text-white font-medium disabled:opacity-50"
+              >
+                {ticketAdjustSaving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subAdjust && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-xl p-5 max-w-sm w-full max-h-[85vh] overflow-y-auto">
+            <h3 className="font-semibold text-sm mb-1">サブスクの手動調整</h3>
+            <p className="text-xs text-text-sub mb-3">{subAdjust.planName}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">ステータス</label>
+                <select
+                  value={subAdjustStatus}
+                  onChange={e =>
+                    setSubAdjustStatus(e.target.value as 'active' | 'paused' | 'cancelled')
+                  }
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="active">アクティブ</option>
+                  <option value="paused">一時停止</option>
+                  <option value="cancelled">解約</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">
+                  今月の残回数（最大{subAdjust.sessionsPerMonth}回）
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={subAdjust.sessionsPerMonth}
+                  value={subAdjustRemaining}
+                  onChange={e => setSubAdjustRemaining(e.target.value)}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">変更理由 *</label>
+                <textarea
+                  value={subAdjustReason}
+                  onChange={e => setSubAdjustReason(e.target.value)}
+                  rows={3}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  placeholder="例: 店舗都合の補填"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setSubAdjust(null)}
+                className="flex-1 py-2 rounded-lg border"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleSubAdjustSave}
+                disabled={subAdjustSaving}
+                className="flex-1 py-2 rounded-lg bg-rose text-white font-medium disabled:opacity-50"
+              >
+                {subAdjustSaving ? '保存中...' : '保存'}
               </button>
             </div>
           </div>
