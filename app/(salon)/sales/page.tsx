@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   ShoppingCart, Receipt, Plus, X,
   ChevronLeft, ChevronRight, Loader2, Tag, AlertCircle, ArrowLeft,
-  UserPlus, Search, Ban,
+  UserPlus, Search,
 } from 'lucide-react'
 import { fetchMenus, getCategories, getTaxSettings, getCampaigns, calcTotalWithTax, calcTaxAmount, isCampaignActive, type MenuItem, type Campaign } from '@/lib/menus'
 import { fetchStaffList } from '@/lib/staff-management'
@@ -20,6 +20,16 @@ const PAYMENTS = [
   { value: 'loan', label: 'ローン' },
 ]
 
+const SALE_TYPE_LABELS: Record<string, string> = {
+  cash: '現金',
+  card: 'カード',
+  online: 'オンライン決済',
+  loan: 'ローン',
+  product: '物販',
+  ticket_consume: '回数券消化',
+  subscription_consume: 'サブスク消化',
+}
+
 interface Sale {
   id: string
   sale_date: string
@@ -32,12 +42,58 @@ interface Sale {
   memo?: string
   sale_type?: string
   status?: string
+  original_sale_id?: string | null
+}
+
+interface SaleLogRow {
+  id: string
+  action: string
+  operated_at: string
+  operated_by: string
+  before_data: Record<string, unknown> | null
+  after_data: Record<string, unknown> | null
+}
+
+function salePaymentLine(s: Sale) {
+  const pm = PAYMENTS.find(p => p.value === s.payment_method)?.label ?? s.payment_method ?? '—'
+  const st = s.sale_type && s.sale_type !== 'cash' ? (SALE_TYPE_LABELS[s.sale_type] || s.sale_type) : null
+  return st ? `${pm}（${st}）` : pm
+}
+
+function saleActionLabelJa(action: string) {
+  switch (action) {
+    case 'created':
+      return '登録'
+    case 'cancelled':
+      return '取消'
+    case 'modified':
+      return '修正'
+    default:
+      return action
+  }
+}
+
+function amountFromSnapshot(data: unknown): string {
+  if (!data || typeof data !== 'object') return '—'
+  const a = (data as Record<string, unknown>).amount
+  if (a == null || a === '') return '—'
+  const n = Number(a)
+  if (!Number.isFinite(n)) return '—'
+  return `¥${n.toLocaleString()}`
 }
 
 type SalePermissions = { canCancel: boolean; canModify: boolean; role: string | null }
 
 function isActiveSale(s: Sale) {
   return (s.status ?? 'active') === 'active'
+}
+
+function isCancelledSale(s: Sale) {
+  return s.status === 'cancelled'
+}
+
+function isModifiedStatusSale(s: Sale) {
+  return s.status === 'modified'
 }
 
 type CartItemType = 'menu' | 'ticket' | 'subscription'
@@ -107,6 +163,10 @@ export default function SalesPage() {
     modify_reason: '',
   })
   const [modifySubmitting, setModifySubmitting] = useState(false)
+  const [logModalSale, setLogModalSale] = useState<Sale | null>(null)
+  const [saleLogs, setSaleLogs] = useState<SaleLogRow[]>([])
+  const [saleLogsLoading, setSaleLogsLoading] = useState(false)
+  const [saleLogsError, setSaleLogsError] = useState('')
   const [showCustomerModal, setShowCustomerModal] = useState(false)
   const [customerSearch, setCustomerSearch] = useState('')
   const [searchResults, setSearchResults] = useState<Array<{ id: string; name: string; phone?: string; visit_count?: number; last_visit_date?: string }>>([])
@@ -453,6 +513,23 @@ export default function SalesPage() {
     })
   }
 
+  const openSaleLogsModal = (s: Sale) => {
+    setLogModalSale(s)
+    setSaleLogs([])
+    setSaleLogsError('')
+    setSaleLogsLoading(true)
+    void fetch(`/api/sales/${s.id}/logs`)
+      .then(async res => {
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(j.error || 'ログの取得に失敗しました')
+        setSaleLogs((j.logs || []) as SaleLogRow[])
+      })
+      .catch(e => {
+        setSaleLogsError(e instanceof Error ? e.message : 'ログの取得に失敗しました')
+      })
+      .finally(() => setSaleLogsLoading(false))
+  }
+
   const submitModify = async () => {
     if (!modifyModalSale) return
     setModifySubmitting(true)
@@ -777,55 +854,104 @@ export default function SalesPage() {
                 <p className="text-lg">この期間の売上はありません</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {sales.map(s => {
                   const active = isActiveSale(s)
+                  const cancelled = isCancelledSale(s)
+                  const modifiedStatus = isModifiedStatusSale(s)
+                  const replacement = active && !!s.original_sale_id
+                  const customerTitle = s.customer_name?.trim() ? `${s.customer_name}様` : '顧客未登録'
                   return (
                     <div
                       key={s.id}
-                      className={`flex items-center justify-between p-5 bg-white rounded-2xl border border-gray-100 shadow-sm ${!active ? 'opacity-75' : ''}`}
+                      className={`p-5 bg-white rounded-2xl border shadow-sm ${
+                        cancelled ? 'border-red-100 bg-red-50/30' : 'border-gray-100'
+                      }`}
                     >
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`text-2xl font-bold ${active ? 'text-text-main' : 'text-text-sub line-through'}`}>
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {cancelled && (
+                              <span className="px-2.5 py-1 rounded-lg bg-red-100 text-red-700 text-xs font-bold border border-red-200">
+                                取消済み
+                              </span>
+                            )}
+                            {modifiedStatus && (
+                              <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs font-bold border border-amber-200">
+                                修正済み
+                              </span>
+                            )}
+                            {replacement && (
+                              <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-xs font-bold border border-amber-200">
+                                修正反映
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xl sm:text-2xl font-bold text-text-main truncate leading-tight">
+                            {customerTitle}
+                          </p>
+                          <div className="space-y-1 text-sm text-text-sub">
+                            <p>
+                              <span className="text-text-main/70 font-medium">日付</span>
+                              <span className="mx-2">·</span>
+                              {s.sale_date}
+                            </p>
+                            <p>
+                              <span className="text-text-main/70 font-medium">メニュー</span>
+                              <span className="mx-2">·</span>
+                              {s.menu?.trim() ? s.menu : '—'}
+                            </p>
+                            <p>
+                              <span className="text-text-main/70 font-medium">支払</span>
+                              <span className="mx-2">·</span>
+                              {salePaymentLine(s)}
+                            </p>
+                            <p>
+                              <span className="text-text-main/70 font-medium">担当</span>
+                              <span className="mx-2">·</span>
+                              {s.staff_name?.trim() ? s.staff_name : '—'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-stretch sm:items-end gap-3 shrink-0 border-t border-gray-100 pt-4 sm:border-t-0 sm:pt-0">
+                          <p
+                            className={`text-right text-2xl sm:text-3xl font-bold tabular-nums ${
+                              cancelled ? 'text-text-sub line-through decoration-2' : 'text-rose'
+                            }`}
+                          >
                             ¥{s.amount.toLocaleString()}
-                          </span>
-                          {!active && (
-                            <span className="px-2 py-0.5 rounded-lg bg-red-100 text-red-700 text-sm font-bold">
-                              取消済み
-                            </span>
-                          )}
-                          {s.menu && <span className="text-base text-text-sub">{s.menu}</span>}
+                          </p>
+                          <div className="flex flex-wrap gap-2 justify-end">
+                            <button
+                              type="button"
+                              onClick={() => openSaleLogsModal(s)}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold border border-gray-200 bg-white text-text-main hover:bg-gray-50"
+                              title="この売上の監査ログを表示します"
+                            >
+                              📋 ログ
+                            </button>
+                            {active && salePermissions?.canModify && (
+                              <button
+                                type="button"
+                                onClick={() => openModifyModal(s)}
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold bg-sky-600 text-white hover:bg-sky-700 shadow-sm"
+                                title="売上内容を修正します（差し替え・ログに記録されます）"
+                              >
+                                ✏️ 修正
+                              </button>
+                            )}
+                            {active && salePermissions?.canCancel && (
+                              <button
+                                type="button"
+                                onClick={() => openCancelModal(s)}
+                                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-sm font-bold border-2 border-red-300 text-red-600 bg-red-50 hover:bg-red-100"
+                                title="この売上を取消します（ログに記録されます）"
+                              >
+                                🗑️ 取消
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex gap-3 mt-1 text-sm text-text-sub">
-                          <span>{s.sale_date}</span>
-                          {s.customer_name && <span>{s.customer_name}様</span>}
-                          {s.staff_name && <span>/ {s.staff_name}</span>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="px-3 py-1 rounded-full bg-light-lav text-sm font-medium">
-                          {PAYMENTS.find(p => p.value === s.payment_method)?.label ?? s.payment_method}
-                        </span>
-                        {active && salePermissions?.canModify && (
-                          <button
-                            type="button"
-                            onClick={() => openModifyModal(s)}
-                            className="px-3 py-2 text-sm font-bold text-rose border border-rose/40 rounded-xl hover:bg-rose/10"
-                          >
-                            修正
-                          </button>
-                        )}
-                        {active && salePermissions?.canCancel && (
-                          <button
-                            type="button"
-                            onClick={() => openCancelModal(s)}
-                            className="p-2 text-text-sub hover:text-red-600 rounded-xl"
-                            title="取消"
-                          >
-                            <Ban className="w-5 h-5" />
-                          </button>
-                        )}
                       </div>
                     </div>
                   )
@@ -1073,6 +1199,79 @@ export default function SalesPage() {
               >
                 {modifySubmitting ? '処理中...' : '修正を確定'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 売上監査ログ */}
+      {logModalSale && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col card-shadow my-6">
+            <div className="p-5 border-b border-gray-100 flex items-start justify-between gap-3 shrink-0">
+              <div>
+                <h3 className="font-bold text-text-main text-lg">監査ログ</h3>
+                <p className="text-sm text-text-sub mt-1">
+                  {logModalSale.customer_name?.trim() ? `${logModalSale.customer_name}様` : '顧客未登録'}
+                  <span className="mx-2">·</span>¥{logModalSale.amount.toLocaleString()}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLogModalSale(null)}
+                className="p-2 text-text-sub hover:text-rose rounded-xl shrink-0"
+                aria-label="閉じる"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto flex-1">
+              {saleLogsLoading && (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="w-10 h-10 text-rose animate-spin" />
+                </div>
+              )}
+              {saleLogsError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{saleLogsError}</p>
+              )}
+              {!saleLogsLoading && !saleLogsError && saleLogs.length === 0 && (
+                <p className="text-center text-text-sub py-10">この売上のログはまだありません</p>
+              )}
+              {!saleLogsLoading && !saleLogsError && saleLogs.length > 0 && (
+                <ul className="space-y-4">
+                  {saleLogs.map(log => (
+                    <li
+                      key={log.id}
+                      className="rounded-xl border border-gray-100 bg-[#FAFAFA] p-4 text-sm"
+                    >
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <span className="font-bold text-text-main">
+                          {new Date(log.operated_at).toLocaleString('ja-JP', {
+                            dateStyle: 'short',
+                            timeStyle: 'medium',
+                          })}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-white border border-gray-200 text-xs font-bold text-text-main">
+                          {saleActionLabelJa(log.action)}
+                        </span>
+                      </div>
+                      <p className="text-text-sub mb-2">
+                        <span className="text-text-main/80 font-medium">操作者</span> {log.operated_by}
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 text-xs sm:text-sm">
+                        <div className="rounded-lg bg-white border border-gray-100 p-2">
+                          <p className="text-text-sub font-medium mb-0.5">変更前 金額</p>
+                          <p className="font-bold text-text-main tabular-nums">{amountFromSnapshot(log.before_data)}</p>
+                        </div>
+                        <div className="rounded-lg bg-white border border-gray-100 p-2">
+                          <p className="text-text-sub font-medium mb-0.5">変更後 金額</p>
+                          <p className="font-bold text-text-main tabular-nums">{amountFromSnapshot(log.after_data)}</p>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </div>
