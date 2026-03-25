@@ -92,7 +92,13 @@ export async function PATCH(
           ? body.customer_id
           : (existing.customer_id as string)
 
-      const built = buildContractRowFromBody(body, {
+      const bodyNorm = {
+        ...body,
+        total_amount: body.total_amount ?? body.amount ?? 0,
+        amount: body.amount ?? body.total_amount ?? 0,
+      }
+
+      const built = buildContractRowFromBody(bodyNorm, {
         salonId,
         customerId,
         mode: 'update',

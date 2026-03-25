@@ -216,6 +216,7 @@ function NewContractForm() {
           start_date: startDate || null,
           end_date: endDate || null,
           amount: amountNum,
+          total_amount: amountNum,
           deposit_amount: pd.depositAmount === '' ? 0 : Number(pd.depositAmount),
           deposit_paid_at: pd.depositPaidAt || null,
           remaining_paid_at: pd.remainingPaidAt || null,

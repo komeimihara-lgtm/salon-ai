@@ -36,6 +36,7 @@ export function buildContractRowFromBody(
     start_date,
     end_date,
     amount: amountRaw,
+    total_amount: totalAmountRaw,
     payment_type,
     payment_method: paymentMethodRaw,
     payment_detail,
@@ -58,14 +59,17 @@ export function buildContractRowFromBody(
   if (!course_name || typeof course_name !== 'string' || !course_name.trim()) {
     return { ok: false, message: 'コース名が必要です' }
   }
-  if (amountRaw == null || Number.isNaN(Number(amountRaw))) {
+
+  /** total_amount / amount のどちらか欠けてもよい。null・undefined は相手側で埋め、両方なければ 0 */
+  const coalesced = totalAmountRaw ?? amountRaw ?? 0
+  const amount = Math.round(Number(coalesced))
+  if (Number.isNaN(amount)) {
     return { ok: false, message: '契約金額が不正です' }
   }
-
-  const amount = Math.round(Number(amountRaw))
   if (amount < 0) {
     return { ok: false, message: '契約金額が不正です' }
   }
+  const total_amount = amount
 
   const depNum = depRaw != null && depRaw !== '' ? Number(depRaw) : 0
   const deposit_amount =
@@ -114,6 +118,7 @@ export function buildContractRowFromBody(
     start_date: start_date ? String(start_date).slice(0, 10) : null,
     end_date: end_date ? String(end_date).slice(0, 10) : null,
     amount,
+    total_amount,
     deposit_amount,
     deposit_paid_at: deposit_paid_at_norm,
     remaining_paid_at: remaining_paid_at ? String(remaining_paid_at).slice(0, 10) : null,
