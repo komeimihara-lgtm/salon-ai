@@ -4,6 +4,10 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronLeft, Loader2, Search } from 'lucide-react'
 import Link from 'next/link'
+import {
+  ContractPaymentAndDepositFields,
+  defaultContractPaymentDepositValues,
+} from '@/components/contracts/ContractPaymentAndDepositFields'
 
 interface CustomerOption {
   id: string
@@ -54,32 +58,7 @@ function NewContractForm() {
   const [sessions, setSessions] = useState<number | ''>('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [amount, setAmount] = useState<number | ''>(0)
-
-  /** 支払い手段（DB payment_method） */
-  const [instrumentMethod, setInstrumentMethod] = useState<
-    'cash' | 'card' | 'loan' | 'transfer' | 'auto_billing'
-  >('cash')
-  const [cardBrand, setCardBrand] = useState<
-    'visa' | 'master' | 'jcb' | 'amex' | 'diners' | 'unionpay' | 'other'
-  >('visa')
-  const [loanCompany, setLoanCompany] = useState('')
-
-  /** 一括 / 分割（DB payment_type） */
-  const [paymentType, setPaymentType] = useState<'lump_sum' | 'installment'>('lump_sum')
-  const [installPreset, setInstallPreset] = useState<'3' | '6' | '12' | '24' | '36' | 'other'>('12')
-  const [installOtherCount, setInstallOtherCount] = useState(18)
-  const [installMonthly, setInstallMonthly] = useState<number | ''>(0)
-  const [installFirst, setInstallFirst] = useState<number | ''>(0)
-  const [installNote, setInstallNote] = useState('')
-
-  /** 自動引き落とし（サブスク） */
-  const [billingDay, setBillingDay] = useState(1)
-  const [billingMethod, setBillingMethod] = useState<'card' | 'bank_transfer'>('card')
-  const [firstBillingDate, setFirstBillingDate] = useState('')
-  const [billingCycle, setBillingCycle] = useState<'monthly' | 'quarterly' | 'biannual' | 'annual'>(
-    'monthly'
-  )
+  const [pd, setPd] = useState(defaultContractPaymentDepositValues)
 
   const [saving, setSaving] = useState(false)
 
@@ -176,7 +155,7 @@ function NewContractForm() {
       const line = contractLines.find(l => l.key === key)
       return sum + (line?.price ?? 0)
     }, 0)
-    if (total > 0) setAmount(total)
+    if (total > 0) setPd(p => ({ ...p, amount: total }))
   }, [selectedLineKeys, contractLines])
 
   const filteredCustomers = customers.filter(c =>
@@ -203,26 +182,26 @@ function NewContractForm() {
     .filter(Boolean)
     .join(', ')
 
-  const amountNum = Number(amount)
+  const amountNum = Number(pd.amount)
   const amountOk = !Number.isNaN(amountNum) && amountNum >= 0
 
   const installmentCountNum =
-    installPreset === 'other'
-      ? Math.max(2, installOtherCount || 2)
-      : parseInt(installPreset, 10)
+    pd.installPreset === 'other'
+      ? Math.max(2, pd.installOtherCount || 2)
+      : parseInt(pd.installPreset, 10)
 
   const handleSubmit = async () => {
     if (!customerId || selectedLineKeys.length === 0 || !amountOk) return
     setSaving(true)
     try {
       const paymentDetail: PaymentDetail | null =
-        paymentType === 'installment'
+        pd.paymentType === 'installment'
           ? {
               type: '分割',
               count: installmentCountNum,
-              monthly: Number(installMonthly) || 0,
-              first: Number(installFirst) || 0,
-              note: installNote,
+              monthly: Number(pd.installMonthly) || 0,
+              first: Number(pd.installFirst) || 0,
+              note: pd.installNote,
             }
           : null
 
@@ -237,16 +216,20 @@ function NewContractForm() {
           start_date: startDate || null,
           end_date: endDate || null,
           amount: amountNum,
-          payment_type: paymentType,
-          payment_method: instrumentMethod,
+          deposit_amount: pd.depositAmount === '' ? 0 : Number(pd.depositAmount),
+          deposit_paid_at: pd.depositPaidAt || null,
+          remaining_paid_at: pd.remainingPaidAt || null,
+          deposit_payment_method: pd.depositPaymentMethod || null,
+          payment_type: pd.paymentType,
+          payment_method: pd.instrumentMethod,
           payment_detail: paymentDetail,
-          card_brand: instrumentMethod === 'card' ? cardBrand : null,
-          loan_company: instrumentMethod === 'loan' ? loanCompany.trim() || null : null,
-          installment_count: paymentType === 'installment' ? installmentCountNum : null,
-          billing_cycle: instrumentMethod === 'auto_billing' ? billingCycle : null,
-          billing_day: instrumentMethod === 'auto_billing' ? billingDay : null,
-          billing_method: instrumentMethod === 'auto_billing' ? billingMethod : null,
-          first_billing_date: instrumentMethod === 'auto_billing' ? firstBillingDate || null : null,
+          card_brand: pd.instrumentMethod === 'card' ? pd.cardBrand : null,
+          loan_company: pd.instrumentMethod === 'loan' ? pd.loanCompany.trim() || null : null,
+          installment_count: pd.paymentType === 'installment' ? installmentCountNum : null,
+          billing_cycle: pd.instrumentMethod === 'auto_billing' ? pd.billingCycle : null,
+          billing_day: pd.instrumentMethod === 'auto_billing' ? pd.billingDay : null,
+          billing_method: pd.instrumentMethod === 'auto_billing' ? pd.billingMethod : null,
+          first_billing_date: pd.instrumentMethod === 'auto_billing' ? pd.firstBillingDate || null : null,
         }),
       })
       const data = await res.json()
@@ -452,199 +435,10 @@ function NewContractForm() {
           </div>
         </div>
 
-        <div>
-          <label className="text-xs text-[#4A5568] mb-1 block">契約金額 *</label>
-          <input
-            type="number"
-            min={0}
-            value={amount}
-            onChange={e => setAmount(e.target.value ? parseInt(e.target.value) : '')}
-            className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs text-[#4A5568] mb-1 block">支払い方法</label>
-          <select
-            value={instrumentMethod}
-            onChange={e =>
-              setInstrumentMethod(e.target.value as typeof instrumentMethod)
-            }
-            className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-          >
-            <option value="cash">現金</option>
-            <option value="card">クレジットカード</option>
-            <option value="loan">ローン</option>
-            <option value="transfer">銀行振込</option>
-            <option value="auto_billing">自動引き落とし（サブスク用）</option>
-          </select>
-        </div>
-
-        {instrumentMethod === 'card' && (
-          <div>
-            <label className="text-xs text-[#4A5568] mb-1 block">カード種別</label>
-            <select
-              value={cardBrand}
-              onChange={e => setCardBrand(e.target.value as typeof cardBrand)}
-              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-            >
-              <option value="visa">VISA</option>
-              <option value="master">Mastercard</option>
-              <option value="jcb">JCB</option>
-              <option value="amex">AMEX</option>
-              <option value="diners">Diners Club</option>
-              <option value="unionpay">銀聯（UnionPay）</option>
-              <option value="other">その他</option>
-            </select>
-          </div>
-        )}
-
-        {instrumentMethod === 'loan' && (
-          <div>
-            <label className="text-xs text-[#4A5568] mb-1 block">ローン会社名</label>
-            <input
-              type="text"
-              value={loanCompany}
-              onChange={e => setLoanCompany(e.target.value)}
-              placeholder="例: ○○信販"
-              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-        )}
-
-        {instrumentMethod === 'auto_billing' && (
-          <div className="bg-[#F0F9FF] border border-[#BAE6FD] rounded-lg p-3 space-y-3">
-            <p className="text-xs font-medium text-[#4A5568]">自動引き落とし（将来の Stripe 等と連携可能な項目）</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-[#4A5568] mb-1 block">引き落とし日（毎月）</label>
-                <select
-                  value={billingDay}
-                  onChange={e => setBillingDay(parseInt(e.target.value, 10))}
-                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-                >
-                  {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
-                    <option key={d} value={d}>
-                      {d}日
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-[#4A5568] mb-1 block">初回決済日</label>
-                <input
-                  type="date"
-                  value={firstBillingDate}
-                  onChange={e => setFirstBillingDate(e.target.value)}
-                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-[#4A5568] mb-1 block">引き落とし方法</label>
-              <select
-                value={billingMethod}
-                onChange={e => setBillingMethod(e.target.value as typeof billingMethod)}
-                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="card">クレジットカード自動決済</option>
-                <option value="bank_transfer">口座振替</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-[#4A5568] mb-1 block">決済サイクル</label>
-              <select
-                value={billingCycle}
-                onChange={e => setBillingCycle(e.target.value as typeof billingCycle)}
-                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="monthly">毎月</option>
-                <option value="quarterly">毎3ヶ月</option>
-                <option value="biannual">毎6ヶ月</option>
-                <option value="annual">毎年</option>
-              </select>
-            </div>
-          </div>
-        )}
-
-        <div>
-          <label className="text-xs text-[#4A5568] mb-1 block">支払い回数</label>
-          <select
-            value={paymentType}
-            onChange={e => setPaymentType(e.target.value as typeof paymentType)}
-            className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-          >
-            <option value="lump_sum">一括</option>
-            <option value="installment">分割</option>
-          </select>
-        </div>
-
-        {paymentType === 'installment' && (
-          <div className="bg-[#F8F5FF] border border-[#BAE6FD] rounded-lg p-3 space-y-3">
-            <p className="text-xs font-medium text-[#4A5568]">分割払い詳細</p>
-            <div>
-              <label className="text-xs text-[#4A5568] mb-1 block">分割回数</label>
-              <select
-                value={installPreset}
-                onChange={e =>
-                  setInstallPreset(e.target.value as typeof installPreset)
-                }
-                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm mb-2"
-              >
-                <option value="3">3回</option>
-                <option value="6">6回</option>
-                <option value="12">12回</option>
-                <option value="24">24回</option>
-                <option value="36">36回</option>
-                <option value="other">その他</option>
-              </select>
-              {installPreset === 'other' && (
-                <input
-                  type="number"
-                  min={2}
-                  value={installOtherCount}
-                  onChange={e => setInstallOtherCount(parseInt(e.target.value, 10) || 2)}
-                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-                  placeholder="回数"
-                />
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-[#4A5568] mb-1 block">月額</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={installMonthly}
-                  onChange={e => setInstallMonthly(e.target.value ? parseInt(e.target.value) : '')}
-                  placeholder="¥10,000"
-                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-[#4A5568] mb-1 block">初回金額</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={installFirst}
-                  onChange={e => setInstallFirst(e.target.value ? parseInt(e.target.value) : '')}
-                  placeholder="¥20,000"
-                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-[#4A5568] mb-1 block">備考</label>
-              <input
-                type="text"
-                value={installNote}
-                onChange={e => setInstallNote(e.target.value)}
-                placeholder="例: 毎月27日引き落とし"
-                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-        )}
+        <ContractPaymentAndDepositFields
+          values={pd}
+          onPatch={patch => setPd(prev => ({ ...prev, ...patch }))}
+        />
 
         <button
           onClick={handleSubmit}

@@ -8,9 +8,15 @@ import {
   CONTRACT_AUTO_BILLING_METHOD_LABEL,
   CONTRACT_BILLING_CYCLE_LABEL,
   CONTRACT_CARD_BRAND_LABEL,
+  CONTRACT_DEPOSIT_PAYMENT_METHOD_LABEL,
   CONTRACT_PAYMENT_INSTRUMENT_LABEL,
   contractPaymentTypeLabel,
 } from '@/lib/contracts-payment'
+import {
+  ContractPaymentAndDepositFields,
+  defaultContractPaymentDepositValues,
+  type ContractPaymentDepositFieldsValues,
+} from '@/components/contracts/ContractPaymentAndDepositFields'
 
 interface ContractData {
   id: string
@@ -21,6 +27,11 @@ interface ContractData {
   start_date: string | null
   end_date: string | null
   amount: number
+  deposit_amount?: number | null
+  remaining_amount?: number | null
+  deposit_paid_at?: string | null
+  remaining_paid_at?: string | null
+  deposit_payment_method?: string | null
   payment_type?: string | null
   payment_method?: string | null
   payment_detail: { type: string; count: number; monthly: number; first: number; note: string } | null
@@ -67,6 +78,76 @@ function resolvePaymentType(c: ContractData): string {
   return c.payment_detail ? 'installment' : 'lump_sum'
 }
 
+function sliceDate(d: string | null | undefined): string {
+  if (!d) return ''
+  return d.length >= 10 ? d.slice(0, 10) : d
+}
+
+function contractToEditPd(c: ContractData): ContractPaymentDepositFieldsValues {
+  const base = defaultContractPaymentDepositValues()
+  const icRaw = c.installment_count ?? c.payment_detail?.count ?? 12
+  const ic = Number.isFinite(Number(icRaw)) ? Math.round(Number(icRaw)) : 12
+  const presetNums = [3, 6, 12, 24, 36] as const
+  let installPreset: ContractPaymentDepositFieldsValues['installPreset'] = '12'
+  let installOtherCount = 18
+  if ((presetNums as readonly number[]).includes(ic)) {
+    installPreset = String(ic) as ContractPaymentDepositFieldsValues['installPreset']
+  } else if (ic >= 2) {
+    installPreset = 'other'
+    installOtherCount = ic
+  }
+
+  const pm = resolveInstrument(c)
+  const inst: ContractPaymentDepositFieldsValues['instrumentMethod'] =
+    pm === 'cash' || pm === 'card' || pm === 'loan' || pm === 'transfer' || pm === 'auto_billing'
+      ? pm
+      : 'cash'
+
+  const dpm = c.deposit_payment_method || ''
+  const depositPaymentMethod: ContractPaymentDepositFieldsValues['depositPaymentMethod'] =
+    dpm === 'cash' || dpm === 'card' || dpm === 'loan' || dpm === 'transfer' ? dpm : ''
+
+  const cb = c.card_brand || 'visa'
+  const cardBrand: ContractPaymentDepositFieldsValues['cardBrand'] =
+    cb === 'visa' ||
+    cb === 'master' ||
+    cb === 'jcb' ||
+    cb === 'amex' ||
+    cb === 'diners' ||
+    cb === 'unionpay' ||
+    cb === 'other'
+      ? cb
+      : 'visa'
+
+  return {
+    ...base,
+    amount: c.amount,
+    depositAmount: c.deposit_amount ?? 0,
+    depositPaidAt: sliceDate(c.deposit_paid_at),
+    remainingPaidAt: sliceDate(c.remaining_paid_at),
+    depositPaymentMethod,
+    instrumentMethod: inst,
+    cardBrand,
+    loanCompany: c.loan_company || '',
+    paymentType: resolvePaymentType(c) === 'installment' ? 'installment' : 'lump_sum',
+    installPreset,
+    installOtherCount,
+    installMonthly: c.payment_detail?.monthly ?? 0,
+    installFirst: c.payment_detail?.first ?? 0,
+    installNote: c.payment_detail?.note ?? '',
+    billingDay: c.billing_day ?? 1,
+    billingMethod:
+      c.billing_method === 'bank_transfer' ? 'bank_transfer' : 'card',
+    firstBillingDate: sliceDate(c.first_billing_date),
+    billingCycle:
+      c.billing_cycle === 'quarterly' ||
+      c.billing_cycle === 'biannual' ||
+      c.billing_cycle === 'annual'
+        ? c.billing_cycle
+        : 'monthly',
+  }
+}
+
 export default function ContractDetailPage() {
   const params = useParams()
   const router = useRouter()
@@ -76,6 +157,18 @@ export default function ContractDetailPage() {
   const [loading, setLoading] = useState(true)
   const [signing, setSigning] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+
+  const [editSaving, setEditSaving] = useState(false)
+  const [editCourseName, setEditCourseName] = useState('')
+  const [editTreatment, setEditTreatment] = useState('')
+  const [editSessions, setEditSessions] = useState<number | ''>('')
+  const [editStartDate, setEditStartDate] = useState('')
+  const [editEndDate, setEditEndDate] = useState('')
+  const [editPd, setEditPd] = useState<ContractPaymentDepositFieldsValues>(defaultContractPaymentDepositValues)
+
+  const [paidDatesSaving, setPaidDatesSaving] = useState(false)
+  const [editDepositPaidAt, setEditDepositPaidAt] = useState('')
+  const [editRemainingPaidAt, setEditRemainingPaidAt] = useState('')
 
   // Canvas refs
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -105,6 +198,19 @@ export default function ContractDetailPage() {
   useEffect(() => {
     fetchContract()
   }, [fetchContract])
+
+  useEffect(() => {
+    if (!contract) return
+    setEditDepositPaidAt(sliceDate(contract.deposit_paid_at))
+    setEditRemainingPaidAt(sliceDate(contract.remaining_paid_at))
+    if (contract.status !== 'draft') return
+    setEditCourseName(contract.course_name)
+    setEditTreatment(contract.treatment_content || '')
+    setEditSessions(contract.sessions ?? '')
+    setEditStartDate(sliceDate(contract.start_date))
+    setEditEndDate(sliceDate(contract.end_date))
+    setEditPd(contractToEditPd(contract))
+  }, [contract])
 
   // Canvas setup
   useEffect(() => {
@@ -255,6 +361,90 @@ export default function ContractDetailPage() {
     }
   }
 
+  const handleSaveDraft = async () => {
+    if (!contract || contract.status !== 'draft') return
+    const amountNum = Number(editPd.amount)
+    if (!editCourseName.trim() || Number.isNaN(amountNum) || amountNum < 0) {
+      alert('コース名と契約金額を確認してください')
+      return
+    }
+    const installmentCountNum =
+      editPd.installPreset === 'other'
+        ? Math.max(2, editPd.installOtherCount || 2)
+        : parseInt(editPd.installPreset, 10)
+    const paymentDetail =
+      editPd.paymentType === 'installment'
+        ? {
+            type: '分割',
+            count: installmentCountNum,
+            monthly: Number(editPd.installMonthly) || 0,
+            first: Number(editPd.installFirst) || 0,
+            note: editPd.installNote,
+          }
+        : null
+
+    setEditSaving(true)
+    try {
+      const res = await fetch(`/api/contracts/${contract.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          course_name: editCourseName.trim(),
+          treatment_content: editTreatment || null,
+          sessions: editSessions === '' ? null : editSessions,
+          start_date: editStartDate || null,
+          end_date: editEndDate || null,
+          amount: amountNum,
+          deposit_amount: editPd.depositAmount === '' ? 0 : Number(editPd.depositAmount),
+          deposit_paid_at: editPd.depositPaidAt || null,
+          remaining_paid_at: editPd.remainingPaidAt || null,
+          deposit_payment_method: editPd.depositPaymentMethod || null,
+          payment_type: editPd.paymentType,
+          payment_method: editPd.instrumentMethod,
+          payment_detail: paymentDetail,
+          card_brand: editPd.instrumentMethod === 'card' ? editPd.cardBrand : null,
+          loan_company: editPd.instrumentMethod === 'loan' ? editPd.loanCompany.trim() || null : null,
+          installment_count: editPd.paymentType === 'installment' ? installmentCountNum : null,
+          billing_cycle: editPd.instrumentMethod === 'auto_billing' ? editPd.billingCycle : null,
+          billing_day: editPd.instrumentMethod === 'auto_billing' ? editPd.billingDay : null,
+          billing_method: editPd.instrumentMethod === 'auto_billing' ? editPd.billingMethod : null,
+          first_billing_date: editPd.instrumentMethod === 'auto_billing' ? editPd.firstBillingDate || null : null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '保存に失敗しました')
+      await fetchContract()
+      showToast('保存しました')
+    } catch {
+      alert('保存に失敗しました')
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const handleSavePaidDates = async () => {
+    if (!contract || contract.status === 'draft') return
+    setPaidDatesSaving(true)
+    try {
+      const res = await fetch(`/api/contracts/${contract.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deposit_paid_at: editDepositPaidAt || null,
+          remaining_paid_at: editRemainingPaidAt || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '保存に失敗しました')
+      await fetchContract()
+      showToast('入金日を保存しました')
+    } catch {
+      alert('保存に失敗しました')
+    } finally {
+      setPaidDatesSaving(false)
+    }
+  }
+
   const handlePrint = () => window.print()
 
   const handleDownloadPdf = async () => {
@@ -331,6 +521,118 @@ export default function ContractDetailPage() {
         </div>
       )}
 
+      {!isSigned && (
+        <div className="print:hidden mb-6 bg-white rounded-2xl p-5 card-shadow space-y-4">
+          <h2 className="text-sm font-bold text-text-main">契約内容の編集（下書き）</h2>
+          <div>
+            <label className="text-xs text-[#4A5568] mb-1 block">コース名 *</label>
+            <input
+              value={editCourseName}
+              onChange={e => setEditCourseName(e.target.value)}
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-[#4A5568] mb-1 block">施術内容</label>
+            <textarea
+              value={editTreatment}
+              onChange={e => setEditTreatment(e.target.value)}
+              rows={3}
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-[#4A5568] mb-1 block">回数</label>
+            <input
+              type="number"
+              min={1}
+              value={editSessions}
+              onChange={e => setEditSessions(e.target.value ? parseInt(e.target.value, 10) : '')}
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[#4A5568] mb-1 block">開始日</label>
+              <input
+                type="date"
+                value={editStartDate}
+                onChange={e => setEditStartDate(e.target.value)}
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-[#4A5568] mb-1 block">終了日</label>
+              <input
+                type="date"
+                value={editEndDate}
+                onChange={e => setEditEndDate(e.target.value)}
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <ContractPaymentAndDepositFields
+            values={editPd}
+            onPatch={patch => setEditPd(prev => ({ ...prev, ...patch }))}
+          />
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            disabled={editSaving}
+            className="w-full py-3 rounded-xl bg-rose text-white font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {editSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> 保存中...
+              </>
+            ) : (
+              '変更を保存'
+            )}
+          </button>
+        </div>
+      )}
+
+      {isSigned && (
+        <div className="print:hidden mb-6 bg-white rounded-2xl p-5 card-shadow space-y-3">
+          <h2 className="text-sm font-bold text-text-main">入金日の記録</h2>
+          <p className="text-xs text-text-sub">署名後も頭金・残金の入金日だけは更新できます。</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[#4A5568] mb-1 block">頭金入金日</label>
+              <input
+                type="date"
+                value={editDepositPaidAt}
+                onChange={e => setEditDepositPaidAt(e.target.value)}
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-[#4A5568] mb-1 block">残金入金日</label>
+              <input
+                type="date"
+                value={editRemainingPaidAt}
+                onChange={e => setEditRemainingPaidAt(e.target.value)}
+                className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleSavePaidDates}
+            disabled={paidDatesSaving}
+            className="w-full py-2.5 rounded-xl border border-rose text-rose font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {paidDatesSaving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> 保存中...
+              </>
+            ) : (
+              '入金日を保存'
+            )}
+          </button>
+        </div>
+      )}
+
       {/* 契約書テンプレート */}
       <div id="contract-template" className="bg-white rounded-2xl p-6 sm:p-8 card-shadow print:shadow-none print:rounded-none">
         <h2 className="text-xl font-bold text-center text-text-main mb-6 border-b-2 border-text-main pb-2">
@@ -369,6 +671,33 @@ export default function ContractDetailPage() {
               期間: {contract.start_date || '—'} 〜 {contract.end_date || '—'}
             </p>
             <p>契約金額: ¥{contract.amount.toLocaleString()}（税込）</p>
+            <p>頭金: ¥{(contract.deposit_amount ?? 0).toLocaleString()}</p>
+            <p>
+              残金: ¥
+              {(contract.remaining_amount != null
+                ? contract.remaining_amount
+                : Math.max(0, contract.amount - (contract.deposit_amount ?? 0))
+              ).toLocaleString()}
+            </p>
+            {(contract.deposit_amount ?? 0) > 0 && contract.deposit_payment_method && (
+              <p>
+                頭金の支払い方法:{' '}
+                {CONTRACT_DEPOSIT_PAYMENT_METHOD_LABEL[contract.deposit_payment_method] ||
+                  contract.deposit_payment_method}
+              </p>
+            )}
+            {contract.deposit_paid_at && (
+              <p>
+                頭金入金日:{' '}
+                {new Date(contract.deposit_paid_at + 'T12:00:00').toLocaleDateString('ja-JP')}
+              </p>
+            )}
+            {contract.remaining_paid_at && (
+              <p>
+                残金入金日:{' '}
+                {new Date(contract.remaining_paid_at + 'T12:00:00').toLocaleDateString('ja-JP')}
+              </p>
+            )}
             <p>
               支払い方法:{' '}
               {CONTRACT_PAYMENT_INSTRUMENT_LABEL[resolveInstrument(contract)] ||

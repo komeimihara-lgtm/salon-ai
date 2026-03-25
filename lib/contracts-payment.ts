@@ -30,6 +30,14 @@ export const CONTRACT_AUTO_BILLING_METHOD_LABEL: Record<string, string> = {
   bank_transfer: '口座振替',
 }
 
+/** 頭金の支払い方法（契約全体の payment_method とは別） */
+export const CONTRACT_DEPOSIT_PAYMENT_METHOD_LABEL: Record<string, string> = {
+  cash: '現金',
+  card: 'クレジットカード',
+  loan: 'ローン',
+  transfer: '銀行振込',
+}
+
 export function contractPaymentTypeLabel(paymentType: string | null | undefined) {
   if (paymentType === 'installment') return '分割払い'
   return '一括払い'
