@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import {
   getSalonSaleOperator,
   canCancelSale,
@@ -8,8 +8,8 @@ import {
 export const dynamic = 'force-dynamic'
 
 /** 売上一覧の取消・修正ボタン表示用 */
-export async function GET() {
-  const op = await getSalonSaleOperator()
+export async function GET(req: NextRequest) {
+  const op = await getSalonSaleOperator(req)
   return NextResponse.json({
     role: op.role,
     canCancel: canCancelSale(op.role),

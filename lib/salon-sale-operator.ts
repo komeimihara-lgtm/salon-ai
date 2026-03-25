@@ -1,7 +1,9 @@
+import type { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { resolveSalonIdForOwnerApi } from '@/lib/resolve-salon-id-api'
 
 export type SalonSaleRole = 'owner' | 'staff' | null
 
@@ -12,32 +14,62 @@ export type SalonSaleOperator = {
   role: SalonSaleRole
 }
 
-/**
- * Cookie の salon_id と Supabase セッションから、売上取消・修正の権限を判定する。
- * - salons.owner_email と一致 → owner
- * - staff.login_email と一致 → staff.role（owner / staff）
- */
-export async function getSalonSaleOperator(): Promise<SalonSaleOperator> {
-  const salonId = getSalonIdFromCookie()
-  const cookieStore = cookies()
-  let email: string | null = null
+async function getSessionEmailFromRequest(req: NextRequest): Promise<string | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (!url || !anon) return null
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll: () => cookieStore.getAll(),
-          setAll: () => {},
+    const supabase = createServerClient(url, anon, {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll()
         },
-      }
-    )
+        setAll() {
+          /* 読み取り専用 */
+        },
+      },
+    })
     const {
       data: { session },
     } = await supabase.auth.getSession()
-    email = session?.user?.email?.trim().toLowerCase() ?? null
+    return session?.user?.email?.trim().toLowerCase() ?? null
   } catch {
-    email = null
+    return null
+  }
+}
+
+/**
+ * Cookie / リクエストの salon_id と Supabase セッションから、売上取消・修正の権限を判定する。
+ * - Route Handler では `req` を渡すこと（middleware 外でも owner メールから salon_id を解決できる）
+ * - salons.owner_email と一致 → owner
+ * - staff.login_email と一致 → staff.role（owner / staff）
+ */
+export async function getSalonSaleOperator(req?: NextRequest): Promise<SalonSaleOperator> {
+  const salonId = req ? await resolveSalonIdForOwnerApi(req) : getSalonIdFromCookie()
+
+  let email: string | null = null
+  if (req) {
+    email = await getSessionEmailFromRequest(req)
+  } else {
+    const cookieStore = cookies()
+    try {
+      const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            getAll: () => cookieStore.getAll(),
+            setAll: () => {},
+          },
+        }
+      )
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      email = session?.user?.email?.trim().toLowerCase() ?? null
+    } catch {
+      email = null
+    }
   }
 
   if (!salonId || !email) {

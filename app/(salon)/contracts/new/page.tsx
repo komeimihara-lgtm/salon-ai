@@ -406,13 +406,13 @@ function NewContractForm() {
         </div>
 
         <div>
-          <label className="text-xs text-[#4A5568] mb-1 block">回数</label>
+          <label className="text-xs text-[#4A5568] mb-1 block">施術回数（コース回数）</label>
           <input
             type="number"
             min={1}
             value={sessions}
             onChange={e => setSessions(e.target.value ? parseInt(e.target.value) : '')}
-            placeholder="例: 12"
+            placeholder="例: 12（分割払いの回数とは別です）"
             className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
           />
         </div>

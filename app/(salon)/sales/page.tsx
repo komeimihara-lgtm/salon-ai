@@ -179,7 +179,8 @@ export default function SalesPage() {
   const fetchSales = useCallback(async () => {
     try {
       const res = await fetch(
-        `/api/kpi/sales?start=${dateRange.start}&end=${dateRange.end}&include_cancelled=1`
+        `/api/kpi/sales?start=${dateRange.start}&end=${dateRange.end}&include_cancelled=1`,
+        { credentials: 'include' }
       )
       const json = await res.json()
       setSales(json.sales || [])
@@ -224,7 +225,7 @@ export default function SalesPage() {
     setTaxSettingsState(getTaxSettings())
     setCampaignsState(getCampaigns())
     fetchCustomers()
-    fetch('/api/sales/permissions')
+    fetch('/api/sales/permissions', { credentials: 'include' })
       .then(r => r.json())
       .then((j: SalePermissions) =>
         setSalePermissions({
@@ -447,7 +448,12 @@ export default function SalesPage() {
         }
       }
       if (salesToCreate.length > 0) {
-        const res = await fetch('/api/kpi/sales', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sales: salesToCreate }) })
+        const res = await fetch('/api/kpi/sales', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ sales: salesToCreate }),
+        })
         if (!res.ok) throw new Error()
       }
       for (const c of cart) {
@@ -486,6 +492,7 @@ export default function SalesPage() {
       const res = await fetch(`/api/sales/${cancelModalSale.id}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ cancel_reason: reason }),
       })
       const j = await res.json().catch(() => ({}))
@@ -519,7 +526,7 @@ export default function SalesPage() {
     setSaleLogs([])
     setSaleLogsError('')
     setSaleLogsLoading(true)
-    void fetch(`/api/sales/${s.id}/logs`)
+    void fetch(`/api/sales/${s.id}/logs`, { credentials: 'include' })
       .then(async res => {
         const j = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(j.error || 'ログの取得に失敗しました')
@@ -538,6 +545,7 @@ export default function SalesPage() {
       const res = await fetch(`/api/sales/${modifyModalSale.id}/modify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           amount: modifyForm.amount,
           sale_date: modifyForm.sale_date,

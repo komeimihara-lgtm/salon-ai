@@ -283,7 +283,10 @@ export function ContractPaymentAndDepositFields({
       )}
 
       <div>
-        <label className="text-xs text-[#4A5568] mb-1 block">支払い回数</label>
+        <label className="text-xs text-[#4A5568] mb-1 block">残金の支払い</label>
+        <p className="text-[11px] text-[#718096] mb-1.5">
+          頭金を差し引いた残金を、一括で払うか分割するかを選びます（分割回数は下の「分割払い詳細」で1か所だけ指定します）。
+        </p>
         <select
           value={depositIsZero ? 'lump_sum' : v.paymentType}
           onChange={e =>
@@ -292,8 +295,8 @@ export function ContractPaymentAndDepositFields({
           disabled={depositIsZero}
           className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:bg-gray-50"
         >
-          <option value="lump_sum">一括</option>
-          {!depositIsZero && <option value="installment">分割</option>}
+          <option value="lump_sum">一括払い（残金まとめて）</option>
+          {!depositIsZero && <option value="installment">分割払い（残金を複数回）</option>}
         </select>
       </div>
 

@@ -1,5 +1,5 @@
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
+import { resolveSalonIdForOwnerApi } from '@/lib/resolve-salon-id-api'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
 import { getSalonSaleOperator } from '@/lib/salon-sale-operator'
@@ -13,7 +13,11 @@ export async function GET(req: NextRequest) {
   const start = searchParams.get('start')
   const end = searchParams.get('end')
   const customerId = searchParams.get('customer_id')
-  const salonId = searchParams.get('salon_id') || getSalonIdFromCookie()
+  const querySalon = searchParams.get('salon_id')?.trim()
+  const salonId = querySalon || (await resolveSalonIdForOwnerApi(req))
+  if (!salonId) {
+    return NextResponse.json({ error: 'salon_id が取得できません' }, { status: 401 })
+  }
   const includeCancelled =
     searchParams.get('include_cancelled') === '1' || searchParams.get('include_cancelled') === 'true'
 
@@ -61,8 +65,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'salesが必要です' }, { status: 400 })
     }
 
-    const salonId = getSalonIdFromCookie()
-    const op = await getSalonSaleOperator()
+    const salonId = await resolveSalonIdForOwnerApi(req)
+    if (!salonId) {
+      return NextResponse.json({ error: 'salon_id が取得できません' }, { status: 401 })
+    }
+    const op = await getSalonSaleOperator(req)
     const operatedBy = op.displayName || op.email || 'レジ登録'
 
     const cleanedSales = sales.map((s: Record<string, unknown>) => ({

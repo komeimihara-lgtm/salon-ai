@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const oldId = params.id
-  const op = await getSalonSaleOperator()
+  const op = await getSalonSaleOperator(req)
   if (!op.salonId) {
     return NextResponse.json({ error: 'salon_id がありません' }, { status: 400 })
   }

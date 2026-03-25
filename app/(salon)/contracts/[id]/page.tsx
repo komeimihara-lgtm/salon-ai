@@ -565,12 +565,13 @@ export default function ContractDetailPage() {
             />
           </div>
           <div>
-            <label className="text-xs text-[#4A5568] mb-1 block">回数</label>
+            <label className="text-xs text-[#4A5568] mb-1 block">施術回数（コース回数）</label>
             <input
               type="number"
               min={1}
               value={editSessions}
               onChange={e => setEditSessions(e.target.value ? parseInt(e.target.value, 10) : '')}
+              placeholder="分割払いの回数とは別"
               className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
             />
           </div>
@@ -759,12 +760,11 @@ export default function ContractDetailPage() {
                 )}
               </>
             )}
-            <p>支払い回数: {contractPaymentTypeLabel(resolvePaymentType(contract))}</p>
+            <p>残金の支払い: {contractPaymentTypeLabel(resolvePaymentType(contract))}</p>
             {resolvePaymentType(contract) === 'installment' && contract.payment_detail && (
               <>
                 <p>
-                  分割回数: 全
-                  {contract.installment_count ?? contract.payment_detail.count}回
+                  分割回数: {contract.installment_count ?? contract.payment_detail.count}回
                 </p>
                 {contract.payment_detail.first > 0 && (
                   <p>初回金額: ¥{contract.payment_detail.first.toLocaleString()}</p>
