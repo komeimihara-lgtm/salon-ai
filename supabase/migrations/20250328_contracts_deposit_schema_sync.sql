@@ -1,4 +1,4 @@
--- contracts: 不足列の補完（冪等）+ 頭金・残金（残金は生成列）
+-- contracts: 不足列の補完（冪等）+ 頭金（残金はアプリで算出）
 -- アプリ: app/api/contracts, contracts/new, contracts/[id] と整合
 
 -- 旧スキーマ: payment_method が lump_sum / installment のみ → payment_type
@@ -47,20 +47,8 @@ ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS signer_ip text;
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS sessions integer;
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS amount integer;
 
--- 頭金・残金
+-- 頭金（残金 remaining_amount はアプリ側で算出し DB には持たない）
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS deposit_amount integer NOT NULL DEFAULT 0;
-
-DO $gen$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'contracts' AND column_name = 'remaining_amount'
-  ) THEN
-    ALTER TABLE public.contracts ADD COLUMN remaining_amount integer
-      GENERATED ALWAYS AS (COALESCE(amount, 0) - COALESCE(deposit_amount, 0)) STORED;
-  END IF;
-END
-$gen$;
 
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS deposit_paid_at date;
 ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS remaining_paid_at date;
@@ -69,7 +57,6 @@ ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS deposit_payment_method tex
 UPDATE public.contracts SET deposit_amount = 0 WHERE deposit_amount IS NULL;
 
 COMMENT ON COLUMN public.contracts.deposit_amount IS $c$頭金（円）$c$;
-COMMENT ON COLUMN public.contracts.remaining_amount IS $c$残金（契約金額 - 頭金、自動計算）$c$;
 COMMENT ON COLUMN public.contracts.deposit_paid_at IS $c$頭金入金日$c$;
 COMMENT ON COLUMN public.contracts.remaining_paid_at IS $c$残金入金日$c$;
 COMMENT ON COLUMN public.contracts.deposit_payment_method IS $c$頭金の支払い方法（cash | card | loan | transfer）$c$;

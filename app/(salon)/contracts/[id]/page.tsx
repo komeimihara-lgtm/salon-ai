@@ -17,6 +17,7 @@ import {
   defaultContractPaymentDepositValues,
   type ContractPaymentDepositFieldsValues,
 } from '@/components/contracts/ContractPaymentAndDepositFields'
+import { computeContractRemainingAmount } from '@/lib/contract-payload'
 
 interface ContractData {
   id: string
@@ -674,10 +675,7 @@ export default function ContractDetailPage() {
             <p>頭金: ¥{(contract.deposit_amount ?? 0).toLocaleString()}</p>
             <p>
               残金: ¥
-              {(contract.remaining_amount != null
-                ? contract.remaining_amount
-                : Math.max(0, contract.amount - (contract.deposit_amount ?? 0))
-              ).toLocaleString()}
+              {computeContractRemainingAmount(contract.amount, contract.deposit_amount).toLocaleString()}
             </p>
             {(contract.deposit_amount ?? 0) > 0 && contract.deposit_payment_method && (
               <p>

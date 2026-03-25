@@ -68,6 +68,8 @@ export function ContractPaymentAndDepositFields({
         ? Math.max(0, amountNum - depositNum)
         : 0
 
+  const depositIsZero = depositNum === 0
+
   const patch = onPatch
 
   return (
@@ -92,16 +94,37 @@ export function ContractPaymentAndDepositFields({
             min={0}
             max={Number.isFinite(amountNum) ? amountNum : undefined}
             value={v.depositAmount}
-            onChange={e =>
-              patch({ depositAmount: e.target.value ? parseInt(e.target.value, 10) : '' })
-            }
+            onChange={e => {
+              const raw = e.target.value
+              const next = raw === '' ? '' : parseInt(raw, 10)
+              const amt = Number(v.amount)
+              const cap = Number.isFinite(amt) ? amt : 0
+              const capped =
+                raw === '' || Number.isNaN(Number(next))
+                  ? 0
+                  : Math.min(Math.max(0, next as number), cap)
+              const p: Partial<ContractPaymentDepositFieldsValues> = {
+                depositAmount: raw === '' ? '' : capped,
+              }
+              if (capped === 0) {
+                p.paymentType = 'lump_sum'
+                p.depositPaidAt = ''
+                p.depositPaymentMethod = ''
+              }
+              patch(p)
+            }}
             className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
           />
         </div>
         <p className="text-sm text-[#1A202C]">
           残金: <span className="font-semibold tabular-nums">¥{remaining.toLocaleString()}</span>
-          <span className="text-xs text-[#4A5568] ml-1">（契約金額 − 頭金）</span>
+          <span className="text-xs text-[#4A5568] ml-1">（契約金額 − 頭金・リアルタイム）</span>
         </p>
+        {depositIsZero && (
+          <p className="text-xs text-amber-900 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+            頭金が0円の場合は一括払いとして登録されます（分割払いは選択できません）。
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-[#4A5568] mb-1 block">頭金入金日</label>
@@ -109,7 +132,8 @@ export function ContractPaymentAndDepositFields({
               type="date"
               value={v.depositPaidAt}
               onChange={e => patch({ depositPaidAt: e.target.value })}
-              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              disabled={depositIsZero}
+              className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:bg-gray-50"
             />
           </div>
           <div>
@@ -131,7 +155,8 @@ export function ContractPaymentAndDepositFields({
                 depositPaymentMethod: e.target.value as ContractPaymentDepositFieldsValues['depositPaymentMethod'],
               })
             }
-            className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+            disabled={depositIsZero}
+            className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:bg-gray-50"
           >
             <option value="">未選択</option>
             {(Object.keys(CONTRACT_DEPOSIT_PAYMENT_METHOD_LABEL) as Array<
@@ -260,18 +285,19 @@ export function ContractPaymentAndDepositFields({
       <div>
         <label className="text-xs text-[#4A5568] mb-1 block">支払い回数</label>
         <select
-          value={v.paymentType}
+          value={depositIsZero ? 'lump_sum' : v.paymentType}
           onChange={e =>
             patch({ paymentType: e.target.value as ContractPaymentDepositFieldsValues['paymentType'] })
           }
-          className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+          disabled={depositIsZero}
+          className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm disabled:opacity-50 disabled:bg-gray-50"
         >
           <option value="lump_sum">一括</option>
-          <option value="installment">分割</option>
+          {!depositIsZero && <option value="installment">分割</option>}
         </select>
       </div>
 
-      {v.paymentType === 'installment' && (
+      {!depositIsZero && v.paymentType === 'installment' && (
         <div className="bg-[#F8F5FF] border border-[#BAE6FD] rounded-lg p-3 space-y-3">
           <p className="text-xs font-medium text-[#4A5568]">分割払い詳細</p>
           <div>

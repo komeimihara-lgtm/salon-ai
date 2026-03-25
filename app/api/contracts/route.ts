@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
-import { buildContractRowFromBody } from '@/lib/contract-payload'
+import { buildContractRowFromBody, computeContractRemainingAmount } from '@/lib/contract-payload'
 
 function errorMessage(e: unknown): string {
   if (e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string') {
@@ -24,7 +24,15 @@ export async function GET() {
       .order('created_at', { ascending: false })
 
     if (error) throw error
-    return NextResponse.json({ contracts: data || [] })
+    const rows = data || []
+    const contracts = rows.map(c => ({
+      ...c,
+      remaining_amount: computeContractRemainingAmount(
+        Number(c.amount),
+        c.deposit_amount as number | null | undefined,
+      ),
+    }))
+    return NextResponse.json({ contracts })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: errorMessage(e) }, { status: 500 })
@@ -60,7 +68,18 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error) throw error
-    return NextResponse.json({ contract: data })
+
+    const contract = data
+      ? {
+          ...data,
+          remaining_amount: computeContractRemainingAmount(
+            Number(data.amount),
+            data.deposit_amount as number | null | undefined,
+          ),
+        }
+      : data
+
+    return NextResponse.json({ contract })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: errorMessage(e) }, { status: 500 })

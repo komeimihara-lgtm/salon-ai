@@ -1,4 +1,14 @@
-/** POST/PATCH 用: リクエスト body → contracts 行（remaining_amount は生成列のため含めない） */
+/** 残金（DB には保存しない。表示・API 応答用） */
+export function computeContractRemainingAmount(
+  amount: number,
+  depositAmount?: number | null,
+): number {
+  const a = Math.round(Number(amount))
+  const d = Math.round(Number(depositAmount ?? 0))
+  return Math.max(0, a - d)
+}
+
+/** POST/PATCH 用: リクエスト body → contracts 行（残金 remaining_amount は DB に保存しない） */
 
 const INSTRUMENTS = new Set(['cash', 'card', 'loan', 'transfer', 'auto_billing'])
 const DEPOSIT_METHODS = new Set(['cash', 'card', 'loan', 'transfer'])
@@ -68,6 +78,11 @@ export function buildContractRowFromBody(
     ptype = rawPm as 'lump_sum' | 'installment'
   }
 
+  /** 頭金0は一括払いとして扱う（分割・分割詳細は保存しない） */
+  if (deposit_amount === 0) {
+    ptype = 'lump_sum'
+  }
+
   const instrument = INSTRUMENTS.has(rawPm) ? rawPm : 'cash'
 
   let instCount: number | null = null
@@ -87,6 +102,9 @@ export function buildContractRowFromBody(
   const deposit_payment_method =
     deposit_amount > 0 && DEPOSIT_METHODS.has(depPmStr) ? depPmStr : null
 
+  const deposit_paid_at_norm =
+    deposit_amount > 0 && deposit_paid_at ? String(deposit_paid_at).slice(0, 10) : null
+
   const row: Record<string, unknown> = {
     salon_id: ctx.salonId,
     customer_id: ctx.customerId,
@@ -97,15 +115,15 @@ export function buildContractRowFromBody(
     end_date: end_date ? String(end_date).slice(0, 10) : null,
     amount,
     deposit_amount,
-    deposit_paid_at: deposit_paid_at ? String(deposit_paid_at).slice(0, 10) : null,
+    deposit_paid_at: deposit_paid_at_norm,
     remaining_paid_at: remaining_paid_at ? String(remaining_paid_at).slice(0, 10) : null,
     deposit_payment_method,
     payment_type: ptype,
     payment_method: instrument,
-    payment_detail: payment_detail || null,
+    payment_detail: deposit_amount === 0 ? null : payment_detail || null,
     card_brand: instrument === 'card' && card_brand ? String(card_brand) : null,
     loan_company: instrument === 'loan' && loan_company ? String(loan_company).trim() : null,
-    installment_count: instCount,
+    installment_count: deposit_amount === 0 ? null : instCount,
     auto_billing: autoBilling,
     billing_cycle: autoBilling && billing_cycle ? String(billing_cycle) : null,
     billing_day:

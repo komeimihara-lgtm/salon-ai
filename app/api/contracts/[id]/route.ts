@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
-import { buildContractRowFromBody } from '@/lib/contract-payload'
+import { buildContractRowFromBody, computeContractRemainingAmount } from '@/lib/contract-payload'
+
+function withComputedRemaining<C extends { amount?: unknown; deposit_amount?: unknown }>(
+  row: C | null,
+): (C & { remaining_amount: number }) | null {
+  if (!row) return null
+  return {
+    ...row,
+    remaining_amount: computeContractRemainingAmount(
+      Number(row.amount),
+      row.deposit_amount as number | null | undefined,
+    ),
+  }
+}
 
 function errorMessage(e: unknown): string {
   if (e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string') {
@@ -37,7 +50,10 @@ export async function GET(
       .eq('id', salonId)
       .single()
 
-    return NextResponse.json({ contract: data, salon: salon || {} })
+    return NextResponse.json({
+      contract: withComputedRemaining(data),
+      salon: salon || {},
+    })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: String(e) }, { status: 500 })
@@ -100,7 +116,7 @@ export async function PATCH(
         .single()
 
       if (error) throw error
-      return NextResponse.json({ contract: data })
+      return NextResponse.json({ contract: withComputedRemaining(data) })
     }
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -128,7 +144,7 @@ export async function PATCH(
       .single()
 
     if (error) throw error
-    return NextResponse.json({ contract: data })
+    return NextResponse.json({ contract: withComputedRemaining(data) })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: errorMessage(e) }, { status: 500 })
