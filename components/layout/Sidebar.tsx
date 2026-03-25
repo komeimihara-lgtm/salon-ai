@@ -19,6 +19,8 @@ import {
   Smartphone,
   BarChart2,
   BookOpen,
+  Timer,
+  PieChart,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -34,6 +36,9 @@ const NAV_ITEMS = [
   { href: '/counseling', icon: MessageCircle, label: 'AIカウンセリング' },
   { href: '/menu', icon: UtensilsCrossed, label: 'メニュー設定' },
   { href: '/staff', icon: UserCog, label: 'スタッフ管理' },
+  { href: '/attendance', icon: Timer, label: 'タイムカード' },
+  { href: '/attendance/manage', icon: Timer, label: '勤怠管理' },
+  { href: '/staff/sales', icon: PieChart, label: 'スタッフ売上' },
   { href: '/settings', icon: Settings, label: 'サロン設定' },
   { href: '/line', icon: Smartphone, label: 'LINE連携' },
   { href: '/qa-chat', icon: MessageSquare, label: 'Q&Aチャット' },

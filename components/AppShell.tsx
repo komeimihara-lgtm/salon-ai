@@ -30,6 +30,8 @@ import {
   ChevronDown,
   ChevronRight,
   LogOut,
+  Fingerprint,
+  BarChart3,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
@@ -76,6 +78,9 @@ const NAV_ITEMS: NavItem[] = [
   { type: 'link', href: '/subscriptions', icon: Repeat, label: 'サブスク管理' },
   { type: 'link', href: '/contracts', icon: FileText, label: '契約書' },
   { type: 'link', href: '/staff', icon: Clock, label: 'スタッフ管理' },
+  { type: 'link', href: '/attendance', icon: Fingerprint, label: 'タイムカード' },
+  { type: 'link', href: '/attendance/manage', icon: Clock, label: '勤怠管理' },
+  { type: 'link', href: '/staff/sales', icon: BarChart3, label: 'スタッフ売上' },
   { type: 'link', href: '/settings', icon: Settings, label: 'サロン設定' },
 ]
 
