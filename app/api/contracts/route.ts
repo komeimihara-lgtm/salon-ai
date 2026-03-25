@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { resolveSalonIdForOwnerApi } from '@/lib/resolve-salon-id-api'
 import { buildContractRowFromBody, computeContractRemainingAmount } from '@/lib/contract-payload'
+import { getSalonSaleOperator, canModifySale } from '@/lib/salon-sale-operator'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,6 +48,11 @@ export async function POST(req: NextRequest) {
     const salonId = await resolveSalonIdForOwnerApi(req)
     if (!salonId) {
       return NextResponse.json({ error: 'サロンにログインしてください' }, { status: 401 })
+    }
+
+    const op = await getSalonSaleOperator(req)
+    if (!canModifySale(op.role)) {
+      return NextResponse.json({ error: '契約書の作成はオーナーのみ可能です' }, { status: 403 })
     }
 
     const customer_id = body.customer_id

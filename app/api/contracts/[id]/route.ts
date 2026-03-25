@@ -3,6 +3,18 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromApiRequest } from '@/lib/get-salon-id'
 import { resolveSalonIdForOwnerApi } from '@/lib/resolve-salon-id-api'
 import { buildContractRowFromBody, computeContractRemainingAmount } from '@/lib/contract-payload'
+import { getSalonSaleOperator, canModifySale } from '@/lib/salon-sale-operator'
+
+const SIGNING_PATCH_KEYS = new Set(['signature_image', 'signed_at', 'signer_ip', 'status'])
+
+function isSigningOnlyPatchBody(body: Record<string, unknown>): boolean {
+  const keys = Object.keys(body)
+  if (keys.length === 0) return false
+  if (!keys.every(k => SIGNING_PATCH_KEYS.has(k))) return false
+  if (body.status !== 'signed') return false
+  if (typeof body.signature_image !== 'string' || !body.signature_image.trim()) return false
+  return true
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -161,6 +173,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'サロンにログインしてください' }, { status: 401 })
     }
 
+    const op = await getSalonSaleOperator(req)
     const body = (await req.json()) as Record<string, unknown>
     const admin = getSupabaseAdmin()
 
@@ -180,6 +193,33 @@ export async function PATCH(
     }
 
     const isDraft = existing.status === 'draft'
+    const signingOnly = isSigningOnlyPatchBody(body)
+
+    if (isDraft && signingOnly) {
+      if (op.role !== 'owner' && op.role !== 'staff') {
+        return NextResponse.json({ error: '署名の保存に失敗しました（権限がありません）' }, { status: 403 })
+      }
+      const updates = {
+        signature_image: body.signature_image,
+        signed_at: body.signed_at,
+        signer_ip: body.signer_ip ?? null,
+        status: 'signed',
+        updated_at: new Date().toISOString(),
+      }
+      const { data, error } = await admin
+        .from('contracts')
+        .update(updates)
+        .eq('id', id)
+        .eq('salon_id', salonId)
+        .select()
+        .single()
+      if (error) throw error
+      return NextResponse.json({ contract: withComputedRemaining(data) })
+    }
+
+    if (!canModifySale(op.role)) {
+      return NextResponse.json({ error: '契約書の更新はオーナーのみ可能です' }, { status: 403 })
+    }
 
     if (isDraft) {
       const customerId =
@@ -246,6 +286,41 @@ export async function PATCH(
 
     if (error) throw error
     return NextResponse.json({ contract: withComputedRemaining(data) })
+  } catch (e) {
+    console.error(e)
+    return NextResponse.json({ error: errorMessage(e) }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> | { id: string } },
+) {
+  try {
+    const id = await contractIdFromParams(context.params)
+    if (!id) {
+      return NextResponse.json({ error: '契約書IDが不正です' }, { status: 400 })
+    }
+
+    const salonId = await resolveSalonIdForOwnerApi(req)
+    if (!salonId) {
+      return NextResponse.json({ error: 'サロンにログインしてください' }, { status: 401 })
+    }
+
+    const op = await getSalonSaleOperator(req)
+    if (!canModifySale(op.role)) {
+      return NextResponse.json({ error: '契約書の削除はオーナーのみ可能です' }, { status: 403 })
+    }
+
+    const admin = getSupabaseAdmin()
+    const { error } = await admin.from('contracts').delete().eq('id', id).eq('salon_id', salonId)
+
+    if (error) {
+      console.error('[contracts DELETE]', error.message, { id, salonId })
+      return NextResponse.json({ error: '契約書の削除に失敗しました' }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: errorMessage(e) }, { status: 500 })
