@@ -14,6 +14,7 @@ import {
   Heart,
   Loader2,
   Bell,
+  AlertTriangle,
 } from 'lucide-react'
 import type { Reservation } from '@/types'
 import ReservationActionCard from '@/components/ReservationActionCard'
@@ -256,6 +257,20 @@ export default function DashboardPage() {
   const [businessHours, setBusinessHours] = useState({ openTime: '10:00', closeTime: '21:00' })
   const [panelAnnouncements, setPanelAnnouncements] = useState<{ id: string; title: string; type: string; body: string; is_read: boolean }[]>([])
   const [announcementsUnreadCount, setAnnouncementsUnreadCount] = useState(0)
+  const [productExpiryAlerts, setProductExpiryAlerts] = useState<
+    {
+      id: string
+      customer_name: string
+      product_name: string
+      sold_at: string
+      expires_at: string
+      days_left: number
+      line_user_id: string | null
+      is_notified: boolean
+    }[]
+  >([])
+  const [productExpiryLoading, setProductExpiryLoading] = useState(true)
+  const [expiryNotifySending, setExpiryNotifySending] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/settings/salon')
@@ -292,6 +307,19 @@ export default function DashboardPage() {
         setAnnouncementsUnreadCount(typeof d.unread_count === 'number' ? d.unread_count : list.filter((a: { is_read: boolean }) => !a.is_read).length)
       })
       .catch(() => {})
+  }, [])
+
+  const loadProductExpiryAlerts = () => {
+    setProductExpiryLoading(true)
+    fetch('/api/products/expiry-alerts?include_notified=1')
+      .then(r => r.json())
+      .then((d) => setProductExpiryAlerts(Array.isArray(d.alerts) ? d.alerts : []))
+      .catch(() => setProductExpiryAlerts([]))
+      .finally(() => setProductExpiryLoading(false))
+  }
+
+  useEffect(() => {
+    loadProductExpiryAlerts()
   }, [])
 
   useEffect(() => {
@@ -494,6 +522,69 @@ export default function DashboardPage() {
                 })}
               </ul>
             )}
+
+            <div className="mt-5 pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <h3 className="font-dm-sans font-bold text-sm text-text-main">⚠️ 消費期限アラート</h3>
+              </div>
+              {productExpiryLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="w-6 h-6 text-rose animate-spin" />
+                </div>
+              ) : productExpiryAlerts.length === 0 ? (
+                <p className="text-xs text-text-sub py-2">該当する物販の期限アラートはありません</p>
+              ) : (
+                <ul className="space-y-2 max-h-56 overflow-y-auto">
+                  {productExpiryAlerts.map((a) => (
+                    <li
+                      key={a.id}
+                      className="rounded-xl border border-amber-100 bg-amber-50/80 px-3 py-2.5 text-xs"
+                    >
+                      <p className="font-semibold text-text-main">
+                        {a.customer_name} ／ {a.product_name}
+                      </p>
+                      <p className="text-text-sub mt-0.5">
+                        販売 {a.sold_at} · 期限 {a.expires_at}
+                        <span className={`ml-2 font-bold ${a.days_left <= 3 ? 'text-red-600' : 'text-amber-800'}`}>
+                          残り{a.days_left}日
+                        </span>
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {a.is_notified ? (
+                          <span className="text-emerald-700 font-medium">送信済み✅</span>
+                        ) : a.line_user_id ? (
+                          <button
+                            type="button"
+                            disabled={expiryNotifySending === a.id}
+                            onClick={async () => {
+                              setExpiryNotifySending(a.id)
+                              try {
+                                const res = await fetch(`/api/products/expiry-notify/${a.id}`, {
+                                  method: 'POST',
+                                })
+                                const j = await res.json().catch(() => ({}))
+                                if (!res.ok) throw new Error(j.error || '送信に失敗しました')
+                                loadProductExpiryAlerts()
+                              } catch (e) {
+                                alert(e instanceof Error ? e.message : '送信に失敗しました')
+                              } finally {
+                                setExpiryNotifySending(null)
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-[#06C755] text-white text-xs font-bold disabled:opacity-50"
+                          >
+                            {expiryNotifySending === a.id ? '送信中…' : 'LINEを送る'}
+                          </button>
+                        ) : (
+                          <span className="text-text-sub">LINE未連携</span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
             <Link
               href="/announcements"

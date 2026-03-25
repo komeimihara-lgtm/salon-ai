@@ -5,6 +5,7 @@ import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
 import { getSalonSaleOperator } from '@/lib/salon-sale-operator'
 import { insertSaleLog, saleRowSnapshot } from '@/lib/sale-audit'
 import { overwriteSaleCustomerNamesFromDb } from '@/lib/sale-customer-display'
+import { insertCustomerProductExpiriesForSales } from '@/lib/customer-product-expiry'
 
 export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin()
@@ -76,6 +77,7 @@ export async function POST(req: NextRequest) {
       memo: s.memo || null,
       sale_type: s.sale_type || 'cash',
       ticket_id: s.ticket_id || null,
+      product_id: s.product_id || null,
       status: ACTIVE_SALE_STATUS,
     }))
 
@@ -91,6 +93,18 @@ export async function POST(req: NextRequest) {
     }
 
     const rows = data || []
+    await insertCustomerProductExpiriesForSales(
+      supabase,
+      rows.map((r) => ({
+        id: r.id as string,
+        salon_id: r.salon_id as string,
+        sale_date: r.sale_date as string | null,
+        sale_type: r.sale_type as string | null,
+        customer_id: r.customer_id as string | null,
+        product_id: (r as { product_id?: string | null }).product_id ?? null,
+      }))
+    )
+
     for (const row of rows) {
       const { error: logErr } = await insertSaleLog({
         saleId: row.id,

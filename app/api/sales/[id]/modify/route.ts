@@ -52,6 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     memo: body.memo !== undefined ? body.memo : snap.memo,
     sale_type: body.sale_type !== undefined ? body.sale_type : snap.sale_type ?? 'cash',
     ticket_id: body.ticket_id !== undefined ? body.ticket_id : snap.ticket_id ?? null,
+    product_id: body.product_id !== undefined ? body.product_id : snap.product_id ?? null,
     status: 'active' as const,
     original_sale_id: oldId,
   }

@@ -18,6 +18,8 @@ export default function ProductsPage() {
   const [formStock, setFormStock] = useState(0)
   const [formThreshold, setFormThreshold] = useState(3)
   const [formMemo, setFormMemo] = useState('')
+  const [formExpiryDays, setFormExpiryDays] = useState<number | ''>('')
+  const [formExpiryAlertDays, setFormExpiryAlertDays] = useState(14)
   const [formSaving, setFormSaving] = useState(false)
 
   // 在庫調整モーダル
@@ -51,13 +53,27 @@ export default function ProductsPage() {
 
   const openAdd = () => {
     setEditTarget(null)
-    setFormName(''); setFormPrice(0); setFormCost(0); setFormStock(0); setFormThreshold(3); setFormMemo('')
+    setFormName('')
+    setFormPrice(0)
+    setFormCost(0)
+    setFormStock(0)
+    setFormThreshold(3)
+    setFormMemo('')
+    setFormExpiryDays('')
+    setFormExpiryAlertDays(14)
     setShowForm(true)
   }
 
   const openEdit = (p: Product) => {
     setEditTarget(p)
-    setFormName(p.name); setFormPrice(p.price); setFormCost(p.cost); setFormStock(p.stock); setFormThreshold(p.low_stock_threshold); setFormMemo(p.memo || '')
+    setFormName(p.name)
+    setFormPrice(p.price)
+    setFormCost(p.cost)
+    setFormStock(p.stock)
+    setFormThreshold(p.low_stock_threshold)
+    setFormMemo(p.memo || '')
+    setFormExpiryDays(p.expiry_days != null && p.expiry_days > 0 ? p.expiry_days : '')
+    setFormExpiryAlertDays(p.expiry_alert_days != null ? p.expiry_alert_days : 14)
     setShowForm(true)
   }
 
@@ -65,7 +81,17 @@ export default function ProductsPage() {
     if (!formName.trim()) return
     setFormSaving(true)
     try {
-      const data = { name: formName.trim(), category: '物販', price: formPrice, cost: formCost, stock: formStock, low_stock_threshold: formThreshold, memo: formMemo }
+      const data = {
+        name: formName.trim(),
+        category: '物販',
+        price: formPrice,
+        cost: formCost,
+        stock: formStock,
+        low_stock_threshold: formThreshold,
+        memo: formMemo,
+        expiry_days: formExpiryDays === '' ? null : Math.max(1, Number(formExpiryDays)),
+        expiry_alert_days: Math.max(1, Number(formExpiryAlertDays) || 14),
+      }
       if (editTarget) { const updated = await updateProduct(editTarget.id, data); setProducts(prev => prev.map(p => p.id === updated.id ? updated : p)) }
       else { const created = await createProduct(data); setProducts(prev => [created, ...prev]) }
       setShowForm(false)
@@ -181,7 +207,10 @@ export default function ProductsPage() {
                   {isLow && <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-medium shrink-0">残少</span>}
                 </div>
                 <p className="text-xl font-bold text-rose mb-1">¥{p.price.toLocaleString()}</p>
-                <p className="text-sm text-text-sub mb-3">在庫: {p.stock}個　仕入: ¥{p.cost.toLocaleString()}</p>
+                <p className="text-sm text-text-sub mb-1">在庫: {p.stock}個　仕入: ¥{p.cost.toLocaleString()}</p>
+                {p.expiry_days != null && p.expiry_days > 0 && (
+                  <p className="text-xs text-amber-800 mb-2">消費期限: 販売日から{p.expiry_days}日</p>
+                )}
                 <div className="flex gap-2">
                   <button onClick={() => { setStockTarget(p); setStockType('in'); setStockQty(1); setStockMemo('') }}
                     className="flex-1 py-2 rounded-xl bg-emerald-50 text-emerald-700 text-sm font-bold hover:bg-emerald-100">
@@ -219,6 +248,30 @@ export default function ProductsPage() {
                 <div><label className="text-xs text-text-sub block mb-1">残少アラート数</label>
                   <input type="number" value={formThreshold} onChange={e => setFormThreshold(Number(e.target.value))} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" /></div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-text-sub block mb-1">消費期限（販売日から〇日）</label>
+                  <input
+                    type="number"
+                    min={1}
+                    placeholder="未設定"
+                    value={formExpiryDays}
+                    onChange={e => setFormExpiryDays(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-text-sub block mb-1">何日前からアラート</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={formExpiryAlertDays}
+                    onChange={e => setFormExpiryAlertDays(Number(e.target.value) || 14)}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none"
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-text-sub">期限を空にすると、この商品は消費期限トラッキングの対象外になります。</p>
               <div><label className="text-xs text-text-sub block mb-1">メモ</label>
                 <input value={formMemo} onChange={e => setFormMemo(e.target.value)} className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none" /></div>
             </div>

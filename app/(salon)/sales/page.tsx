@@ -420,6 +420,7 @@ export default function SalesPage() {
           staff_name: selectedStaff?.name || null,
           payment_method: paymentMethod,
           sale_type: hasProduct || c.category === '物販' ? 'product' : paymentMethod,
+          product_id: c.category === '物販' && c.productId ? c.productId : null,
         }
         if (c.type === 'ticket' && c.ticketPlan) {
           const custId = selectedCustomer!.id

@@ -84,5 +84,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: '監査ログの記録に失敗しました' }, { status: 500 })
   }
 
+  await supabase.from('customer_product_expiry').delete().eq('sale_id', id)
+
   return NextResponse.json({ sale: updated })
 }

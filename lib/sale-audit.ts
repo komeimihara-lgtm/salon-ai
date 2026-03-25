@@ -15,6 +15,7 @@ const SALE_SNAPSHOT_KEYS = [
   'memo',
   'sale_type',
   'ticket_id',
+  'product_id',
   'status',
   'cancelled_at',
   'cancelled_by',
