@@ -803,8 +803,8 @@ export default function ContractDetailPage() {
             <p className="font-medium text-text-main pt-1">【クーリングオフ受付先】</p>
             <p>
               ・書面：
-              {salon.postal_code?.trim() ? `〒${salon.postal_code.trim()} ` : '〒＿＿＿─＿＿＿＿ '}
-              {salon.address?.trim() || '（サロン住所未登録）'}
+              {salon.postal_code?.trim() ? `〒${salon.postal_code.trim()} ` : '〒XXX-XXXX '}
+              {salon.address?.trim() || '（サロン住所）'}
             </p>
             <p>
               ・電子メール：
