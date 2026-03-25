@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -51,11 +52,20 @@ export default function Sidebar() {
   return (
     <aside className="w-60 min-h-screen bg-white border-r border-[#E8E0F0] flex flex-col shrink-0">
       <div className="p-5 border-b border-[#E8E0F0]">
-        <Link href="/dashboard" className="block">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] bg-clip-text text-transparent">
-            SOLA
-          </h1>
-          <p className="text-[10px] text-[#6B7280] mt-0.5 tracking-wider">AI SALON MANAGER</p>
+        <Link href="/dashboard" className="flex items-center gap-3">
+          <Image
+            src="/favicon.png"
+            alt="SOLA"
+            width={44}
+            height={44}
+            className="rounded-lg shrink-0"
+          />
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] bg-clip-text text-transparent leading-tight">
+              SOLA
+            </h1>
+            <p className="text-[10px] text-[#6B7280] mt-0.5 tracking-wider">AI SALON MANAGER</p>
+          </div>
         </Link>
       </div>
       <nav className="flex-1 py-4 overflow-y-auto">

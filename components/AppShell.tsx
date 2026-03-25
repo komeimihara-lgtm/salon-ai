@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -155,9 +156,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen flex">
       {/* サイドバー - PC */}
       <aside className="hidden lg:flex lg:w-[240px] lg:flex-col lg:fixed lg:inset-y-0 bg-deep z-30">
-        <div className="flex flex-col justify-center h-16 px-6 border-b border-white/10">
-          <span className="font-serif-jp text-xl font-bold text-white">SOLA</span>
-          <span className="text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
+        <div className="flex items-center gap-3 h-16 px-6 border-b border-white/10">
+          <Image
+            src="/favicon.png"
+            alt="SOLA"
+            width={40}
+            height={40}
+            className="rounded-lg bg-white/95 shrink-0"
+          />
+          <div className="flex flex-col justify-center min-w-0">
+            <span className="font-serif-jp text-xl font-bold text-white leading-tight">SOLA</span>
+            <span className="text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
+          </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
@@ -273,9 +283,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         }`}
       >
         <div className="flex items-center justify-between h-16 px-6 border-b border-white/10">
-          <div className="flex flex-col">
-            <span className="font-serif-jp text-xl font-bold text-white">SOLA</span>
-            <span className="text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
+          <div className="flex items-center gap-3 min-w-0">
+            <Image
+              src="/favicon.png"
+              alt="SOLA"
+              width={40}
+              height={40}
+              className="rounded-lg bg-white/95 shrink-0"
+            />
+            <div className="flex flex-col min-w-0">
+              <span className="font-serif-jp text-xl font-bold text-white leading-tight">SOLA</span>
+              <span className="text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
+            </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="p-2 text-white/80">
             <X className="w-5 h-5" />
