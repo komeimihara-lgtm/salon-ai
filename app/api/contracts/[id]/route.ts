@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { getSalonIdFromApiRequest, getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { buildContractRowFromBody, computeContractRemainingAmount } from '@/lib/contract-payload'
 
 function withComputedRemaining<C extends { amount?: unknown; deposit_amount?: unknown }>(
@@ -39,7 +39,7 @@ async function contractIdFromParams(
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   context: { params: Promise<{ id: string }> | { id: string } },
 ) {
   try {
@@ -48,11 +48,32 @@ export async function GET(
       return NextResponse.json({ error: '契約書IDが不正です' }, { status: 400 })
     }
 
-    const salonId = getSalonIdFromCookie()
+    const salonId = getSalonIdFromApiRequest(req)
+    let fromHeadersCookie: string | null | 'error' = null
+    try {
+      fromHeadersCookie = getSalonIdFromCookie() || null
+    } catch {
+      fromHeadersCookie = 'error'
+    }
+
+    console.log(
+      JSON.stringify({
+        tag: '[contracts GET] salon_id debug',
+        contractId: id,
+        salonIdResolved: salonId || null,
+        fromNextRequestCookies: req.cookies.get('salon_id')?.value ?? null,
+        fromHeadersCookies: fromHeadersCookie,
+        hasSalonIdInRawHeader: Boolean(req.headers.get('cookie')?.includes('salon_id')),
+      }),
+    )
+
     if (!salonId) {
       return NextResponse.json({ error: 'サロンにログインしてください' }, { status: 401 })
     }
-    const { data, error } = await getSupabaseAdmin()
+
+    const admin = getSupabaseAdmin()
+
+    let { data, error } = await admin
       .from('contracts')
       .select('*, customers(name, name_kana, phone, email, address)')
       .eq('id', id)
@@ -60,14 +81,60 @@ export async function GET(
       .maybeSingle()
 
     if (error) {
-      console.error('[contracts GET]', error.message, { id, salonId })
+      console.error('[contracts GET] supabase', JSON.stringify({ message: error.message, code: error.code, id, salonId }))
       return NextResponse.json({ error: '契約書の取得に失敗しました' }, { status: 500 })
     }
+
+    /** customers 埋め込みが環境によって 0 件扱いになる場合のフォールバック */
     if (!data) {
+      const plain = await admin
+        .from('contracts')
+        .select('*')
+        .eq('id', id)
+        .eq('salon_id', salonId)
+        .maybeSingle()
+      if (plain.data) {
+        const row = plain.data as Record<string, unknown> & { customer_id?: string }
+        let customers: unknown = null
+        const cid = row.customer_id
+        if (typeof cid === 'string' && cid) {
+          const { data: cust } = await admin
+            .from('customers')
+            .select('name, name_kana, phone, email, address')
+            .eq('id', cid)
+            .maybeSingle()
+          customers = cust
+        }
+        data = { ...row, customers } as typeof data
+        console.log(JSON.stringify({ tag: '[contracts GET] used plain+customer fallback', contractId: id }))
+      }
+    }
+
+    console.log(
+      JSON.stringify({
+        tag: '[contracts GET] query result',
+        contractId: id,
+        salonIdResolved: salonId,
+        found: Boolean(data),
+      }),
+    )
+
+    if (!data) {
+      const { data: byId } = await admin.from('contracts').select('id, salon_id').eq('id', id).maybeSingle()
+      console.log(
+        JSON.stringify({
+          tag: '[contracts GET] probe id only (404 診断)',
+          contractId: id,
+          cookieSalonId: salonId,
+          rowExists: Boolean(byId),
+          rowSalonId: byId?.salon_id ?? null,
+          salonIdMatches: byId ? String(byId.salon_id) === String(salonId) : null,
+        }),
+      )
       return NextResponse.json({ error: '契約書が見つかりません' }, { status: 404 })
     }
 
-    const { data: salon } = await getSupabaseAdmin()
+    const { data: salon } = await admin
       .from('salons')
       .select('name, phone, address')
       .eq('id', salonId)
@@ -93,7 +160,7 @@ export async function PATCH(
       return NextResponse.json({ error: '契約書IDが不正です' }, { status: 400 })
     }
 
-    const salonId = getSalonIdFromCookie()
+    const salonId = getSalonIdFromApiRequest(req)
     if (!salonId) {
       return NextResponse.json({ error: 'サロンにログインしてください' }, { status: 401 })
     }
