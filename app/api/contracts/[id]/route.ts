@@ -24,11 +24,30 @@ function errorMessage(e: unknown): string {
   return String(e)
 }
 
+/** Next 14/15 両対応: params が同期オブジェクトでも Promise でも id を取り出す */
+async function contractIdFromParams(
+  params: Promise<{ id: string }> | { id: string },
+): Promise<string> {
+  const p = await Promise.resolve(params)
+  const raw = p?.id
+  const s = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : ''
+  try {
+    return decodeURIComponent(String(s).trim())
+  } catch {
+    return String(s).trim()
+  }
+}
+
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  context: { params: Promise<{ id: string }> | { id: string } },
 ) {
   try {
+    const id = await contractIdFromParams(context.params)
+    if (!id) {
+      return NextResponse.json({ error: '契約書IDが不正です' }, { status: 400 })
+    }
+
     const salonId = getSalonIdFromCookie()
     if (!salonId) {
       return NextResponse.json({ error: 'サロンにログインしてください' }, { status: 401 })
@@ -36,11 +55,15 @@ export async function GET(
     const { data, error } = await getSupabaseAdmin()
       .from('contracts')
       .select('*, customers(name, name_kana, phone, email, address)')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('salon_id', salonId)
-      .single()
+      .maybeSingle()
 
-    if (error || !data) {
+    if (error) {
+      console.error('[contracts GET]', error.message, { id, salonId })
+      return NextResponse.json({ error: '契約書の取得に失敗しました' }, { status: 500 })
+    }
+    if (!data) {
       return NextResponse.json({ error: '契約書が見つかりません' }, { status: 404 })
     }
 
@@ -62,9 +85,14 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  context: { params: Promise<{ id: string }> | { id: string } },
 ) {
   try {
+    const id = await contractIdFromParams(context.params)
+    if (!id) {
+      return NextResponse.json({ error: '契約書IDが不正です' }, { status: 400 })
+    }
+
     const salonId = getSalonIdFromCookie()
     if (!salonId) {
       return NextResponse.json({ error: 'サロンにログインしてください' }, { status: 401 })
@@ -76,11 +104,15 @@ export async function PATCH(
     const { data: existing, error: fetchErr } = await admin
       .from('contracts')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('salon_id', salonId)
-      .single()
+      .maybeSingle()
 
-    if (fetchErr || !existing) {
+    if (fetchErr) {
+      console.error('[contracts PATCH fetch]', fetchErr.message, { id, salonId })
+      return NextResponse.json({ error: '契約書の取得に失敗しました' }, { status: 500 })
+    }
+    if (!existing) {
       return NextResponse.json({ error: '契約書が見つかりません' }, { status: 404 })
     }
 
@@ -116,7 +148,7 @@ export async function PATCH(
       const { data, error } = await admin
         .from('contracts')
         .update(updates)
-        .eq('id', params.id)
+        .eq('id', id)
         .eq('salon_id', salonId)
         .select()
         .single()
@@ -144,7 +176,7 @@ export async function PATCH(
     const { data, error } = await admin
       .from('contracts')
       .update(updates)
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('salon_id', salonId)
       .select()
       .single()

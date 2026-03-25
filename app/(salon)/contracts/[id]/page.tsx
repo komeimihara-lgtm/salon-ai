@@ -149,10 +149,20 @@ function contractToEditPd(c: ContractData): ContractPaymentDepositFieldsValues {
   }
 }
 
+function normalizeRouteContractId(raw: string | string[] | undefined): string {
+  const s = Array.isArray(raw) ? raw[0] : raw
+  if (!s) return ''
+  try {
+    return decodeURIComponent(String(s).trim())
+  } catch {
+    return String(s).trim()
+  }
+}
+
 export default function ContractDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const id = params.id as string
+  const id = normalizeRouteContractId(params.id as string | string[] | undefined)
   const [contract, setContract] = useState<ContractData | null>(null)
   const [salon, setSalon] = useState<SalonInfo>({})
   const [loading, setLoading] = useState(true)
@@ -182,12 +192,21 @@ export default function ContractDetailPage() {
   }
 
   const fetchContract = useCallback(async () => {
+    if (!id) {
+      setContract(null)
+      setLoading(false)
+      return
+    }
     try {
-      const res = await fetch(`/api/contracts/${id}`)
+      const res = await fetch(`/api/contracts/${encodeURIComponent(id)}`, {
+        credentials: 'include',
+      })
       const data = await res.json()
       if (res.ok) {
         setContract(data.contract)
         setSalon(data.salon || {})
+      } else {
+        setContract(null)
       }
     } catch {
       setContract(null)
@@ -306,9 +325,10 @@ export default function ContractDetailPage() {
         signerIp = ipData.ip || ''
       } catch { /* ignore */ }
 
-      const res = await fetch(`/api/contracts/${contract.id}`, {
+      const res = await fetch(`/api/contracts/${encodeURIComponent(contract.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           signature_image: signatureImage,
           signed_at: signedAt,
@@ -386,9 +406,10 @@ export default function ContractDetailPage() {
 
     setEditSaving(true)
     try {
-      const res = await fetch(`/api/contracts/${contract.id}`, {
+      const res = await fetch(`/api/contracts/${encodeURIComponent(contract.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           course_name: editCourseName.trim(),
           treatment_content: editTreatment || null,
@@ -427,9 +448,10 @@ export default function ContractDetailPage() {
     if (!contract || contract.status === 'draft') return
     setPaidDatesSaving(true)
     try {
-      const res = await fetch(`/api/contracts/${contract.id}`, {
+      const res = await fetch(`/api/contracts/${encodeURIComponent(contract.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           deposit_paid_at: editDepositPaidAt || null,
           remaining_paid_at: editRemainingPaidAt || null,

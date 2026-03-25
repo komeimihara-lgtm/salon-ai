@@ -208,6 +208,7 @@ function NewContractForm() {
       const res = await fetch('/api/contracts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           customer_id: customerId,
           course_name: courseName,
@@ -234,8 +235,9 @@ function NewContractForm() {
         }),
       })
       const data = await res.json()
-      if (res.ok && data.contract) {
-        router.push(`/contracts/${data.contract.id}`)
+      const newId = data.contract?.id
+      if (res.ok && typeof newId === 'string' && newId.length > 0) {
+        router.push(`/contracts/${encodeURIComponent(newId)}`)
       } else {
         alert(data.error || '作成に失敗しました')
       }
