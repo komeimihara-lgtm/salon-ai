@@ -4,6 +4,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, Loader2, Printer, CheckCircle } from 'lucide-react'
+import {
+  CONTRACT_AUTO_BILLING_METHOD_LABEL,
+  CONTRACT_BILLING_CYCLE_LABEL,
+  CONTRACT_CARD_BRAND_LABEL,
+  CONTRACT_PAYMENT_INSTRUMENT_LABEL,
+  contractPaymentTypeLabel,
+} from '@/lib/contracts-payment'
 
 interface ContractData {
   id: string
@@ -14,8 +21,17 @@ interface ContractData {
   start_date: string | null
   end_date: string | null
   amount: number
-  payment_method: string
+  payment_type?: string | null
+  payment_method?: string | null
   payment_detail: { type: string; count: number; monthly: number; first: number; note: string } | null
+  card_brand?: string | null
+  loan_company?: string | null
+  installment_count?: number | null
+  auto_billing?: boolean | null
+  billing_cycle?: string | null
+  billing_day?: number | null
+  billing_method?: string | null
+  first_billing_date?: string | null
   status: string
   signature_image: string | null
   signed_at: string | null
@@ -34,6 +50,21 @@ interface SalonInfo {
   name?: string
   phone?: string
   address?: string
+}
+
+const INSTRUMENT_CODES = new Set(['cash', 'card', 'loan', 'transfer', 'auto_billing'])
+
+function resolveInstrument(c: ContractData): string {
+  const pm = c.payment_method || ''
+  if (INSTRUMENT_CODES.has(pm)) return pm
+  return 'cash'
+}
+
+function resolvePaymentType(c: ContractData): string {
+  if (c.payment_type === 'installment' || c.payment_type === 'lump_sum') return c.payment_type
+  const pm = c.payment_method || ''
+  if (pm === 'installment' || pm === 'lump_sum') return pm
+  return c.payment_detail ? 'installment' : 'lump_sum'
 }
 
 export default function ContractDetailPage() {
@@ -338,15 +369,60 @@ export default function ContractDetailPage() {
               期間: {contract.start_date || '—'} 〜 {contract.end_date || '—'}
             </p>
             <p>契約金額: ¥{contract.amount.toLocaleString()}（税込）</p>
-            <p>支払方法: {contract.payment_method === 'lump_sum' ? '一括払い' : '分割払い'}</p>
-            {contract.payment_method === 'installment' && contract.payment_detail && (
+            <p>
+              支払い方法:{' '}
+              {CONTRACT_PAYMENT_INSTRUMENT_LABEL[resolveInstrument(contract)] ||
+                resolveInstrument(contract)}
+            </p>
+            {resolveInstrument(contract) === 'card' && contract.card_brand && (
+              <p>
+                カード種別:{' '}
+                {CONTRACT_CARD_BRAND_LABEL[contract.card_brand] || contract.card_brand}
+              </p>
+            )}
+            {resolveInstrument(contract) === 'loan' && contract.loan_company && (
+              <p>ローン会社: {contract.loan_company}</p>
+            )}
+            {resolveInstrument(contract) === 'auto_billing' && (
               <>
-                <p>分割回数: 全{contract.payment_detail.count}回</p>
+                {contract.billing_day != null && <p>引き落とし日: 毎月{contract.billing_day}日</p>}
+                {contract.billing_method && (
+                  <p>
+                    引き落とし方法:{' '}
+                    {CONTRACT_AUTO_BILLING_METHOD_LABEL[contract.billing_method] ||
+                      contract.billing_method}
+                  </p>
+                )}
+                {contract.first_billing_date && (
+                  <p>
+                    初回決済日:{' '}
+                    {new Date(contract.first_billing_date + 'T12:00:00').toLocaleDateString('ja-JP')}
+                  </p>
+                )}
+                {contract.billing_cycle && (
+                  <p>
+                    決済サイクル:{' '}
+                    {CONTRACT_BILLING_CYCLE_LABEL[contract.billing_cycle] || contract.billing_cycle}
+                  </p>
+                )}
+                {contract.auto_billing && (
+                  <p className="text-xs text-gray-500">※ 自動課金は契約記録のみ（決済処理は別途）</p>
+                )}
+              </>
+            )}
+            <p>支払い回数: {contractPaymentTypeLabel(resolvePaymentType(contract))}</p>
+            {resolvePaymentType(contract) === 'installment' && contract.payment_detail && (
+              <>
+                <p>
+                  分割回数: 全
+                  {contract.installment_count ?? contract.payment_detail.count}回
+                </p>
                 {contract.payment_detail.first > 0 && (
                   <p>初回金額: ¥{contract.payment_detail.first.toLocaleString()}</p>
                 )}
                 {contract.payment_detail.monthly > 0 && (
-                  <p>月額: ¥{contract.payment_detail.monthly.toLocaleString()}
+                  <p>
+                    月額: ¥{contract.payment_detail.monthly.toLocaleString()}
                     {contract.payment_detail.note ? `（${contract.payment_detail.note}）` : ''}
                   </p>
                 )}
