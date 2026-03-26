@@ -45,6 +45,36 @@ import {
   daysUntilNextBilling,
   type CustomerSubscription,
 } from '@/lib/subscriptions'
+import type { CounselingKartePayload } from '@/lib/counseling-karte-types'
+import { emptyCounselingKarte } from '@/lib/counseling-karte-types'
+
+function normalizeKarte(raw: unknown, fallbackDate: string): CounselingKartePayload {
+  const e = emptyCounselingKarte(fallbackDate)
+  if (!raw || typeof raw !== 'object') return e
+  const k = raw as Partial<CounselingKartePayload>
+  return {
+    date: typeof k.date === 'string' && k.date ? k.date : e.date,
+    phase1: { ...e.phase1, ...(k.phase1 && typeof k.phase1 === 'object' ? k.phase1 : {}) },
+    phase2: { ...e.phase2, ...(k.phase2 && typeof k.phase2 === 'object' ? k.phase2 : {}) },
+    phase2_5: { ...e.phase2_5, ...(k.phase2_5 && typeof k.phase2_5 === 'object' ? k.phase2_5 : {}) },
+    phase3: { ...e.phase3, ...(k.phase3 && typeof k.phase3 === 'object' ? k.phase3 : {}) },
+    phase4: { ...e.phase4, ...(k.phase4 && typeof k.phase4 === 'object' ? k.phase4 : {}) },
+    phase5: { ...e.phase5, ...(k.phase5 && typeof k.phase5 === 'object' ? k.phase5 : {}) },
+    phase7: { ...e.phase7, ...(k.phase7 && typeof k.phase7 === 'object' ? k.phase7 : {}) },
+    phase7_5: { ...e.phase7_5, ...(k.phase7_5 && typeof k.phase7_5 === 'object' ? k.phase7_5 : {}) },
+  }
+}
+
+type CounselingSessionRow = {
+  id: string
+  customer_name: string
+  selected_menu?: string | null
+  concerns?: string[] | string | null
+  chat_history?: { role: string; content: string }[] | null
+  karte_data?: CounselingKartePayload | null
+  visit_date?: string | null
+  created_at: string
+}
 
 interface Customer {
   id: string
@@ -152,12 +182,12 @@ export default function CustomerDetailPage() {
   const [visitEditing, setVisitEditing] = useState<VisitRecord | null>(null)
   const [visitForm, setVisitForm] = useState({ visit_date: '', menu: '', staff_name: '', amount: '' })
   const [visitSaving, setVisitSaving] = useState(false)
-  const [counselingSessions, setCounselingSessions] = useState<{
-    id: string; customer_name: string; selected_menu?: string; concerns?: string[];
-    chat_history?: { role: string; content: string }[]; created_at: string;
-  }[]>([])
+  const [counselingSessions, setCounselingSessions] = useState<CounselingSessionRow[]>([])
   const [counselingLoading, setCounselingLoading] = useState(false)
   const [expandedSession, setExpandedSession] = useState<string | null>(null)
+  const [karteEditId, setKarteEditId] = useState<string | null>(null)
+  const [karteEditForm, setKarteEditForm] = useState<CounselingKartePayload | null>(null)
+  const [karteEditSaving, setKarteEditSaving] = useState(false)
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -231,7 +261,7 @@ export default function CustomerDetailPage() {
     if (!id) return
     setCounselingLoading(true)
     try {
-      const res = await fetch(`/api/counseling/sessions?customer_id=${id}`)
+      const res = await fetch(`/api/counseling/sessions?customer_id=${id}`, { credentials: 'include' })
       const data = await res.json()
       setCounselingSessions(data.sessions || [])
     } catch {
@@ -240,6 +270,37 @@ export default function CustomerDetailPage() {
       setCounselingLoading(false)
     }
   }, [id])
+
+  const openKarteEdit = (s: CounselingSessionRow) => {
+    const d = (s.visit_date || s.created_at).slice(0, 10)
+    setKarteEditId(s.id)
+    setKarteEditForm(normalizeKarte(s.karte_data, d))
+  }
+
+  const handleKarteEditSave = async () => {
+    if (!karteEditId || !karteEditForm) return
+    setKarteEditSaving(true)
+    try {
+      const res = await fetch(`/api/counseling/sessions/${karteEditId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ karte_data: karteEditForm }),
+      })
+      if (res.ok) {
+        showToast('カウンセリング記録を更新しました')
+        setKarteEditId(null)
+        setKarteEditForm(null)
+        await fetchCounselingSessions()
+      } else {
+        showToast('更新に失敗しました')
+      }
+    } catch {
+      showToast('更新に失敗しました')
+    } finally {
+      setKarteEditSaving(false)
+    }
+  }
 
   const openVisitAdd = () => {
     setVisitEditing(null)
@@ -931,39 +992,81 @@ export default function CustomerDetailPage() {
         )}
       </div>
 
-      {/* カウンセリング履歴 */}
+      {/* カウンセリング記録（構造化カルテ） */}
       <div className="bg-white rounded-2xl p-5 card-shadow mb-6">
         <h2 className="font-semibold text-text-main flex items-center gap-2 mb-3">
           <MessageCircle className="w-4 h-4 text-[#9B8EC4]" />
-          カウンセリング履歴
+          カウンセリング記録
         </h2>
         {counselingLoading ? (
           <p className="text-sm text-text-sub py-4 flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> 読み込み中...
           </p>
         ) : counselingSessions.length === 0 ? (
-          <p className="text-sm text-[#4A5568] py-2">カウンセリング履歴はありません</p>
+          <p className="text-sm text-[#4A5568] py-2">カウンセリング記録はありません</p>
         ) : (
           <div className="space-y-3">
-            {counselingSessions.map(s => (
+            {counselingSessions.map(s => {
+              const kd = s.karte_data
+              const visitLabel = s.visit_date
+                ? new Date(s.visit_date).toLocaleDateString('ja-JP')
+                : new Date(s.created_at).toLocaleDateString('ja-JP')
+              const concernsText = Array.isArray(s.concerns)
+                ? s.concerns.join('、')
+                : typeof s.concerns === 'string'
+                  ? s.concerns
+                  : ''
+              const goalSummary = kd
+                ? [kd.phase4?.goal_timing, kd.phase4?.goal_scene, kd.phase4?.goal_state].filter(Boolean).join(' / ')
+                : ''
+              return (
               <div key={s.id} className="rounded-lg border border-[#9B8EC4]/20 overflow-hidden">
-                <button
-                  onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
-                  className="w-full flex items-center justify-between px-3 py-2.5 bg-[#F8F5FF] hover:bg-[#F0EBFF] transition text-left"
-                >
+                <div className="px-3 py-2.5 bg-[#F8F5FF] border-b border-[#9B8EC4]/10 flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="text-sm font-medium text-[#1A202C]">
-                      {new Date(s.created_at).toLocaleDateString('ja-JP')}
-                      {s.selected_menu ? ` — ${s.selected_menu}` : ''}
+                      {visitLabel}
+                      {s.selected_menu ? ` · ${s.selected_menu}` : ''}
                     </p>
-                    {s.concerns && s.concerns.length > 0 && (
-                      <p className="text-xs text-[#4A5568] mt-0.5">
-                        お悩み: {s.concerns.join('、').slice(0, 60)}{s.concerns.join('、').length > 60 ? '...' : ''}
+                    {kd && (
+                      <dl className="mt-2 grid gap-1.5 text-xs text-[#4A5568]">
+                        {kd.phase2?.menu_category ? (
+                          <div><span className="font-semibold text-[#1A202C]">来店目的</span> {kd.phase2.menu_category}</div>
+                        ) : null}
+                        {goalSummary ? (
+                          <div><span className="font-semibold text-[#1A202C]">目標</span> {goalSummary}</div>
+                        ) : null}
+                        {kd.phase2_5?.contraindications ? (
+                          <div><span className="font-semibold text-[#1A202C]">禁忌</span> {kd.phase2_5.contraindications}</div>
+                        ) : null}
+                        {kd.phase7_5?.anxiety ? (
+                          <div><span className="font-semibold text-[#1A202C]">不安</span> {kd.phase7_5.anxiety}</div>
+                        ) : null}
+                      </dl>
+                    )}
+                    {!kd && concernsText && (
+                      <p className="text-xs text-[#4A5568] mt-1">
+                        お悩み: {concernsText.slice(0, 80)}{concernsText.length > 80 ? '…' : ''}
                       </p>
                     )}
                   </div>
-                  <ChevronDown className={`w-4 h-4 text-[#4A5568] transition-transform ${expandedSession === s.id ? 'rotate-180' : ''}`} />
-                </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openKarteEdit(s)}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-[#9B8EC4] text-[#6B5B8C] hover:bg-white"
+                    >
+                      編集
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
+                      className="p-1 rounded hover:bg-[#E8E0F5]"
+                      title="会話ログ"
+                    >
+                      <ChevronDown className={`w-4 h-4 text-[#4A5568] transition-transform ${expandedSession === s.id ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
+                </div>
                 {expandedSession === s.id && s.chat_history && s.chat_history.length > 0 && (
                   <div className="px-3 py-3 space-y-2 max-h-80 overflow-y-auto bg-white">
                     {s.chat_history.map((m, i) => (
@@ -980,10 +1083,189 @@ export default function CustomerDetailPage() {
                   </div>
                 )}
               </div>
-            ))}
+            )
+            })}
           </div>
         )}
       </div>
+
+      {/* カウンセリング記録の編集モーダル */}
+      {karteEditForm && karteEditId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[88vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">カウンセリング記録を編集</h3>
+              <button
+                type="button"
+                onClick={() => { setKarteEditId(null); setKarteEditForm(null) }}
+                className="p-2 text-text-sub"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="text-xs text-[#4A5568] block mb-1">来店日</label>
+                <input
+                  type="date"
+                  value={karteEditForm.date}
+                  onChange={(e) => setKarteEditForm((f) => (f ? { ...f, date: e.target.value } : null))}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2"
+                />
+              </div>
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 1</p>
+              {(
+                [
+                  ['source', 'どこで知ったか'],
+                  ['experience', 'エステ・クリニック経験'],
+                  ['experience_detail', '経験した施術・内容'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <label className="text-xs text-[#4A5568] block mb-1">{label}</label>
+                  <textarea
+                    value={karteEditForm.phase1[key]}
+                    onChange={(e) =>
+                      setKarteEditForm((f) =>
+                        f ? { ...f, phase1: { ...f.phase1, [key]: e.target.value } } : null,
+                      )
+                    }
+                    rows={2}
+                    className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 2</p>
+              {(
+                [
+                  ['menu_category', '来店目的・お悩みカテゴリ'],
+                  ['symptom', '症状の詳細'],
+                  ['home_care', 'ホームケア'],
+                  ['since', 'いつ頃から気になるか'],
+                  ['timing', '気になるタイミング'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <label className="text-xs text-[#4A5568] block mb-1">{label}</label>
+                  <textarea
+                    value={karteEditForm.phase2[key]}
+                    onChange={(e) =>
+                      setKarteEditForm((f) =>
+                        f ? { ...f, phase2: { ...f.phase2, [key]: e.target.value } } : null,
+                      )
+                    }
+                    rows={2}
+                    className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 2.5 禁忌</p>
+              <textarea
+                value={karteEditForm.phase2_5.contraindications}
+                onChange={(e) =>
+                  setKarteEditForm((f) =>
+                    f ? { ...f, phase2_5: { contraindications: e.target.value } } : null,
+                  )
+                }
+                rows={2}
+                className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 3 期待すること</p>
+              <textarea
+                value={karteEditForm.phase3.expectation}
+                onChange={(e) =>
+                  setKarteEditForm((f) => (f ? { ...f, phase3: { expectation: e.target.value } } : null))
+                }
+                rows={2}
+                className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 4 ゴール</p>
+              {(
+                [
+                  ['goal_timing', 'いつまでに悩みを解決したいか'],
+                  ['goal_scene', 'どんな場面で変化を感じたいか'],
+                  ['goal_state', '目指す状態'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <label className="text-xs text-[#4A5568] block mb-1">{label}</label>
+                  <textarea
+                    value={karteEditForm.phase4[key]}
+                    onChange={(e) =>
+                      setKarteEditForm((f) =>
+                        f ? { ...f, phase4: { ...f.phase4, [key]: e.target.value } } : null,
+                      )
+                    }
+                    rows={2}
+                    className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 5</p>
+              {(
+                [
+                  ['continue', '継続意向'],
+                  ['salon_value', 'サロンに求めること'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <label className="text-xs text-[#4A5568] block mb-1">{label}</label>
+                  <textarea
+                    value={karteEditForm.phase5[key]}
+                    onChange={(e) =>
+                      setKarteEditForm((f) =>
+                        f ? { ...f, phase5: { ...f.phase5, [key]: e.target.value } } : null,
+                      )
+                    }
+                    rows={2}
+                    className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 7 スタッフとの関わり方</p>
+              <textarea
+                value={karteEditForm.phase7.staff_style}
+                onChange={(e) =>
+                  setKarteEditForm((f) =>
+                    f ? { ...f, phase7: { staff_style: e.target.value } } : null,
+                  )
+                }
+                rows={2}
+                className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 7.5 不安・心配事</p>
+              <textarea
+                value={karteEditForm.phase7_5.anxiety}
+                onChange={(e) =>
+                  setKarteEditForm((f) =>
+                    f ? { ...f, phase7_5: { anxiety: e.target.value } } : null,
+                  )
+                }
+                rows={2}
+                className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                type="button"
+                onClick={() => { setKarteEditId(null); setKarteEditForm(null) }}
+                className="flex-1 py-2 rounded-xl border border-gray-300 text-sm font-medium text-[#4A5568]"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleKarteEditSave()}
+                disabled={karteEditSaving}
+                className="flex-1 py-2 rounded-xl bg-rose text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {karteEditSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 来店履歴 追加/編集モーダル */}
       {visitModalOpen && (

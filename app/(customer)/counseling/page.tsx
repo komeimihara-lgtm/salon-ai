@@ -320,10 +320,13 @@ function CounselingContent() {
   const [speechError, setSpeechError] = useState<string | null>(null)
   const [salonMenus, setSalonMenus] = useState<{ id: string; name: string; price?: number }[]>([])
   const [autoSaved, setAutoSaved] = useState(false)
+  const [karteEndSaving, setKarteEndSaving] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const initialSpokenRef = useRef(false)
   const audioUnlockedRef = useRef(false)
-  const autoSaveTriggeredRef = useRef(false)
+  /** PHASE8 時の save-karte 用（STEP6 で update する） */
+  const counselingSessionIdRef = useRef<string | null>(null)
+  const phase8KarteSavedRef = useRef(false)
   const speechAbortRef = useRef<AbortController | null>(null)
   const speechAudioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -488,29 +491,66 @@ function CounselingContent() {
     }
   }, [chatInput, chatLoading, data.messages, data.customerName, data.courseName, speakMessage, unlockAudio])
 
-  // PHASE 5 完了検出 → カウンセリング自動保存
+  const handleEndCounselingSave = useCallback(async () => {
+    if (data.messages.length < 2) return
+    setKarteEndSaving(true)
+    try {
+      const visit_date = new Date().toISOString().slice(0, 10)
+      const res = await fetch('/api/counseling/save-karte', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: data.customerId || null,
+          customer_name: data.customerName || 'お客様',
+          course_name: data.courseName || null,
+          visit_date,
+          messages: data.messages,
+          session_id: counselingSessionIdRef.current,
+        }),
+      })
+      if (!res.ok) throw new Error('保存に失敗しました')
+      const j = await res.json()
+      if (j.session?.id) counselingSessionIdRef.current = j.session.id
+      phase8KarteSavedRef.current = true
+      setAutoSaved(true)
+    } catch {
+      alert('カルテへの保存に失敗しました')
+    } finally {
+      setKarteEndSaving(false)
+    }
+  }, [data.customerId, data.customerName, data.courseName, data.messages])
+
+  // PHASE 8（締め文）検出 → 構造化カルテを自動保存
   useEffect(() => {
-    if (autoSaveTriggeredRef.current || data.messages.length < 4) return
+    if (phase8KarteSavedRef.current || data.messages.length < 4) return
     const lastMsg = data.messages.at(-1)
     if (lastMsg?.role !== 'assistant') return
     if (!lastMsg.content.includes('これより施術に入ります')) return
 
-    autoSaveTriggeredRef.current = true
-    const userMsgs = data.messages.filter(m => m.role === 'user').map(m => m.content)
-    const payload = {
-      customer_name: data.customerName || 'お客様',
+    phase8KarteSavedRef.current = true
+    const visit_date = new Date().toISOString().slice(0, 10)
+    const body = {
       customer_id: data.customerId || null,
+      customer_name: data.customerName || 'お客様',
       course_name: data.courseName || null,
+      visit_date,
       messages: data.messages,
-      concerns: userMsgs.slice(0, 3).join('、'),
-      chat_history: data.messages,
-      mode: 'salon',
+      session_id: counselingSessionIdRef.current,
     }
-    fetch('/api/counseling/sessions', {
+    fetch('/api/counseling/save-karte', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).then(() => setAutoSaved(true)).catch(() => {})
+      body: JSON.stringify(body),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('save-karte failed')
+        const j = await res.json()
+        if (j.session?.id) counselingSessionIdRef.current = j.session.id
+        setAutoSaved(true)
+      })
+      .catch(() => {
+        phase8KarteSavedRef.current = false
+      })
   }, [data.messages, data.customerName, data.customerId, data.courseName])
 
   const diagnoseSkinType = (answers: Record<string, string>): SkinType => {
@@ -599,23 +639,27 @@ AIがお伺いするので、
   const handleSave = useCallback(async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/counseling/sessions', {
+      const visit_date = new Date().toISOString().slice(0, 10)
+      const res = await fetch('/api/counseling/save-karte', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer_id: data.customerId || null,
           customer_name: data.customerName || 'お客様',
-          mode,
-          concerns: data.concerns,
+          course_name: data.courseName || null,
+          visit_date,
+          messages: data.messages,
+          session_id: counselingSessionIdRef.current,
           skin_type: data.skinType ? SKIN_TYPE_LABELS[data.skinType] : null,
           allergies: data.hasAllergy ? data.allergyDetail : null,
           cautions: [data.pregnancy && '妊娠中・授乳中', data.otherCautions, data.medication].filter(Boolean).join('\n') || null,
           selected_menu: data.selectedMenu?.name || null,
           aria_comment: solaComment || null,
-          chat_history: data.messages,
         }),
       })
       if (!res.ok) throw new Error()
+      const j = await res.json()
+      if (j.session?.id) counselingSessionIdRef.current = j.session.id
       localStorage.removeItem(STORAGE_KEY)
       setCompleted(true)
       if (mode === 'salon' && data.customerId) {
@@ -646,6 +690,9 @@ AIがお伺いするので、
   const lastAssistantMsg = data.messages.filter(m => m.role === 'assistant').at(-1)
   const lastMsgIsAssistant = data.messages.at(-1)?.role === 'assistant'
   const choices = lastAssistantMsg && lastMsgIsAssistant && !chatLoading ? extractChoices(lastAssistantMsg.content) : []
+  const hasPhase8Closing = data.messages.some(
+    (m) => m.role === 'assistant' && m.content.includes('これより施術に入ります'),
+  )
 
   const resetAndStartOver = () => {
     setData(DEFAULT_SESSION)
@@ -658,7 +705,9 @@ AIがお伺いするので、
     setSearchResults([])
     setNewCustomer(true)
     initialSpokenRef.current = false
-    autoSaveTriggeredRef.current = false
+    counselingSessionIdRef.current = null
+    phase8KarteSavedRef.current = false
+    setKarteEndSaving(false)
     localStorage.removeItem(STORAGE_KEY)
   }
 
@@ -919,6 +968,18 @@ AIがお伺いするので、
                       {choice}
                     </button>
                   ))}
+                </div>
+              )}
+              {hasPhase8Closing && (
+                <div className="pl-2 pr-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleEndCounselingSave()}
+                    disabled={karteEndSaving}
+                    className="w-full py-3 rounded-xl border-2 border-emerald-600/70 bg-emerald-50 text-emerald-800 text-sm font-semibold disabled:opacity-50"
+                  >
+                    {karteEndSaving ? '保存中…' : 'カウンセリングを終了してカルテに保存'}
+                  </button>
                 </div>
               )}
               {autoSaved && (

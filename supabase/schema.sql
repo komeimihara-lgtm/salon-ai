@@ -49,6 +49,7 @@ CREATE TABLE customers (
   concerns TEXT,                         -- 悩み（カンマ区切り）
   allergies TEXT,                        -- アレルギー
   memo TEXT,                             -- スタッフメモ
+  counseling_memo JSONB DEFAULT '[]'::jsonb, -- カウンセリング構造化履歴
   -- LINE連携
   line_user_id TEXT,
   -- ステータス
@@ -165,6 +166,8 @@ CREATE TABLE IF NOT EXISTS counseling_sessions (
   selected_menu TEXT,
   aria_comment TEXT,
   chat_history JSONB DEFAULT '[]',
+  karte_data JSONB,
+  visit_date DATE DEFAULT CURRENT_DATE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
