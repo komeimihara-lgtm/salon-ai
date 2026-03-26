@@ -9,6 +9,11 @@ function cleanTextForSpeech(text: string): string {
     .replace(/[✨🌸💆🌿🍃🌱]/g, '')
     .replace(/[\u2600-\u26FF\u2700-\u27BF\uFE00-\uFE0F]/g, '')
     .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
+    // 全角スラッシュ（候補列挙）は TTS が「スラッシュ」と読むため読点に
+    .replace(/\uFF0F/g, '、')
+    // 「A / B」形式の半角スラッシュ（URLの // にはスペースが無いので通常触れない）
+    .replace(/\s*\/\s+/g, '、')
+    .replace(/\s+\/\s*/g, '、')
     .trim()
 }
 
