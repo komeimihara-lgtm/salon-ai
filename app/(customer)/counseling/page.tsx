@@ -340,7 +340,6 @@ function CounselingContent() {
   const [solaComment, setSolaComment] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
   const [searchResults, setSearchResults] = useState<{ id: string; name: string }[]>([])
-  const [newCustomer, setNewCustomer] = useState(true)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [speechError, setSpeechError] = useState<string | null>(null)
@@ -753,7 +752,6 @@ AIがお伺いするので、
     setChatInput('')
     setCustomerSearch('')
     setSearchResults([])
-    setNewCustomer(true)
     initialSpokenRef.current = false
     counselingSessionIdRef.current = null
     phase8KarteSavedRef.current = false
@@ -867,7 +865,10 @@ AIがお伺いするので、
             <h3 className="font-semibold text-[#3D3D3D]">基本情報</h3>
             {mode === 'salon' && (
               <div>
-                <label className="text-xs text-gray-500 block mb-2">顧客</label>
+                <label className="text-xs text-gray-500 block mb-2">顧客（必須）</label>
+                <p className="text-xs text-gray-500 mb-2">
+                  名前で検索し、一覧から顧客を選んでください。新規登録は顧客管理から行ってください。
+                </p>
                 <div className="flex gap-2 mb-2">
                   <input
                     type="text"
@@ -877,7 +878,7 @@ AIがお伺いするので、
                     placeholder="名前で検索"
                     className="flex-1 px-3 py-2 rounded-lg border border-gray-200"
                   />
-                  <button onClick={doSearch} className="p-2 bg-[#C4728A] text-white rounded-lg">
+                  <button type="button" onClick={doSearch} className="p-2 bg-[#C4728A] text-white rounded-lg">
                     <Search className="w-5 h-5" />
                   </button>
                 </div>
@@ -885,11 +886,12 @@ AIがお伺いするので、
                   <div className="space-y-1 mb-2">
                     {searchResults.map((c) => (
                       <button
+                        type="button"
                         key={c.id}
                         onClick={() => {
                           setData((d) => ({ ...d, customerName: c.name, customerId: c.id }))
-                          setNewCustomer(false)
                           setSearchResults([])
+                          setCustomerSearch('')
                         }}
                         className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-[#F8F5FF] text-left"
                       >
@@ -898,21 +900,23 @@ AIがお伺いするので、
                     ))}
                   </div>
                 )}
-                {newCustomer ? (
-                  <input
-                    type="text"
-                    value={data.customerName}
-                    onChange={(e) => setData((d) => ({ ...d, customerName: e.target.value }))}
-                    placeholder="新規のお客様のお名前"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200"
-                  />
-                ) : (
+                {data.customerId ? (
                   <div className="flex items-center justify-between p-3 rounded-lg bg-[#F8F5FF] border border-[#9B8EC4]/30">
                     <span className="font-medium text-[#3D3D3D]">{data.customerName}</span>
-                    <button type="button" onClick={() => { setNewCustomer(true); setData((d) => ({ ...d, customerId: undefined, customerName: '' })) }} className="text-xs text-[#C4728A] hover:underline">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setData((d) => ({ ...d, customerId: undefined, customerName: '' }))
+                      }}
+                      className="text-xs text-[#C4728A] hover:underline"
+                    >
                       変更
                     </button>
                   </div>
+                ) : (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    顧客が未選択です。検索結果から選択してください。
+                  </p>
                 )}
               </div>
             )}
@@ -1240,7 +1244,9 @@ AIがお伺いするので、
               setStep((s) => Math.min(6, s + 1))
             }}
             disabled={
-              (step === 1 && (!data.customerName.trim() || !data.courseName)) ||
+              (step === 1 &&
+                (!data.courseName ||
+                  (mode === 'salon' ? !data.customerId : !data.customerName.trim()))) ||
               (step === 2 && data.messages.filter((m) => m.role === 'user').length < 1) ||
               (step === 3 && Object.keys(data.skinAnswers).length < 4) ||
               (step === 5 && !data.selectedMenu)
