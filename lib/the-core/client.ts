@@ -76,7 +76,7 @@ ${buildCounselingSolaFlowInstructions({ customerName, courseName, staffName })}
     "bond_score_delta": -0.1〜0.3,
     "trust_indicators": {}
   },
-  "counselingPhaseAdvice": "phase1〜phase8のいずれか（例: phase3）。今どの段階か"
+  "counselingPhaseAdvice": "phase1〜phase8、phase2.5（禁忌）、phase7.5（不安確認）など。今どの段階か"
 }`
 }
 
