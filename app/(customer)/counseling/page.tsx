@@ -25,6 +25,32 @@ const STORAGE_KEY = 'sola_counseling_draft'
 
 const SOLA_AVATAR_URL = '/images/sola-avatar.png'
 
+/** 末尾の「／」区切り選択肢行を除いたアシスタント文面（複数選択判定用） */
+function stripAssistantChoiceLine(content: string): string {
+  const lines = content.trim().split('\n')
+  const last = lines[lines.length - 1]?.trim() ?? ''
+  if (last.includes('／') && lines.length >= 2 && !last.includes('？') && !last.includes('?')) {
+    return lines.slice(0, -1).join('\n').trim()
+  }
+  return content.trim()
+}
+
+/** PHASE 2.5 / 3 / 4 Step2・Step3 / 5 Q2 は複数選択可（プロンプトと同期） */
+function isCounselingMultiSelectPrompt(assistantContent: string): boolean {
+  const q = stripAssistantChoiceLine(assistantContent)
+  if (q.includes('施術前に確認させてください')) return true
+  if (q.includes('期待することは何ですか')) return true
+  if (q.includes('場面でその変化を感じたい')) return true
+  if (q.includes('どのくらいの状態を目指していますか')) return true
+  if (q.includes('理想のお肌はどんな状態ですか')) return true
+  if (q.includes('目標の体型・サイズはありますか')) return true
+  if (q.includes('どんな状態になりたいですか')) return true
+  if (q.includes('どんな変化を期待されていますか')) return true
+  if (q.includes('通い続けるサロンとして') && q.includes('大切に')) return true
+  if (q.includes('サロンとして、どんな点を大切に')) return true
+  return false
+}
+
 /** カウンセリング読み上げ用（MediaSource + ElevenLabs ストリーム） */
 const COUNSELING_SPEECH_MPEG = 'audio/mpeg'
 
@@ -321,6 +347,8 @@ function CounselingContent() {
   const [salonMenus, setSalonMenus] = useState<{ id: string; name: string; price?: number }[]>([])
   const [autoSaved, setAutoSaved] = useState(false)
   const [karteEndSaving, setKarteEndSaving] = useState(false)
+  /** 複数選択モード時の仮選択（送信順はタップ順） */
+  const [multiSelected, setMultiSelected] = useState<string[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
   const initialSpokenRef = useRef(false)
   const audioUnlockedRef = useRef(false)
@@ -690,6 +718,28 @@ AIがお伺いするので、
   const lastAssistantMsg = data.messages.filter(m => m.role === 'assistant').at(-1)
   const lastMsgIsAssistant = data.messages.at(-1)?.role === 'assistant'
   const choices = lastAssistantMsg && lastMsgIsAssistant && !chatLoading ? extractChoices(lastAssistantMsg.content) : []
+  const isMultiSelectRound =
+    !!lastAssistantMsg &&
+    lastMsgIsAssistant &&
+    !chatLoading &&
+    choices.length > 0 &&
+    isCounselingMultiSelectPrompt(lastAssistantMsg.content)
+
+  useEffect(() => {
+    setMultiSelected([])
+  }, [lastAssistantMsg?.content])
+
+  const toggleMultiChoice = useCallback((c: string) => {
+    setMultiSelected((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))
+  }, [])
+
+  const submitMultiSelect = useCallback(() => {
+    if (multiSelected.length === 0 || chatLoading) return
+    const text = multiSelected.join('、')
+    setMultiSelected([])
+    void sendChat(text)
+  }, [multiSelected, chatLoading, sendChat])
+
   const hasPhase8Closing = data.messages.some(
     (m) => m.role === 'assistant' && m.content.includes('これより施術に入ります'),
   )
@@ -708,6 +758,7 @@ AIがお伺いするので、
     counselingSessionIdRef.current = null
     phase8KarteSavedRef.current = false
     setKarteEndSaving(false)
+    setMultiSelected([])
     localStorage.removeItem(STORAGE_KEY)
   }
 
@@ -958,16 +1009,48 @@ AIがお伺いするので、
                 </div>
               )}
               {choices.length > 0 && (
-                <div className="flex flex-wrap gap-2 pl-14">
-                  {choices.map((choice) => (
+                <div className="pl-14 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {choices.map((choice) => {
+                      const selected = multiSelected.includes(choice)
+                      if (isMultiSelectRound) {
+                        return (
+                          <button
+                            key={choice}
+                            type="button"
+                            onClick={() => toggleMultiChoice(choice)}
+                            className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-colors ${
+                              selected
+                                ? 'bg-[#C4728A] border-[#C4728A] text-white shadow-sm'
+                                : 'bg-white border-[#C4728A]/30 text-[#C4728A] hover:bg-[#C4728A]/10'
+                            }`}
+                          >
+                            {choice}
+                          </button>
+                        )
+                      }
+                      return (
+                        <button
+                          key={choice}
+                          type="button"
+                          onClick={() => sendChat(choice)}
+                          className="px-4 py-2 rounded-xl bg-white border-2 border-[#C4728A]/30 text-sm font-medium text-[#C4728A] hover:bg-[#C4728A] hover:text-white transition-colors"
+                        >
+                          {choice}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {isMultiSelectRound && (
                     <button
-                      key={choice}
-                      onClick={() => sendChat(choice)}
-                      className="px-4 py-2 rounded-xl bg-white border-2 border-[#C4728A]/30 text-sm font-medium text-[#C4728A] hover:bg-[#C4728A] hover:text-white transition-colors"
+                      type="button"
+                      onClick={() => void submitMultiSelect()}
+                      disabled={multiSelected.length === 0 || chatLoading}
+                      className="w-full max-w-sm py-2.5 rounded-xl bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {choice}
+                      選択して送信{multiSelected.length > 0 ? `（${multiSelected.length}件）` : ''}
                     </button>
-                  ))}
+                  )}
                 </div>
               )}
               {hasPhase8Closing && (
