@@ -25,6 +25,101 @@ const STORAGE_KEY = 'sola_counseling_draft'
 
 const SOLA_AVATAR_URL = '/images/sola-avatar.png'
 
+/** カウンセリング読み上げ用（MediaSource + ElevenLabs ストリーム） */
+const COUNSELING_SPEECH_MPEG = 'audio/mpeg'
+
+/**
+ * ElevenLabs 相当の MP3 ストリームを MediaSource で再生。
+ * 先頭チャンクを append した時点で play() し、以降のチャンクを継続 append する。
+ */
+async function playCounselingSpeechFromMpegStream(response: Response, audio: HTMLAudioElement): Promise<void> {
+  const body = response.body
+  if (!body) throw new Error('ストリームがありません')
+
+  if (typeof MediaSource === 'undefined' || !MediaSource.isTypeSupported(COUNSELING_SPEECH_MPEG)) {
+    throw new Error('MSE_MPEG_UNSUPPORTED')
+  }
+
+  const mediaSource = new MediaSource()
+  const objectUrl = URL.createObjectURL(mediaSource)
+  audio.src = objectUrl
+
+  await new Promise<void>((resolve, reject) => {
+    mediaSource.addEventListener('sourceopen', () => resolve(), { once: true })
+    mediaSource.addEventListener('error', () => reject(new Error('MediaSource error')), { once: true })
+  })
+
+  const sourceBuffer = mediaSource.addSourceBuffer(COUNSELING_SPEECH_MPEG)
+  const reader = body.getReader()
+  let playbackStarted = false
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        if (mediaSource.readyState === 'open') {
+          mediaSource.endOfStream()
+        }
+        break
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const onEnd = () => {
+          sourceBuffer.removeEventListener('updateend', onEnd)
+          sourceBuffer.removeEventListener('error', onErr)
+          resolve()
+        }
+        const onErr = () => {
+          sourceBuffer.removeEventListener('updateend', onEnd)
+          sourceBuffer.removeEventListener('error', onErr)
+          reject(new Error('SourceBuffer error'))
+        }
+        sourceBuffer.addEventListener('updateend', onEnd, { once: true })
+        sourceBuffer.addEventListener('error', onErr, { once: true })
+        try {
+          sourceBuffer.appendBuffer(value)
+        } catch (err) {
+          sourceBuffer.removeEventListener('updateend', onEnd)
+          sourceBuffer.removeEventListener('error', onErr)
+          reject(err)
+        }
+      })
+
+      if (!playbackStarted) {
+        playbackStarted = true
+        await audio.play()
+      }
+    }
+  } catch (e) {
+    URL.revokeObjectURL(objectUrl)
+    if (mediaSource.readyState === 'open') {
+      try {
+        mediaSource.endOfStream('decode')
+      } catch (_) {
+        /* noop */
+      }
+    }
+    throw e
+  }
+
+  const revokeMsObject = () => URL.revokeObjectURL(objectUrl)
+  audio.addEventListener('ended', revokeMsObject, { once: true })
+  audio.addEventListener('error', revokeMsObject, { once: true })
+}
+
+/** 非ストリーミングフォールバック（Blob 全体取得後に再生） */
+async function playCounselingSpeechFromBlobResponse(
+  response: Response,
+  audio: HTMLAudioElement,
+): Promise<string> {
+  const blob = await response.blob()
+  if (blob.size === 0) throw new Error('音声データが空です')
+  const audioUrl = URL.createObjectURL(blob)
+  audio.src = audioUrl
+  await audio.play()
+  return audioUrl
+}
+
 function TypingDots() {
   return (
     <span className="inline-flex gap-1">
@@ -229,6 +324,8 @@ function CounselingContent() {
   const initialSpokenRef = useRef(false)
   const audioUnlockedRef = useRef(false)
   const autoSaveTriggeredRef = useRef(false)
+  const speechAbortRef = useRef<AbortController | null>(null)
+  const speechAudioRef = useRef<HTMLAudioElement | null>(null)
 
   const unlockAudio = useCallback(() => {
     if (audioUnlockedRef.current) return
@@ -264,12 +361,24 @@ function CounselingContent() {
   const speakMessage = useCallback(async (text: string) => {
     if (!voiceEnabled || !text.trim()) return
     setSpeechError(null)
+
+    speechAbortRef.current?.abort()
+    speechAbortRef.current = null
+    speechAudioRef.current?.pause()
+    speechAudioRef.current = null
+
+    const ac = new AbortController()
+    speechAbortRef.current = ac
+
+    let blobUrlToRevoke: string | null = null
+
     try {
       setIsSpeaking(true)
       const response = await fetch('/api/counseling/speech', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: text.trim() }),
+        signal: ac.signal,
       })
       if (!response.ok) {
         const errBody = await response.text()
@@ -277,24 +386,60 @@ function CounselingContent() {
         try {
           const parsed = JSON.parse(errBody)
           if (parsed.error) errMsg = parsed.error
-        } catch (_) {}
+        } catch (_) {
+          /* noop */
+        }
         throw new Error(errMsg)
       }
-      const audioBlob = await response.blob()
-      if (audioBlob.size === 0) throw new Error('音声データが空です')
-      const audioUrl = URL.createObjectURL(audioBlob)
-      const audio = new Audio(audioUrl)
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl)
+
+      const audio = new Audio()
+      speechAudioRef.current = audio
+
+      const finish = () => {
+        if (blobUrlToRevoke) {
+          URL.revokeObjectURL(blobUrlToRevoke)
+          blobUrlToRevoke = null
+        }
         setIsSpeaking(false)
+        if (speechAudioRef.current === audio) speechAudioRef.current = null
       }
+
+      audio.onended = finish
       audio.onerror = () => {
-        URL.revokeObjectURL(audioUrl)
-        setIsSpeaking(false)
+        finish()
         setSpeechError('音声の再生に失敗しました')
       }
-      await audio.play()
+
+      const canMse =
+        !!response.body &&
+        typeof MediaSource !== 'undefined' &&
+        MediaSource.isTypeSupported(COUNSELING_SPEECH_MPEG)
+
+      if (canMse) {
+        const cloned = response.clone()
+        try {
+          await playCounselingSpeechFromMpegStream(response, audio)
+          cloned.body?.cancel().catch(() => {})
+        } catch (streamErr) {
+          console.warn('[counseling] MediaSource ストリーム再生に失敗、Blob にフォールバック', streamErr)
+          try {
+            blobUrlToRevoke = await playCounselingSpeechFromBlobResponse(cloned, audio)
+          } catch {
+            throw streamErr instanceof Error ? streamErr : new Error('音声再生に失敗しました')
+          }
+        }
+      } else {
+        blobUrlToRevoke = await playCounselingSpeechFromBlobResponse(response, audio)
+      }
+
+      if (audio.paused) {
+        await audio.play()
+      }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setIsSpeaking(false)
+        return
+      }
       const msg = error instanceof Error ? error.message : '音声再生エラー'
       console.error('音声再生エラー:', error)
       setSpeechError(msg)

@@ -1,5 +1,5 @@
 /**
- * SOLA カウンセリング読み上げ（ElevenLabs のみ）
+ * SOLA カウンセリング読み上げ（ElevenLabs ストリーミングのみ）
  *
  * cleanTextForSpeech → stripSsmlTags → toVoiceTextForElevenLabs の結果を送信する。
  * リクエスト本文の text は変更しない（画面表示はクライアントの messages のまま）。
@@ -53,49 +53,18 @@ function toVoiceTextForElevenLabs(text: string): string {
   return voiceText
 }
 
-async function synthesizeWithElevenLabs(
-  apiKey: string,
-  voiceId: string,
-  voiceText: string,
-): Promise<{ audio: ArrayBuffer } | { error: string }> {
-  const url = new URL(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`)
-  url.searchParams.set('output_format', 'mp3_44100_128')
-
-  const response = await fetch(url.toString(), {
-    method: 'POST',
-    headers: {
-      'xi-api-key': apiKey,
-      'Content-Type': 'application/json',
-      Accept: 'audio/mpeg',
+function buildElevenLabsStreamRequestBody(voiceText: string): string {
+  return JSON.stringify({
+    text: voiceText,
+    model_id: 'eleven_v3',
+    voice_settings: {
+      stability: 0.3,
+      similarity_boost: 0.75,
+      style: 0.5,
+      use_speaker_boost: true,
+      speed: 1.12,
     },
-    body: JSON.stringify({
-      text: voiceText,
-      model_id: 'eleven_v3',
-      voice_settings: {
-        stability: 0.3,
-        similarity_boost: 0.75,
-        style: 0.5,
-        use_speaker_boost: true,
-        speed: 1.12,
-      },
-    }),
   })
-
-  if (!response.ok) {
-    let msg = `ElevenLabs error: ${response.status}`
-    try {
-      const err = (await response.json()) as { detail?: unknown }
-      if (err.detail != null) msg = `${msg} ${JSON.stringify(err.detail)}`
-    } catch {
-      const t = await response.text()
-      if (t) msg = `${msg} ${t.slice(0, 200)}`
-    }
-    return { error: msg }
-  }
-
-  const audio = await response.arrayBuffer()
-  if (audio.byteLength === 0) return { error: 'ElevenLabs returned empty audio' }
-  return { audio }
 }
 
 export async function POST(req: Request) {
@@ -143,16 +112,50 @@ export async function POST(req: Request) {
       })
     }
 
-    const result = await synthesizeWithElevenLabs(apiKey, voiceId, voiceText)
-    if ('audio' in result) {
-      return new Response(result.audio, {
-        headers: { 'Content-Type': 'audio/mpeg' },
+    const streamUrl = new URL(
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream`,
+    )
+    streamUrl.searchParams.set('output_format', 'mp3_44100_128')
+
+    const elResponse = await fetch(streamUrl.toString(), {
+      method: 'POST',
+      headers: {
+        'xi-api-key': apiKey,
+        'Content-Type': 'application/json',
+        Accept: 'audio/mpeg',
+      },
+      body: buildElevenLabsStreamRequestBody(voiceText),
+    })
+
+    if (!elResponse.ok) {
+      let msg = `ElevenLabs error: ${elResponse.status}`
+      try {
+        const err = (await elResponse.json()) as { detail?: unknown }
+        if (err.detail != null) msg = `${msg} ${JSON.stringify(err.detail)}`
+      } catch {
+        const t = await elResponse.text()
+        if (t) msg = `${msg} ${t.slice(0, 300)}`
+      }
+      console.error('[counseling/speech]', msg)
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
       })
     }
-    console.error('[counseling/speech]', result.error)
-    return new Response(JSON.stringify({ error: result.error }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
+
+    if (!elResponse.body) {
+      return new Response(JSON.stringify({ error: 'ElevenLabs からストリームを取得できませんでした' }), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    return new Response(elResponse.body, {
+      headers: {
+        'Content-Type': 'audio/mpeg',
+        'Transfer-Encoding': 'chunked',
+        'Cache-Control': 'no-store',
+      },
     })
   } catch (error) {
     console.error('[counseling/speech]', error)
