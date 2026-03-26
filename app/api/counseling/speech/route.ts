@@ -9,6 +9,9 @@ function cleanTextForSpeech(text: string): string {
   return text
     // ブランド名 SOLA が「ソーラ」と伸びるのを防ぎ「ソラ」で読ませる（表示テキストはクライアント側のまま）
     .replace(/\bsola\b/gi, 'ソラ')
+    // 「80万件」が誤読されやすい（やまんけん等）ため、はちじゅうまんけんと読ませる
+    .replace(/80万件以上/g, 'はちじゅうまんけんいじょう')
+    .replace(/80万件/g, 'はちじゅうまんけん')
     .replace(/[✨🌸💆🌿🍃🌱]/g, '')
     .replace(/[\u2600-\u26FF\u2700-\u27BF\uFE00-\uFE0F]/g, '')
     .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
