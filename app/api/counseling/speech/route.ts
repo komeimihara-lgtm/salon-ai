@@ -2,6 +2,9 @@
  * SOLA カウンセリング読み上げ
  * 優先: ElevenLabs（ELEVENLABS_API_KEY あり）
  * フォールバック: Google Cloud TTS（キー未設定時または EL 用 voice_id 未設定時）
+ *
+ * ElevenLabs には cleanTextForSpeech → stripSsmlTags → toVoiceTextForElevenLabs のみを送る。
+ * リクエスト本文の text は変更しない（画面表示はクライアントの messages のまま）。
  */
 
 function cleanTextForSpeech(text: string): string {
@@ -32,6 +35,19 @@ function stripSsmlTags(text: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .trim()
+}
+
+/**
+ * ElevenLabs 送信用テキスト（画面に表示する text はクライアント側で保持・変更しない）
+ * 処理順: cleanTextForSpeech → stripSsmlTags → 本関数
+ */
+function toVoiceTextForElevenLabs(text: string): string {
+  const voiceText = text
+    .replace(/\p{Emoji}/gu, '')
+    .replace(/[\uD800-\uDFFF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return voiceText
 }
 
 /** Google SSML 用（ElevenLabs には使わない） */
@@ -123,7 +139,7 @@ async function synthesizeWithGoogle(googleKey: string, text: string, plain: stri
 async function synthesizeWithElevenLabs(
   apiKey: string,
   voiceId: string,
-  plainForSpeech: string,
+  voiceText: string,
 ): Promise<{ audio: ArrayBuffer } | { error: string }> {
   const url = new URL(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}`)
   url.searchParams.set('output_format', 'mp3_44100_128')
@@ -136,7 +152,7 @@ async function synthesizeWithElevenLabs(
       Accept: 'audio/mpeg',
     },
     body: JSON.stringify({
-      text: plainForSpeech,
+      text: voiceText,
       model_id: 'eleven_multilingual_v2',
       voice_settings: {
         stability: 0.5,
@@ -186,14 +202,21 @@ export async function POST(req: Request) {
     const voiceId = process.env.ELEVENLABS_VOICE_ID
 
     if (elevenKey && voiceId) {
-      const elevenText = stripSsmlTags(plain)
-      if (!elevenText) {
+      const afterSsml = stripSsmlTags(plain)
+      if (!afterSsml) {
         return new Response(JSON.stringify({ error: '読み上げ可能なテキストがありません' }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
         })
       }
-      const result = await synthesizeWithElevenLabs(elevenKey, voiceId, elevenText)
+      const voiceText = toVoiceTextForElevenLabs(afterSsml)
+      if (!voiceText) {
+        return new Response(JSON.stringify({ error: '読み上げ可能なテキストがありません' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      const result = await synthesizeWithElevenLabs(elevenKey, voiceId, voiceText)
       if ('audio' in result) {
         return new Response(result.audio, {
           headers: { 'Content-Type': 'audio/mpeg' },
