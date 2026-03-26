@@ -1,3 +1,8 @@
+/**
+ * SOLA カウンセリング読み上げ（Google Cloud TTS）
+ * ロボット感を抑えるため、話速・音高・間・再生プロファイルを調整
+ */
+
 function cleanTextForSpeech(text: string): string {
   return text
     .replace(/[✨🌸💆🌿🍃🌱]/g, '')
@@ -6,13 +11,18 @@ function cleanTextForSpeech(text: string): string {
     .trim()
 }
 
+/** 読点・句読点で息継ぎを入れ、一文が続けざまに聞こえないようにする */
 function textToSsml(text: string): string {
-  const cleaned = cleanTextForSpeech(text)
+  let cleaned = cleanTextForSpeech(text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+  cleaned = cleaned.replace(/、/g, '、<break time="85ms"/>')
   const sentences = cleaned.split(/(?<=[。？！])/).filter(Boolean)
-  const withBreaks = sentences.map((s) => s.trim()).filter(Boolean).join('<break time="120ms"/>')
+  const withBreaks = sentences
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join('<break time="240ms"/>')
   return `<speak>${withBreaks || cleaned}</speak>`
 }
 
@@ -42,14 +52,19 @@ export async function POST(req: Request) {
           input: { ssml },
           voice: {
             languageCode: 'ja-JP',
-            name: 'ja-JP-Neural2-B',
+            /** Neural2-C は B より柔らかい印象の女性声（対話向き） */
+            name: 'ja-JP-Neural2-C',
             ssmlGender: 'FEMALE',
           },
           audioConfig: {
             audioEncoding: 'MP3',
-            speakingRate: 0.98,
-            pitch: 0.5,
-            volumeGainDb: 1.5,
+            /** ややゆっくり＝機械的な早口感を抑える */
+            speakingRate: 0.92,
+            /** 0 = 自然な基準音高（やや高い設定はアナウンス調になりやすい） */
+            pitch: 0,
+            volumeGainDb: 1.0,
+            /** スマホ・イヤホン再生で聞き取りやすいチューニング */
+            effectsProfileId: ['headphone-class-device'],
           },
         }),
       }
