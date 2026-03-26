@@ -1,7 +1,6 @@
 /**
  * SOLA カウンセリング読み上げ（Google Cloud TTS）
- * APIキー環境では Neural2-C や effectsProfileId が拒否されることがあるため、
- * まず安定設定で合成し、失敗時はプレーンテキストにフォールバックする。
+ * SSML 失敗時はプレーンテキストにフォールバック（Neural2-C 非対応環境など）。
  */
 
 function cleanTextForSpeech(text: string): string {
@@ -12,34 +11,46 @@ function cleanTextForSpeech(text: string): string {
     .trim()
 }
 
-/** 読点・句読点で短い休止（SSML が通らない環境では使われない） */
+/** 長いフレーズから順に置換し、誤って分割されないようにする */
+const EMPHASIS_PHRASES = ['ありがとうございます', '素晴らしい', '素敵', '嬉しい'] as const
+
+function applyEmphasisXml(escaped: string): string {
+  let s = escaped
+  for (const phrase of EMPHASIS_PHRASES) {
+    const re = new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
+    s = s.replace(re, `<emphasis level="moderate">${phrase}</emphasis>`)
+  }
+  return s
+}
+
 function textToSsml(text: string): string {
   let cleaned = cleanTextForSpeech(text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
   if (!cleaned) return '<speak></speak>'
-  cleaned = cleaned.replace(/、/g, '、<break time="85ms"/>')
-  const sentences = cleaned.split(/(?<=[。？！])/).filter(Boolean)
-  const withBreaks = sentences
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .join('<break time="240ms"/>')
-  return `<speak>${withBreaks || cleaned}</speak>`
+
+  cleaned = applyEmphasisXml(cleaned)
+
+  cleaned = cleaned.replace(/、/g, '、<break time="120ms"/>')
+  cleaned = cleaned.replace(/。/g, '。<break time="350ms"/>')
+  cleaned = cleaned.replace(/？/g, '？<break time="300ms"/>')
+  cleaned = cleaned.replace(/！/g, '！<break time="280ms"/>')
+
+  return `<speak>${cleaned}</speak>`
 }
 
 const VOICE = {
   languageCode: 'ja-JP',
-  /** B は広く利用可能。C はプロジェクトによっては API で拒否される */
-  name: 'ja-JP-Neural2-B',
+  name: 'ja-JP-Neural2-C',
   ssmlGender: 'FEMALE' as const,
 }
 
 const AUDIO = {
   audioEncoding: 'MP3' as const,
   speakingRate: 0.94,
-  pitch: 0,
-  volumeGainDb: 1.0,
+  pitch: 2.0,
+  volumeGainDb: 2.0,
 }
 
 type SynthBody = {
