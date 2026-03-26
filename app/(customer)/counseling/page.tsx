@@ -35,20 +35,35 @@ function stripAssistantChoiceLine(content: string): string {
   return content.trim()
 }
 
-/** PHASE 2.5 / 3 / 4 Step2・Step3 / 5 Q2 は複数選択可（プロンプトと同期） */
+/**
+ * 複数選択（タップで選択→「選択して送信」）にする質問のみ true。
+ * - PHASE 2.5 禁忌 / PHASE 3 期待 / PHASE 4 Step2・Step3 / PHASE 5 Q2（サロンに求めること）
+ * 上記以外は単一タップで即送信。
+ */
 function isCounselingMultiSelectPrompt(assistantContent: string): boolean {
-  const q = stripAssistantChoiceLine(assistantContent)
-  if (q.includes('施術前に確認させてください')) return true
-  if (q.includes('期待することは何ですか')) return true
-  if (q.includes('場面でその変化を感じたい')) return true
-  if (q.includes('どのくらいの状態を目指していますか')) return true
-  if (q.includes('理想のお肌はどんな状態ですか')) return true
-  if (q.includes('目標の体型・サイズはありますか')) return true
-  if (q.includes('どんな状態になりたいですか')) return true
-  if (q.includes('どんな変化を期待されていますか')) return true
-  if (q.includes('通い続けるサロンとして') && q.includes('大切に')) return true
-  if (q.includes('サロンとして、どんな点を大切に')) return true
-  return false
+  const raw = assistantContent.trim()
+  const body = stripAssistantChoiceLine(assistantContent)
+  const zones = body === raw ? [raw] : [body, raw]
+  return zones.some((q) => {
+    if (!q) return false
+    // PHASE 2.5 禁忌確認
+    if (q.includes('施術前に確認させてください')) return true
+    // PHASE 3 期待確認
+    if (q.includes('期待することは何ですか')) return true
+    if (q.includes('本日の施術で期待') && q.includes('いくつでも')) return true
+    // PHASE 4 Step2 場面・目的
+    if (q.includes('場面でその変化を感じたい')) return true
+    if (q.includes('どんな場面で') && q.includes('感じたいですか')) return true
+    // PHASE 4 Step3 状態ゴール（分岐ごと。自由回答のみの分岐は通常選択肢行なし）
+    if (q.includes('どのくらいの状態を目指していますか')) return true
+    if (q.includes('理想のお肌はどんな状態ですか')) return true
+    if (q.includes('目標の体型・サイズはありますか')) return true
+    if (q.includes('どんな状態になりたいですか')) return true
+    // PHASE 5 Q2（Q1「通い続けて…予定は」のあとの2問目のみ）
+    if (q.includes('通い続けるサロンとして') && q.includes('大切に')) return true
+    if (q.includes('どんな点を大切にされますか')) return true
+    return false
+  })
 }
 
 /** カウンセリング読み上げ用（MediaSource + ElevenLabs ストリーム） */
@@ -700,13 +715,17 @@ AIがお伺いするので、
   }, [data, mode, solaComment])
 
   // AIの返答から選択肢を抽出
+  /** 末尾などの「／」区切り行からボタン用ラベルを抽出（長い日本語ラベル用に文字数上限を緩める） */
   const extractChoices = (text: string): string[] => {
     const lines = text.split('\n')
+    const maxChoiceLen = 80
     for (const line of lines) {
       const trimmed = line.trim()
-      // ／区切り（2つ以上）
       if (trimmed.includes('／')) {
-        const parts = trimmed.split('／').map(s => s.trim()).filter(s => s.length > 0 && s.length <= 25)
+        const parts = trimmed
+          .split('／')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0 && s.length <= maxChoiceLen)
         if (parts.length >= 2) return parts
       }
     }
