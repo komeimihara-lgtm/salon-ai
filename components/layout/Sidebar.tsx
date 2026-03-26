@@ -52,13 +52,13 @@ export default function Sidebar() {
   return (
     <aside className="w-60 min-h-screen bg-white border-r border-[#E8E0F0] flex flex-col shrink-0">
       <div className="p-5 border-b border-[#E8E0F0]">
-        <Link href="/dashboard" className="flex items-center gap-3">
+        <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
           <SolaNavLogo size="md" lightBackdrop={false} />
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] bg-clip-text text-transparent leading-tight">
+          <div className="min-w-0 flex-1 leading-tight">
+            <h1 className="truncate text-xl font-bold leading-tight bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] bg-clip-text text-transparent">
               SOLA
             </h1>
-            <p className="text-[10px] text-[#6B7280] mt-0.5 tracking-wider">AI SALON MANAGER</p>
+            <p className="mt-0.5 truncate text-[10px] tracking-wider text-[#6B7280]">AI SALON MANAGER</p>
           </div>
         </Link>
       </div>

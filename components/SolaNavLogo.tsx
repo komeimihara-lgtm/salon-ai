@@ -9,24 +9,26 @@ type Props = {
 }
 
 const dim = { sm: 40, md: 44 } as const
+const imgPx = { sm: 32, md: 36 } as const
 
 /**
- * favicon.png は上に余白・ロゴはやや下寄り。
- * translate だけだと -50% で上が欠け下半分が背景色だけになるため、
- * 軽く拡大して object-position でロゴを枠の中央付近に収める。
+ * favicon.png 全体を枠内に収め、flex で幾何学的に中央配置。
+ * cover/scale によるクリップずれを避ける。
  */
 export function SolaNavLogo({ size = 'sm', lightBackdrop = true, className = '' }: Props) {
-  const px = dim[size]
   const box = size === 'sm' ? 'h-10 w-10' : 'h-11 w-11'
   const bg = lightBackdrop ? 'bg-white/95' : ''
+  const ip = imgPx[size]
   return (
-    <div className={`relative shrink-0 overflow-hidden rounded-lg ${bg} ${box} ${className}`.trim()}>
+    <div
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg ${bg} ${box} ${className}`.trim()}
+    >
       <Image
         src="/favicon.png"
         alt="SOLA"
-        fill
-        sizes={`${px}px`}
-        className="object-cover scale-[1.28] object-[50%_72%]"
+        width={ip}
+        height={ip}
+        className="object-contain"
         priority
       />
     </div>

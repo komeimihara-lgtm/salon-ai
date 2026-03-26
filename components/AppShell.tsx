@@ -156,11 +156,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen flex">
       {/* サイドバー - PC */}
       <aside className="hidden lg:flex lg:w-[240px] lg:flex-col lg:fixed lg:inset-y-0 bg-deep z-30">
-        <div className="flex items-center gap-3 h-16 px-6 border-b border-white/10">
+        <div className="flex h-16 min-h-16 shrink-0 items-center gap-3 px-6 border-b border-white/10">
           <SolaNavLogo size="sm" lightBackdrop />
-          <div className="flex flex-col justify-center min-w-0">
-            <span className="font-serif-jp text-xl font-bold text-white leading-tight">SOLA</span>
-            <span className="text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
+          <div className="flex min-w-0 flex-1 flex-col justify-center leading-tight">
+            <span className="truncate font-serif-jp text-xl font-bold text-white">SOLA</span>
+            <span className="truncate text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
           </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
@@ -276,12 +276,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex items-center justify-between h-16 px-6 border-b border-white/10">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="flex h-16 min-h-16 shrink-0 items-center justify-between px-6 border-b border-white/10">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <SolaNavLogo size="sm" lightBackdrop />
-            <div className="flex flex-col min-w-0">
-              <span className="font-serif-jp text-xl font-bold text-white leading-tight">SOLA</span>
-              <span className="text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
+            <div className="flex min-w-0 flex-1 flex-col leading-tight">
+              <span className="truncate font-serif-jp text-xl font-bold text-white">SOLA</span>
+              <span className="truncate text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
             </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="p-2 text-white/80">
