@@ -11,8 +11,9 @@ type Props = {
 const dim = { sm: 40, md: 44 } as const
 
 /**
- * favicon.png はキャンバス下半分にロゴがあり、素のままだと枠内で下に沈む。
- * 50% 上にずらして視覚的に中央付近へ寄せる。
+ * favicon.png は上に余白・ロゴはやや下寄り。
+ * translate だけだと -50% で上が欠け下半分が背景色だけになるため、
+ * 軽く拡大して object-position でロゴを枠の中央付近に収める。
  */
 export function SolaNavLogo({ size = 'sm', lightBackdrop = true, className = '' }: Props) {
   const px = dim[size]
@@ -23,9 +24,9 @@ export function SolaNavLogo({ size = 'sm', lightBackdrop = true, className = '' 
       <Image
         src="/favicon.png"
         alt="SOLA"
-        width={px}
-        height={px}
-        className="block -translate-y-1/2"
+        fill
+        sizes={`${px}px`}
+        className="object-cover scale-[1.28] object-[50%_72%]"
         priority
       />
     </div>
