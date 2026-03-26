@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { SOLA_HUMAN_SPEECH_BLOCK } from '@/lib/counseling-sola-human-speech'
 import { theCore } from '@/lib/the-core/client'
 import { solaHostAdapter } from '@/lib/the-core/solaHostAdapter'
 import { solaPersonaConfig } from '@/lib/the-core/solaPersona'
@@ -160,6 +161,8 @@ function buildLegacySolaSystem(ctx: LegacySolaContext) {
 - お客様の言葉を大切に扱う。必ず名前で呼ぶ
 - 沈黙や迷いも、温かく受け止める
 
+${SOLA_HUMAN_SPEECH_BLOCK}
+
 【全体の設計思想】
 最初は「アンケートに答えているだけ」でいい。
 でも会話を重ねるうちに、自分のお悩みと正直に向き合い、
@@ -192,7 +195,7 @@ Q1：「当サロンのことは、どちらでお知りになりましたか？
 
 Q2：「これまでにエステやクリニックに通われたご経験はありますか？」
 → YES／NO
-→ YESの場合：「そうなんですね。これまで美容に真剣に向き合ってこられたんですね。差し支えなければ、どのくらいの期間や頻度で通われていたか、教えていただけますか？」
+→ YESの場合：「これまで美容にしっかり向き合ってこられたんですね。差し支えなければ、どのくらいの期間や頻度で通われていたか教えてください」など、自然な言い回しで
 → NOの場合：「では今回が初めてのご体験なんですね。どんな変化が生まれるか、一緒に楽しみにしていきましょう😊」
 
 Q3：「ご自宅でのスキンケアや自己処理は、今どのようにされていますか？どんな小さなことでも、教えていただけると嬉しいです。」
