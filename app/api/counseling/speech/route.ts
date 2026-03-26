@@ -1,9 +1,7 @@
 /**
- * SOLA カウンセリング読み上げ
- * 優先: ElevenLabs（ELEVENLABS_API_KEY あり）
- * フォールバック: Google Cloud TTS（キー未設定時または EL 用 voice_id 未設定時）
+ * SOLA カウンセリング読み上げ（ElevenLabs のみ）
  *
- * ElevenLabs には cleanTextForSpeech → stripSsmlTags → toVoiceTextForElevenLabs のみを送る。
+ * cleanTextForSpeech → stripSsmlTags → toVoiceTextForElevenLabs の結果を送信する。
  * リクエスト本文の text は変更しない（画面表示はクライアントの messages のまま）。
  */
 
@@ -50,92 +48,6 @@ function toVoiceTextForElevenLabs(text: string): string {
     .replace(/\s+/g, ' ')
     .trim()
   return voiceText
-}
-
-/** Google SSML 用（ElevenLabs には使わない） */
-const EMPHASIS_PHRASES = ['ありがとうございます', '素晴らしい', '素敵', '嬉しい'] as const
-
-function applyEmphasisXml(escaped: string): string {
-  let s = escaped
-  for (const phrase of EMPHASIS_PHRASES) {
-    const re = new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
-    s = s.replace(re, `<emphasis level="moderate">${phrase}</emphasis>`)
-  }
-  return s
-}
-
-function textToSsml(text: string): string {
-  let cleaned = cleanTextForSpeech(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-  if (!cleaned) return '<speak></speak>'
-
-  cleaned = applyEmphasisXml(cleaned)
-
-  cleaned = cleaned.replace(/、/g, '、<break time="120ms"/>')
-  cleaned = cleaned.replace(/。/g, '。<break time="350ms"/>')
-  cleaned = cleaned.replace(/？/g, '？<break time="300ms"/>')
-  cleaned = cleaned.replace(/！/g, '！<break time="280ms"/>')
-
-  return `<speak>${cleaned}</speak>`
-}
-
-const GOOGLE_VOICE = {
-  languageCode: 'ja-JP',
-  name: 'ja-JP-Neural2-C',
-  ssmlGender: 'FEMALE' as const,
-}
-
-const GOOGLE_AUDIO = {
-  audioEncoding: 'MP3' as const,
-  speakingRate: 1.06,
-  pitch: 2.0,
-  volumeGainDb: 2.0,
-}
-
-type GoogleSynthBody = {
-  input: { ssml?: string; text?: string }
-  voice: typeof GOOGLE_VOICE
-  audioConfig: typeof GOOGLE_AUDIO
-}
-
-async function callGoogleTts(apiKey: string, body: GoogleSynthBody) {
-  const response = await fetch(
-    `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-  )
-  const data = (await response.json()) as { audioContent?: string; error?: { message?: string } }
-  return { data }
-}
-
-async function synthesizeWithGoogle(googleKey: string, text: string, plain: string): Promise<ArrayBuffer | null> {
-  let { data } = await callGoogleTts(googleKey, {
-    input: { ssml: textToSsml(text) },
-    voice: GOOGLE_VOICE,
-    audioConfig: GOOGLE_AUDIO,
-  })
-
-  if (!data.audioContent) {
-    console.warn('[counseling/speech] SSML synthesis failed, fallback to plain text', data.error?.message)
-    ;({ data } = await callGoogleTts(googleKey, {
-      input: { text: plain },
-      voice: GOOGLE_VOICE,
-      audioConfig: GOOGLE_AUDIO,
-    }))
-  }
-
-  if (!data.audioContent) {
-    console.error('[counseling/speech]', data.error?.message || '音声生成エラー')
-    return null
-  }
-
-  const buf = Buffer.from(data.audioContent, 'base64')
-  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
 }
 
 async function synthesizeWithElevenLabs(
@@ -193,6 +105,17 @@ export async function POST(req: Request) {
       })
     }
 
+    const apiKey = process.env.ELEVENLABS_API_KEY
+    const voiceId = process.env.ELEVENLABS_VOICE_ID
+    if (!apiKey || !voiceId) {
+      return new Response(
+        JSON.stringify({
+          error: 'ElevenLabs が未設定です（ELEVENLABS_API_KEY と ELEVENLABS_VOICE_ID が必要です）',
+        }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
+
     const plain = cleanTextForSpeech(text)
     if (!plain) {
       return new Response(JSON.stringify({ error: '読み上げ可能なテキストがありません' }), {
@@ -201,54 +124,32 @@ export async function POST(req: Request) {
       })
     }
 
-    const elevenKey = process.env.ELEVENLABS_API_KEY
-    const voiceId = process.env.ELEVENLABS_VOICE_ID
-
-    if (elevenKey && voiceId) {
-      const afterSsml = stripSsmlTags(plain)
-      if (!afterSsml) {
-        return new Response(JSON.stringify({ error: '読み上げ可能なテキストがありません' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      }
-      const voiceText = toVoiceTextForElevenLabs(afterSsml)
-      if (!voiceText) {
-        return new Response(JSON.stringify({ error: '読み上げ可能なテキストがありません' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      }
-      const result = await synthesizeWithElevenLabs(elevenKey, voiceId, voiceText)
-      if ('audio' in result) {
-        return new Response(result.audio, {
-          headers: { 'Content-Type': 'audio/mpeg' },
-        })
-      }
-      console.error('[counseling/speech]', result.error)
-      return new Response(JSON.stringify({ error: result.error }), {
-        status: 500,
+    const afterSsml = stripSsmlTags(plain)
+    if (!afterSsml) {
+      return new Response(JSON.stringify({ error: '読み上げ可能なテキストがありません' }), {
+        status: 400,
         headers: { 'Content-Type': 'application/json' },
       })
     }
 
-    const googleKey = process.env.GOOGLE_TTS_API_KEY
-    if (!googleKey) {
-      return new Response(
-        JSON.stringify({ error: '音声合成が未設定です（ELEVENLABS_API_KEY または GOOGLE_TTS_API_KEY）' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } },
-      )
-    }
-
-    const audio = await synthesizeWithGoogle(googleKey, text, plain)
-    if (!audio) {
-      return new Response(JSON.stringify({ error: '音声生成エラー' }), {
-        status: 500,
+    const voiceText = toVoiceTextForElevenLabs(afterSsml)
+    if (!voiceText) {
+      return new Response(JSON.stringify({ error: '読み上げ可能なテキストがありません' }), {
+        status: 400,
         headers: { 'Content-Type': 'application/json' },
       })
     }
-    return new Response(audio, {
-      headers: { 'Content-Type': 'audio/mpeg' },
+
+    const result = await synthesizeWithElevenLabs(apiKey, voiceId, voiceText)
+    if ('audio' in result) {
+      return new Response(result.audio, {
+        headers: { 'Content-Type': 'audio/mpeg' },
+      })
+    }
+    console.error('[counseling/speech]', result.error)
+    return new Response(JSON.stringify({ error: result.error }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
     })
   } catch (error) {
     console.error('[counseling/speech]', error)
