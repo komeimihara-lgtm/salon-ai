@@ -9,6 +9,8 @@
 
 function cleanTextForSpeech(text: string): string {
   return text
+    // ブランド名 SOLA が「ソーラ」と伸びるのを防ぎ「ソラ」で読ませる（表示テキストはクライアント側のまま）
+    .replace(/\bsola\b/gi, 'ソラ')
     .replace(/[✨🌸💆🌿🍃🌱]/g, '')
     .replace(/[\u2600-\u26FF\u2700-\u27BF\uFE00-\uFE0F]/g, '')
     .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '')
@@ -87,7 +89,7 @@ const GOOGLE_VOICE = {
 
 const GOOGLE_AUDIO = {
   audioEncoding: 'MP3' as const,
-  speakingRate: 0.94,
+  speakingRate: 1.06,
   pitch: 2.0,
   volumeGainDb: 2.0,
 }
@@ -159,6 +161,7 @@ async function synthesizeWithElevenLabs(
         similarity_boost: 0.75,
         style: 0.5,
         use_speaker_boost: true,
+        speed: 1.12,
       },
     }),
   })
