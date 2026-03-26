@@ -153,9 +153,9 @@ async function synthesizeWithElevenLabs(
     },
     body: JSON.stringify({
       text: voiceText,
-      model_id: 'eleven_multilingual_v2',
+      model_id: 'eleven_v3',
       voice_settings: {
-        stability: 0.5,
+        stability: 0.3,
         similarity_boost: 0.75,
         style: 0.5,
         use_speaker_boost: true,
