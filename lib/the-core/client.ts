@@ -7,6 +7,20 @@ import type { ProcessMessageInput, TheCoreResponse } from './types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+const MAX_MEMORY_PROMPT_CHARS = 2000
+
+function memoryContextBlock(userContext: ProcessMessageInput['userContext']): string {
+  const st = userContext.memoryShortTerm
+  const lt = userContext.memoryLongTerm
+  const hasSt = st && typeof st === 'object' && Object.keys(st).length > 0
+  const hasLt = lt && typeof lt === 'object' && Object.keys(lt).length > 0
+  if (!hasSt && !hasLt) return 'なし'
+  const chunks: string[] = []
+  if (hasSt) chunks.push(`短期: ${JSON.stringify(st)}`)
+  if (hasLt) chunks.push(`長期: ${JSON.stringify(lt)}`)
+  return chunks.join(' ').slice(0, MAX_MEMORY_PROMPT_CHARS)
+}
+
 function buildSystemPrompt(input: ProcessMessageInput): string {
   const { persona, userContext } = input
   const customerName = userContext.name || 'お客様'
@@ -19,6 +33,8 @@ function buildSystemPrompt(input: ProcessMessageInput): string {
           .map((t: Record<string, unknown>) => `${t.visit_date}: ${t.menu || '施術'}`)
           .join('\n')
       : 'なし'
+
+  const memoryText = memoryContextBlock(userContext)
 
   return `あなたは${persona.name}、${persona.basePersonality}。
 話し方のスタイル：${persona.speakingStyle}
@@ -60,6 +76,7 @@ ${buildCounselingSolaFlowInstructions({ customerName, courseName, staffName })}
 - 施術履歴：${historyText}
 - お肌の悩み：${userContext.skinConcerns || 'なし'}
 - アレルギー：${userContext.allergies || 'なし'}
+- SOLAの記憶（過去の会話で蓄積。参考にしつつ、今日のお話を最優先）：${memoryText}
 
 【追加指示：感情分析・Bond Score】
 会話の最後に、以下のJSON形式でメタデータを <!-- CORE_META: {...} --> タグ内に出力してください。

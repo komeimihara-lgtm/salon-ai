@@ -1247,8 +1247,22 @@ AIがお伺いするので、
             <ChevronLeft className="w-5 h-5" /> 戻る
           </button>
           <button
-            onClick={() => {
-              if (step === 1) unlockAudio()
+            onClick={async () => {
+              if (step === 1) {
+                unlockAudio()
+                if (data.customerId) {
+                  try {
+                    await fetch('/api/counseling/clear-thread', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ customer_id: data.customerId }),
+                      credentials: 'same-origin',
+                    })
+                  } catch (e) {
+                    console.warn('[counseling] clear-thread', e)
+                  }
+                }
+              }
               if (step === 2) {
                 const concerns = data.messages.filter((m) => m.role === 'user').map((m) => m.content)
                 setData((d) => ({ ...d, concerns }))

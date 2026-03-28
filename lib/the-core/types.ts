@@ -26,6 +26,10 @@ export interface UserContext {
 
   // カウンセリング目標
   counselingGoals: Record<string, unknown>
+
+  /** customer_memories から読み込み（The Core プロンプト用） */
+  memoryShortTerm?: Record<string, unknown>
+  memoryLongTerm?: Record<string, unknown>
 }
 
 export interface EmotionState {

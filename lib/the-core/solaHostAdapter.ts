@@ -19,13 +19,25 @@ export const solaHostAdapter: HostAdapter = {
   async getUserContext(userId: string): Promise<UserContext> {
     const supabase = getSupabaseAdmin()
 
-    const [customer, reservations, visits] = await Promise.all([
+    const [customer, reservations, visits, memories] = await Promise.all([
       supabase.from('customers').select('*').eq('id', userId).single(),
       supabase.from('reservations').select('*').eq('customer_id', userId)
         .order('date', { ascending: false }).limit(5),
       supabase.from('visits').select('*').eq('customer_id', userId)
         .order('visit_date', { ascending: false }).limit(10),
+      supabase
+        .from('customer_memories')
+        .select('short_term, long_term')
+        .eq('customer_id', userId)
+        .maybeSingle(),
     ])
+
+    const st = memories.data?.short_term
+    const lt = memories.data?.long_term
+    const memoryShortTerm =
+      st && typeof st === 'object' && !Array.isArray(st) ? (st as Record<string, unknown>) : undefined
+    const memoryLongTerm =
+      lt && typeof lt === 'object' && !Array.isArray(lt) ? (lt as Record<string, unknown>) : undefined
 
     return {
       // 基本情報
@@ -46,6 +58,9 @@ export const solaHostAdapter: HostAdapter = {
 
       // カウンセリング目標
       counselingGoals: {},
+
+      memoryShortTerm,
+      memoryLongTerm,
     }
   },
 
