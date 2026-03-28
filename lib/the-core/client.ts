@@ -74,16 +74,23 @@ ${buildCounselingSolaFlowInstructions({ customerName, courseName, staffName })}
   },
   "bondUpdate": {
     "bond_score_delta": -0.1〜0.3,
+    "bond_score": null,
     "trust_indicators": {}
   },
+  "memoryUpdates": {
+    "short_term": { "今回の会話で分かったこと（任意・キーは自由）" },
+    "long_term": { "次回以降も覚えておきたいこと（任意）" }
+  },
   "counselingPhaseAdvice": "phase1〜phase8、phase2.5（禁忌）、phase7.5（不安確認）など。今どの段階か"
-}`
+}
+※ memoryUpdates・bond_score は省略可。bond_score を数値で出す場合は絶対値として保存されます。bond_score_delta は既存スコアに加算されます。`
 }
 
 function parseCoreMeta(text: string): {
   cleanMessage: string
   emotion?: TheCoreResponse['emotion']
   bondUpdate?: TheCoreResponse['bondUpdate']
+  memoryUpdates?: TheCoreResponse['memoryUpdates']
   counselingPhaseAdvice?: string
 } {
   const metaMatch = text.match(/<!--\s*CORE_META:\s*([\s\S]*?)\s*-->/)
@@ -94,12 +101,38 @@ function parseCoreMeta(text: string): {
   }
 
   try {
-    const meta = JSON.parse(metaMatch[1])
+    const meta = JSON.parse(metaMatch[1]) as Record<string, unknown>
+    const mem = meta.memoryUpdates
+    const memoryUpdates =
+      mem && typeof mem === 'object' && !Array.isArray(mem)
+        ? {
+            short_term:
+              typeof (mem as { short_term?: unknown }).short_term === 'object' &&
+              (mem as { short_term?: unknown }).short_term !== null &&
+              !Array.isArray((mem as { short_term?: unknown }).short_term)
+                ? ((mem as { short_term: Record<string, unknown> }).short_term)
+                : undefined,
+            long_term:
+              typeof (mem as { long_term?: unknown }).long_term === 'object' &&
+              (mem as { long_term?: unknown }).long_term !== null &&
+              !Array.isArray((mem as { long_term?: unknown }).long_term)
+                ? ((mem as { long_term: Record<string, unknown> }).long_term)
+                : undefined,
+          }
+        : undefined
+    const memoryUpdatesClean =
+      memoryUpdates &&
+      ((memoryUpdates.short_term && Object.keys(memoryUpdates.short_term).length > 0) ||
+        (memoryUpdates.long_term && Object.keys(memoryUpdates.long_term).length > 0))
+        ? memoryUpdates
+        : undefined
+
     return {
       cleanMessage,
-      emotion: meta.emotion,
-      bondUpdate: meta.bondUpdate,
-      counselingPhaseAdvice: meta.counselingPhaseAdvice,
+      emotion: meta.emotion as TheCoreResponse['emotion'],
+      bondUpdate: meta.bondUpdate as TheCoreResponse['bondUpdate'],
+      memoryUpdates: memoryUpdatesClean,
+      counselingPhaseAdvice: meta.counselingPhaseAdvice as string | undefined,
     }
   } catch {
     return { cleanMessage }
@@ -130,13 +163,14 @@ export const theCore = {
         ? response.content[0].text
         : 'ありがとうございます。'
 
-    const { cleanMessage, emotion, bondUpdate, counselingPhaseAdvice } =
+    const { cleanMessage, emotion, bondUpdate, memoryUpdates, counselingPhaseAdvice } =
       parseCoreMeta(rawText)
 
     return {
       message: cleanMessage,
       emotion,
       bondUpdate,
+      memoryUpdates,
       counselingPhaseAdvice,
     }
   },

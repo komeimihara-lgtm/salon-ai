@@ -516,6 +516,7 @@ function CounselingContent() {
         body: JSON.stringify({
           mode: 'chat',
           messages: newMessages,
+          customer_id: data.customerId || undefined,
           customer_name: data.customerName || undefined,
           course_name: data.courseName || undefined,
         }),
@@ -531,7 +532,7 @@ function CounselingContent() {
     } finally {
       setChatLoading(false)
     }
-  }, [chatInput, chatLoading, data.messages, data.customerName, data.courseName, speakMessage, unlockAudio])
+  }, [chatInput, chatLoading, data.messages, data.customerId, data.customerName, data.courseName, speakMessage, unlockAudio])
 
   const handleEndCounselingSave = useCallback(async () => {
     if (data.messages.length < 2) return

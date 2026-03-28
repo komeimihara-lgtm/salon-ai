@@ -38,6 +38,8 @@ export interface EmotionState {
 export interface BondUpdate {
   bond_stage?: number
   bond_score?: number
+  /** モデルが返す差分。保存時は既存 bond_score に加算 */
+  bond_score_delta?: number
   trust_indicators?: Record<string, unknown>
 }
 
@@ -80,6 +82,13 @@ export interface HostAdapter {
   getConversationHistory(userId: string, limit?: number): Promise<ConversationMessage[]>
   getUserContext(userId: string): Promise<UserContext>
   saveConversation(userId: string, messages: ConversationMessage[]): Promise<void>
+  /** カウンセリング1ターン分を追記（初回のみウェルカム文を先に insert） */
+  appendCounselingTurn(
+    userId: string,
+    historyPrefix: ConversationMessage[],
+    userContent: string,
+    assistantContent: string,
+  ): Promise<void>
   saveBondProfile(userId: string, bond: BondUpdate): Promise<void>
   saveEmotionLog(userId: string, emotion: EmotionState, messageIndex: number): Promise<void>
   saveMemory(userId: string, memory: MemoryUpdate): Promise<void>

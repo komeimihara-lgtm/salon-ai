@@ -19,45 +19,76 @@ export async function POST(req: NextRequest) {
       }
 
       const { customer_id } = body
-      const lastUserMessage = messages[messages.length - 1]?.content || ''
+      const chatMessages = messages as { role: string; content: string }[]
+      const lastMsg = chatMessages[chatMessages.length - 1]
+      const lastUserMessage = lastMsg?.content || ''
 
-      // customer_id がある場合は The Core 経由で処理
+      // customer_id がある場合は The Core 経由（会話文脈はクライアントの messages と一致させる）
       if (customer_id) {
-        const history = await solaHostAdapter.getConversationHistory(customer_id)
+        if (lastMsg?.role !== 'user') {
+          return NextResponse.json(
+            { error: '最後のメッセージはお客様（user）である必要があります' },
+            { status: 400 },
+          )
+        }
+
+        const conversationHistory = chatMessages.slice(0, -1).map((m) => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        }))
+
         const context = await solaHostAdapter.getUserContext(customer_id)
 
-        // リクエストからの名前・コース名でコンテキストを上書き
         if (customer_name) context.name = customer_name
         if (body.course_name) context.todaysCourse = body.course_name
 
         const response = await theCore.processMessage({
           userId: customer_id,
           message: lastUserMessage,
-          conversationHistory: history,
+          conversationHistory,
           userContext: context,
           persona: solaPersonaConfig,
         })
 
-        // 感情ログを保存（施術スタッフへの引き渡しデータ）
+        const turnIndex = chatMessages.length - 1
+
         if (response.emotion) {
-          await solaHostAdapter.saveEmotionLog(customer_id, response.emotion, history.length)
+          await solaHostAdapter.saveEmotionLog(customer_id, response.emotion, turnIndex)
         }
 
-        // Bond Score更新
-        if (response.bondUpdate) {
-          await solaHostAdapter.saveBondProfile(customer_id, response.bondUpdate)
+        if (response.bondUpdate && Object.keys(response.bondUpdate).length > 0) {
+          const b = response.bondUpdate
+          const hasBondPayload =
+            typeof b.bond_score === 'number' ||
+            typeof b.bond_score_delta === 'number' ||
+            typeof b.bond_stage === 'number' ||
+            (b.trust_indicators && Object.keys(b.trust_indicators).length > 0)
+          if (hasBondPayload) {
+            await solaHostAdapter.saveBondProfile(customer_id, b)
+          }
         }
 
-        // 会話を保存
-        await solaHostAdapter.saveConversation(customer_id, [
-          { role: 'user', content: lastUserMessage },
-          { role: 'assistant', content: response.message },
-        ])
+        const mem = response.memoryUpdates
+        if (
+          mem &&
+          ((mem.short_term && Object.keys(mem.short_term).length > 0) ||
+            (mem.long_term && Object.keys(mem.long_term).length > 0))
+        ) {
+          await solaHostAdapter.saveMemory(customer_id, mem)
+        }
+
+        await solaHostAdapter.appendCounselingTurn(
+          customer_id,
+          conversationHistory,
+          lastUserMessage,
+          response.message,
+        )
 
         return NextResponse.json({
           message: response.message,
           emotion: response.emotion,
           bondUpdate: response.bondUpdate,
+          memoryUpdates: response.memoryUpdates,
           counselingPhaseAdvice: response.counselingPhaseAdvice,
         })
       }
