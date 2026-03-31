@@ -1,18 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { getSalonIdFromApiRequest } from '@/lib/get-salon-id'
 
-export async function GET() {
-  const salonId = getSalonIdFromCookie()
-  const supabase = getSupabaseAdmin()
+function logSettingsSalon(context: string, payload: Record<string, unknown>) {
+  console.log('[settings/salon]', context, payload)
+}
+
+export async function GET(req: NextRequest) {
+  const salonId = getSalonIdFromApiRequest(req)
+  logSettingsSalon('GET', {
+    salonIdLen: salonId.length,
+    salonIdSuffix: salonId ? salonId.slice(-8) : '',
+    hasCookieHeader: Boolean(req.headers.get('cookie')),
+  })
+  if (!salonId) {
+    logSettingsSalon('GET rejected', { reason: 'missing salon_id' })
+    return NextResponse.json({ error: 'salon_id が取得できません（Cookie を確認してください）' }, { status: 401 })
+  }
+
+  let supabase: ReturnType<typeof getSupabaseAdmin>
+  try {
+    supabase = getSupabaseAdmin()
+  } catch (e) {
+    console.error('[settings/salon] GET Supabase init failed', e)
+    return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+  }
+
   const { data: salon, error } = await supabase
     .from('salons')
     .select(
       'id, name, owner_name, plan, phone, address, postal_code, email, beds, closed_days, business_hours, targets, external_urls',
     )
     .eq('id', salonId)
-    .single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    .maybeSingle()
+
+  if (error) {
+    console.error('[settings/salon] GET salons query failed', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    })
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  if (!salon) {
+    console.warn('[settings/salon] GET no row', { salonIdSuffix: salonId.slice(-8) })
+    return NextResponse.json({ error: 'サロンが見つかりません' }, { status: 404 })
+  }
   const beds: string[] = Array.isArray(salon?.beds) ? salon.beds : ['A', 'B']
   const closed_days: number[] = Array.isArray(salon?.closed_days) ? salon.closed_days : []
   return NextResponse.json({
@@ -32,8 +66,23 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const salonId = getSalonIdFromCookie()
-  const supabase = getSupabaseAdmin()
+  const salonId = getSalonIdFromApiRequest(req)
+  logSettingsSalon('PATCH', {
+    salonIdLen: salonId.length,
+    salonIdSuffix: salonId ? salonId.slice(-8) : '',
+  })
+  if (!salonId) {
+    logSettingsSalon('PATCH rejected', { reason: 'missing salon_id' })
+    return NextResponse.json({ error: 'salon_id が取得できません（Cookie を確認してください）' }, { status: 401 })
+  }
+
+  let supabase: ReturnType<typeof getSupabaseAdmin>
+  try {
+    supabase = getSupabaseAdmin()
+  } catch (e) {
+    console.error('[settings/salon] PATCH Supabase init failed', e)
+    return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+  }
   const body = await req.json()
   const update: Record<string, unknown> = {}
   if (Array.isArray(body.beds)) update.beds = body.beds
@@ -50,10 +99,22 @@ export async function PATCH(req: NextRequest) {
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: 'No valid fields provided' }, { status: 400 })
   }
-  const { error } = await supabase
+  const { data: updatedRows, error } = await supabase
     .from('salons')
     .update(update)
     .eq('id', salonId)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    .select('id')
+  if (error) {
+    console.error('[settings/salon] PATCH salons update failed', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+    })
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  if (!updatedRows?.length) {
+    console.warn('[settings/salon] PATCH no row updated', { salonIdSuffix: salonId.slice(-8) })
+    return NextResponse.json({ error: 'サロンが見つかりません' }, { status: 404 })
+  }
   return NextResponse.json({ ok: true })
 }
