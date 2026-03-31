@@ -1,14 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveSalonIdForOwnerApi } from '@/lib/resolve-salon-id-api'
+import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
 import { getSalonSaleOperator } from '@/lib/salon-sale-operator'
 import { insertSaleLog, saleRowSnapshot } from '@/lib/sale-audit'
 import { overwriteSaleCustomerNamesFromDb } from '@/lib/sale-customer-display'
 import { insertCustomerProductExpiriesForSales } from '@/lib/customer-product-expiry'
+import {
+  jsonErrorWithDetails,
+  logPostgrestError,
+  postgrestErrorFields,
+} from '@/lib/postgrest-error-response'
+
+const LOG_TAG = '[api/kpi/sales]'
 
 export async function GET(req: NextRequest) {
-  const supabase = getSupabaseAdmin()
+  const fromCookieOnly = getSalonIdFromCookie()
+  console.log(LOG_TAG, 'GET getSalonIdFromCookie', {
+    len: fromCookieOnly.length,
+    suffix: fromCookieOnly ? fromCookieOnly.slice(-8) : '',
+  })
+
+  let supabase: ReturnType<typeof getSupabaseAdmin>
+  try {
+    supabase = getSupabaseAdmin()
+  } catch (e) {
+    console.error(LOG_TAG, 'GET Supabase init failed', e)
+    return jsonErrorWithDetails(500, 'サーバー設定エラー', { caught: e })
+  }
+
   const { searchParams } = new URL(req.url)
   const start = searchParams.get('start')
   const end = searchParams.get('end')
@@ -37,6 +58,7 @@ export async function GET(req: NextRequest) {
 
   let { data, error } = await query
   if (error && String(error.message ?? '').includes('status')) {
+    console.warn(LOG_TAG, 'GET retrying without status filter', postgrestErrorFields(error))
     let q2 = supabase
       .from('sales')
       .select('*')
@@ -49,14 +71,33 @@ export async function GET(req: NextRequest) {
     data = r2.data
     error = r2.error
   }
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    logPostgrestError(`${LOG_TAG} GET sales query failed`, error, {
+      salonId_suffix: salonId.slice(-8),
+      includeCancelled,
+    })
+    return jsonErrorWithDetails(500, error.message, { supabase: error })
+  }
   const rows = (data || []).map((r) => ({ ...(r as Record<string, unknown>) }))
   await overwriteSaleCustomerNamesFromDb(supabase, salonId, rows)
   return NextResponse.json({ sales: rows })
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = getSupabaseAdmin()
+  const fromCookieOnly = getSalonIdFromCookie()
+  console.log(LOG_TAG, 'POST getSalonIdFromCookie', {
+    len: fromCookieOnly.length,
+    suffix: fromCookieOnly ? fromCookieOnly.slice(-8) : '',
+  })
+
+  let supabase: ReturnType<typeof getSupabaseAdmin>
+  try {
+    supabase = getSupabaseAdmin()
+  } catch (e) {
+    console.error(LOG_TAG, 'POST Supabase init failed', e)
+    return jsonErrorWithDetails(500, 'サーバー設定エラー', { caught: e })
+  }
+
   try {
     const body = await req.json()
     const sales = Array.isArray(body.sales) ? body.sales : (body.sale_date != null ? [body] : [])
@@ -96,7 +137,8 @@ export async function POST(req: NextRequest) {
       .select()
 
     if (error) {
-      return NextResponse.json({ error: error.message, code: error.code }, { status: 500 })
+      logPostgrestError(`${LOG_TAG} POST sales insert failed`, error, { salonId_suffix: salonId.slice(-8) })
+      return jsonErrorWithDetails(500, error.message, { supabase: error })
     }
 
     const rows = data || []
@@ -122,16 +164,20 @@ export async function POST(req: NextRequest) {
         operatedBy,
       })
       if (logErr) {
+        console.error(`${LOG_TAG} POST insertSaleLog failed`, { saleId: row.id, err: logErr })
         await supabase.from('sales').delete().in(
           'id',
           rows.map((r) => r.id)
         )
-        return NextResponse.json({ error: '監査ログの記録に失敗しました' }, { status: 500 })
+        return jsonErrorWithDetails(500, '監査ログの記録に失敗しました', { caught: logErr })
       }
     }
 
     return NextResponse.json({ sales: rows })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    console.error(LOG_TAG, 'POST unhandled exception', e)
+    return jsonErrorWithDetails(500, e instanceof Error ? e.message : 'リクエスト処理エラー', {
+      caught: e,
+    })
   }
 }

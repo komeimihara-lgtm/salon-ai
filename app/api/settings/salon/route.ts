@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromApiRequest } from '@/lib/get-salon-id'
+import { getSalonIdFromApiRequest, getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { jsonErrorWithDetails, logPostgrestError } from '@/lib/postgrest-error-response'
 
 function logSettingsSalon(context: string, payload: Record<string, unknown>) {
   console.log('[settings/salon]', context, payload)
 }
 
 export async function GET(req: NextRequest) {
+  const fromCookieOnly = getSalonIdFromCookie()
   const salonId = getSalonIdFromApiRequest(req)
   logSettingsSalon('GET', {
-    salonIdLen: salonId.length,
-    salonIdSuffix: salonId ? salonId.slice(-8) : '',
+    getSalonIdFromCookie_len: fromCookieOnly.length,
+    getSalonIdFromCookie_suffix: fromCookieOnly ? fromCookieOnly.slice(-8) : '',
+    resolvedSalonId_len: salonId.length,
+    resolvedSalonId_suffix: salonId ? salonId.slice(-8) : '',
     hasCookieHeader: Boolean(req.headers.get('cookie')),
   })
   if (!salonId) {
@@ -23,7 +27,7 @@ export async function GET(req: NextRequest) {
     supabase = getSupabaseAdmin()
   } catch (e) {
     console.error('[settings/salon] GET Supabase init failed', e)
-    return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+    return jsonErrorWithDetails(500, 'サーバー設定エラー', { caught: e })
   }
 
   const { data: salon, error } = await supabase
@@ -35,13 +39,8 @@ export async function GET(req: NextRequest) {
     .maybeSingle()
 
   if (error) {
-    console.error('[settings/salon] GET salons query failed', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-    })
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    logPostgrestError('[settings/salon] GET salons query failed', error)
+    return jsonErrorWithDetails(500, error.message, { supabase: error })
   }
   if (!salon) {
     console.warn('[settings/salon] GET no row', { salonIdSuffix: salonId.slice(-8) })
@@ -66,10 +65,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const fromCookieOnly = getSalonIdFromCookie()
   const salonId = getSalonIdFromApiRequest(req)
   logSettingsSalon('PATCH', {
-    salonIdLen: salonId.length,
-    salonIdSuffix: salonId ? salonId.slice(-8) : '',
+    getSalonIdFromCookie_len: fromCookieOnly.length,
+    getSalonIdFromCookie_suffix: fromCookieOnly ? fromCookieOnly.slice(-8) : '',
+    resolvedSalonId_len: salonId.length,
+    resolvedSalonId_suffix: salonId ? salonId.slice(-8) : '',
   })
   if (!salonId) {
     logSettingsSalon('PATCH rejected', { reason: 'missing salon_id' })
@@ -81,7 +83,7 @@ export async function PATCH(req: NextRequest) {
     supabase = getSupabaseAdmin()
   } catch (e) {
     console.error('[settings/salon] PATCH Supabase init failed', e)
-    return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 })
+    return jsonErrorWithDetails(500, 'サーバー設定エラー', { caught: e })
   }
   const body = await req.json()
   const update: Record<string, unknown> = {}
@@ -105,12 +107,8 @@ export async function PATCH(req: NextRequest) {
     .eq('id', salonId)
     .select('id')
   if (error) {
-    console.error('[settings/salon] PATCH salons update failed', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-    })
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    logPostgrestError('[settings/salon] PATCH salons update failed', error)
+    return jsonErrorWithDetails(500, error.message, { supabase: error })
   }
   if (!updatedRows?.length) {
     console.warn('[settings/salon] PATCH no row updated', { salonIdSuffix: salonId.slice(-8) })
