@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { getSalonIdFromApiRequest } from '@/lib/get-salon-id'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
 import { addDaysToDateString, daysUntilExpiry, todayDateString } from '@/lib/customer-product-expiry'
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
  * 既定: 未通知のみ。ダッシュボード用に ?include_notified=1 で通知済みも含む
  */
 export async function GET(req: NextRequest) {
-  const salonId = getSalonIdFromCookie()
+  const salonId = getSalonIdFromApiRequest(req)
   if (!salonId) {
     return NextResponse.json({ error: 'サロン未選択です' }, { status: 401 })
   }
@@ -47,7 +47,9 @@ export async function GET(req: NextRequest) {
   const { data: rows, error } = await q
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    // テーブル未作成などの場合は空配列を返す
+    console.error('expiry-alerts query error:', error.message)
+    return NextResponse.json({ alerts: [], today })
   }
 
   type Rel<T> = T | T[] | null

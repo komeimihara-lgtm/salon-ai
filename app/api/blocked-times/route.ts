@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { getSalonIdFromApiRequest } from '@/lib/get-salon-id'
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const start = searchParams.get('start')
     const end = searchParams.get('end')
-    const salonId = getSalonIdFromCookie()
+    const salonId = getSalonIdFromApiRequest(req)
 
     let query = getSupabaseAdmin()
       .from('blocked_times')
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '必須項目が不足しています' }, { status: 400 })
     }
 
-    const salonId = getSalonIdFromCookie()
+    const salonId = getSalonIdFromApiRequest(req)
     const { data, error } = await getSupabaseAdmin()
       .from('blocked_times')
       .insert({
@@ -63,7 +63,7 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'idが必要です' }, { status: 400 })
 
-    const salonId = getSalonIdFromCookie()
+    const salonId = getSalonIdFromApiRequest(req)
     const { error } = await getSupabaseAdmin()
       .from('blocked_times')
       .delete()
