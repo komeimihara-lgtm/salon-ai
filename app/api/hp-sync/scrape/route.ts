@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { getSalonIdFromApiRequest } from '@/lib/get-salon-id'
+import { resolveSalonIdForOwnerApi } from '@/lib/resolve-salon-id-api'
 import { decryptSecret } from '@/lib/hp-sync/crypto'
 import { callScraperService } from '@/lib/hp-sync/scraper-client'
 import { importReservation, scrapedToImport } from '@/lib/hp-sync/import'
@@ -22,14 +23,17 @@ import { canScrapeNow, markScraped, humanJitter } from '@/lib/hp-sync/rate-limit
 
 export const maxDuration = 60
 
-function resolveSalonId(req: NextRequest, body: Record<string, unknown>): string | null {
+async function resolveSalonId(req: NextRequest, body: Record<string, unknown>): Promise<string | null> {
   const internalSecret = process.env.HP_INTERNAL_TRIGGER_SECRET
   const header = req.headers.get('x-internal-trigger')
   if (internalSecret && header === internalSecret && typeof body.salonId === 'string') {
     return body.salonId
   }
-  const fromCookie = getSalonIdFromCookie()
-  return fromCookie || null
+  // Prefer the owner-session resolver; fall back to cookie-only.
+  const fromOwner = await resolveSalonIdForOwnerApi(req).catch(() => '')
+  if (fromOwner) return fromOwner
+  const fromReq = getSalonIdFromApiRequest(req)
+  return fromReq || null
 }
 
 export async function POST(req: NextRequest) {
@@ -42,7 +46,7 @@ export async function POST(req: NextRequest) {
     // empty body is fine
   }
 
-  const salonId = resolveSalonId(req, body)
+  const salonId = await resolveSalonId(req, body)
   if (!salonId) return NextResponse.json({ error: 'salon_id missing' }, { status: 400 })
 
   // Rate limit (5 min minimum between scrapes per salon)

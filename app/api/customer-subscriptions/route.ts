@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { overwriteSaleCustomerNamesFromDb } from '@/lib/sale-customer-display'
 
 const PAYMENT_METHODS = ['cash', 'card', 'online', 'loan'] as const
 
@@ -99,6 +100,9 @@ export async function POST(req: NextRequest) {
     // 売上計上（record_sale が true の場合）
     if (record_sale !== false && Number(price) > 0) {
       const saleType = PAYMENT_METHODS.includes(payment_method as (typeof PAYMENT_METHODS)[number]) ? payment_method : 'card'
+      const saleNameRow = [{ customer_id, customer_name: customer_name || null }]
+      await overwriteSaleCustomerNamesFromDb(getSupabaseAdmin(), salonId, saleNameRow)
+      const resolvedCustomerName = (saleNameRow[0].customer_name as string | null) ?? customer_name ?? null
       await getSupabaseAdmin()
         .from('sales')
         .insert({
@@ -106,9 +110,10 @@ export async function POST(req: NextRequest) {
           sale_date: started_at,
           amount: Number(price),
           customer_id,
-          customer_name: customer_name || null,
+          customer_name: resolvedCustomerName,
           memo: `${plan_name} 加入`,
           sale_type: saleType,
+          status: 'active',
         })
     }
 

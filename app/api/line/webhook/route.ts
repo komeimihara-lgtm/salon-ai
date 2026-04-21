@@ -1,17 +1,10 @@
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
 import { getSupabaseAdmin } from '@/lib/supabase'
+import { resolveSalonByLineSignature } from '@/lib/line-webhook-salon'
 import Anthropic from '@anthropic-ai/sdk'
 import { recalcCustomerAfterCancel } from '@/lib/recalc-customer'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-
-// LINE署名検証
-function verifySignature(body: string, signature: string, secret: string): boolean {
-  const hash = crypto.createHmac('sha256', secret).update(body).digest('base64')
-  return hash === signature
-}
 
 async function replyMessage(replyToken: string, text: string, accessToken: string) {
   await fetch('https://api.line.me/v2/bot/message/reply', {
@@ -83,7 +76,6 @@ function buildCancelConfirmFlex(reservation: { reservation_date: string; start_t
 }
 
 export async function POST(req: NextRequest) {
-  const salonId = getSalonIdFromCookie()
   try {
     const rawBody = await req.text()
     const signature = req.headers.get('x-line-signature') || ''
@@ -94,24 +86,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    // サロンのシークレットを取得
     const supabase = getSupabaseAdmin()
-    const { data: salon } = await supabase
-      .from('salons')
-      .select('line_channel_access_token, line_channel_secret, name')
-      .eq('id', salonId)
-      .single()
-
-    if (!salon?.line_channel_secret) {
-      return NextResponse.json({ error: 'LINE設定なし' }, { status: 400 })
+    const salonRow = await resolveSalonByLineSignature(supabase, rawBody, signature)
+    if (!salonRow?.line_channel_secret) {
+      return NextResponse.json({ error: 'LINE設定なしまたは署名不一致' }, { status: 401 })
     }
 
+    const salonId = salonRow.id
+    const salon = {
+      line_channel_access_token: salonRow.line_channel_access_token,
+      line_channel_secret: salonRow.line_channel_secret,
+      name: salonRow.name,
+    }
     const accessToken = salon.line_channel_access_token || ''
-
-    // 署名検証
-    if (!verifySignature(rawBody, signature, salon.line_channel_secret)) {
-      return NextResponse.json({ error: '署名検証失敗' }, { status: 401 })
-    }
 
     const events = body.events || []
 
@@ -126,7 +113,7 @@ export async function POST(req: NextRequest) {
             line_user_id: lineUserId,
             followed_at: new Date().toISOString(),
             salon_id: salonId,
-          }, { onConflict: 'line_user_id' })
+          }, { onConflict: 'salon_id,line_user_id' })
 
           // 歓迎メッセージを送信
           if (accessToken) {

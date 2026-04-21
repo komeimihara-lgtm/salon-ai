@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { resolveSalonIdForOwnerApi } from '@/lib/resolve-salon-id-api'
 import { encryptSecret, decryptSecret, maskSecret } from '@/lib/hp-sync/crypto'
 
 /**
@@ -13,9 +13,9 @@ import { encryptSecret, decryptSecret, maskSecret } from '@/lib/hp-sync/crypto'
  *   Saves credentials (encrypted). Empty string hp_password clears it.
  */
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const salonId = getSalonIdFromCookie()
+    const salonId = await resolveSalonIdForOwnerApi(req)
     if (!salonId) return NextResponse.json({ error: 'salon_id missing' }, { status: 400 })
 
     const supabase = getSupabaseAdmin()
@@ -51,7 +51,7 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const salonId = getSalonIdFromCookie()
+    const salonId = await resolveSalonIdForOwnerApi(req)
     if (!salonId) return NextResponse.json({ error: 'salon_id missing' }, { status: 400 })
 
     const body = await req.json()

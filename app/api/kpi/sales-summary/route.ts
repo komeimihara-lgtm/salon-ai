@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
 
 /**
  * 売上サマリー取得
@@ -24,6 +25,7 @@ export async function GET(req: NextRequest) {
         .from('sales')
         .select('amount, sale_type')
         .eq('salon_id', getSalonIdFromCookie())
+        .eq('status', ACTIVE_SALE_STATUS)
         .gte('sale_date', start)
         .lte('sale_date', end)
 

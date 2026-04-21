@@ -1,14 +1,14 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { resolveSalonIdForOwnerApi } from '@/lib/resolve-salon-id-api'
 
 /**
  * GET /api/hp-sync/logs
  *   Returns the 10 most recent sync log rows for the current salon.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const salonId = getSalonIdFromCookie()
+    const salonId = await resolveSalonIdForOwnerApi(req)
     if (!salonId) return NextResponse.json({ logs: [] })
 
     const { data, error } = await getSupabaseAdmin()

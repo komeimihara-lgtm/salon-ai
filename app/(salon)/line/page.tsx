@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { MessageCircle, Loader2, Copy, Check, ArrowRight } from 'lucide-react'
+import { Loader2, Copy, Check, ArrowRight, Users } from 'lucide-react'
 
 export default function LinePage() {
   const [channelSecret, setChannelSecret] = useState('')
@@ -14,6 +14,9 @@ export default function LinePage() {
   const [testing, setTesting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [copied, setCopied] = useState(false)
+  const [unmatchedUsers, setUnmatchedUsers] = useState<{ line_user_id: string; followed_at: string }[]>([])
+  const [unmatchedLoading, setUnmatchedLoading] = useState(false)
+  const [copiedLineId, setCopiedLineId] = useState<string | null>(null)
 
   const webhookUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/api/line/webhook`
@@ -37,6 +40,33 @@ export default function LinePage() {
   }
 
   useEffect(() => { checkStatus() }, [])
+
+  async function loadUnmatchedLineUsers() {
+    setUnmatchedLoading(true)
+    try {
+      const res = await fetch('/api/line/unmatched')
+      const data = await res.json()
+      setUnmatchedUsers(Array.isArray(data.users) ? data.users : [])
+    } catch {
+      setUnmatchedUsers([])
+    } finally {
+      setUnmatchedLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadUnmatchedLineUsers()
+  }, [])
+
+  async function copyLineUserId(lineUserId: string) {
+    try {
+      await navigator.clipboard.writeText(lineUserId)
+      setCopiedLineId(lineUserId)
+      setTimeout(() => setCopiedLineId(null), 2000)
+    } catch {
+      setMessage({ type: 'error', text: 'User ID のコピーに失敗しました' })
+    }
+  }
 
   async function handleVerify() {
     setMessage(null)
@@ -137,6 +167,71 @@ export default function LinePage() {
               {copied ? 'コピーしました' : 'コピー'}
             </button>
           </div>
+        </div>
+
+        {/* 未紐付けのLINE友だち（顧客カードで紐付け可能） */}
+        <div className="bg-white border border-[#E8E0F0] rounded-xl p-4 card-shadow">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h2 className="text-sm font-bold text-text-main flex items-center gap-2">
+              <Users className="w-4 h-4 text-rose" />
+              LINE友だち（未紐付け）
+            </h2>
+            <button
+              type="button"
+              onClick={() => loadUnmatchedLineUsers()}
+              disabled={unmatchedLoading}
+              className="text-xs text-rose font-medium hover:underline disabled:opacity-50"
+            >
+              {unmatchedLoading ? '更新中…' : '更新'}
+            </button>
+          </div>
+          <p className="text-xs text-text-sub mb-3">
+            友だち追加済みで、まだ顧客とLINEがつながっていない方の一覧です。
+            <Link href="/customers" className="text-rose font-medium ml-1 hover:underline">
+              顧客一覧
+            </Link>
+            から該当顧客を開き、詳細画面で紐付けてください。
+          </p>
+          {unmatchedLoading && unmatchedUsers.length === 0 ? (
+            <div className="flex items-center justify-center py-8 text-text-sub">
+              <Loader2 className="w-6 h-6 animate-spin text-rose" />
+            </div>
+          ) : unmatchedUsers.length === 0 ? (
+            <p className="text-sm text-text-sub text-center py-6">未紐付けの友だちはいません</p>
+          ) : (
+            <ul className="space-y-2 max-h-56 overflow-y-auto">
+              {unmatchedUsers.map(u => (
+                <li
+                  key={u.line_user_id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-[#FAFAFA] px-3 py-2 text-xs"
+                >
+                  <div className="min-w-0 flex-1">
+                    <code className="block truncate text-[#1A202C] font-mono">{u.line_user_id}</code>
+                    <span className="text-text-sub">
+                      {u.followed_at
+                        ? new Date(u.followed_at).toLocaleString('ja-JP', {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          })
+                        : ''}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => copyLineUserId(u.line_user_id)}
+                    className="shrink-0 flex items-center gap-1 rounded-lg border border-[#BAE6FD] bg-white px-2 py-1.5 text-text-main hover:bg-[#F0F9FF]"
+                  >
+                    {copiedLineId === u.line_user_id ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                    コピー
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* 入力フォーム */}

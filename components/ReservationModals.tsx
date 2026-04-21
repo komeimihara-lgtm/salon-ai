@@ -88,15 +88,26 @@ export function EditReservationModal({ reservation, onClose, onSaved }: { reserv
     start_time: reservation.start_time?.slice(0, 5) || '10:00',
     end_time: reservation.end_time?.slice(0, 5) || '11:00',
     staff_name: reservation.staff_name || '',
+    bed_id: reservation.bed_id || '',
     price: String(reservation.price || 0),
     memo: reservation.memo || '',
   })
   const [menuItems, setMenuItems] = useState<MenuItemSimple[]>([])
+  const [beds, setBeds] = useState<string[]>(['A', 'B'])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     fetch('/api/menus').then(r => r.json()).then(j => setMenuItems(j.menus || [])).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/settings/salon')
+      .then(r => r.json())
+      .then(j => {
+        if (Array.isArray(j.beds) && j.beds.length > 0) setBeds(j.beds)
+      })
+      .catch(() => {})
   }, [])
 
   async function handleSubmit() {
@@ -113,6 +124,7 @@ export function EditReservationModal({ reservation, onClose, onSaved }: { reserv
           start_time: form.start_time,
           end_time: form.end_time,
           staff_name: form.staff_name,
+          bed_id: form.bed_id || null,
           price: parseInt(form.price) || 0,
           memo: form.memo,
         }),
@@ -197,6 +209,19 @@ export function EditReservationModal({ reservation, onClose, onSaved }: { reserv
             <label className="text-xs text-text-sub mb-1 block">担当スタッフ</label>
             <input value={form.staff_name} onChange={e => setForm(p => ({ ...p, staff_name: e.target.value }))}
               className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-rose outline-none" placeholder="田中" />
+          </div>
+          <div>
+            <label className="text-xs text-text-sub mb-1 block">ベッド</label>
+            <select
+              value={form.bed_id}
+              onChange={e => setForm(p => ({ ...p, bed_id: e.target.value }))}
+              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-rose outline-none"
+            >
+              <option value="">未指定</option>
+              {beds.map(b => (
+                <option key={b} value={b}>ベッド{b}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="text-xs text-text-sub mb-1 block">金額（円）</label>

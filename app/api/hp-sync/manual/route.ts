@@ -1,5 +1,5 @@
-import { NextResponse } from 'next/server'
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { NextRequest, NextResponse } from 'next/server'
+import { resolveSalonIdForOwnerApi } from '@/lib/resolve-salon-id-api'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { decryptSecret } from '@/lib/hp-sync/crypto'
 import { callScraperService } from '@/lib/hp-sync/scraper-client'
@@ -17,10 +17,10 @@ import { markScraped, humanJitter } from '@/lib/hp-sync/rate-limit'
 
 export const maxDuration = 60
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const started = Date.now()
   try {
-  const salonId = getSalonIdFromCookie()
+  const salonId = await resolveSalonIdForOwnerApi(req)
   if (!salonId) return NextResponse.json({ error: 'salon_id missing' }, { status: 400 })
 
   const supabase = getSupabaseAdmin()

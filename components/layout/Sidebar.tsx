@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { SolaNavLogo } from '@/components/SolaNavLogo'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -19,6 +20,8 @@ import {
   Smartphone,
   BarChart2,
   BookOpen,
+  Timer,
+  PieChart,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -34,6 +37,9 @@ const NAV_ITEMS = [
   { href: '/counseling', icon: MessageCircle, label: 'AIカウンセリング' },
   { href: '/menu', icon: UtensilsCrossed, label: 'メニュー設定' },
   { href: '/staff', icon: UserCog, label: 'スタッフ管理' },
+  { href: '/attendance', icon: Timer, label: 'タイムカード' },
+  { href: '/attendance/manage', icon: Timer, label: '勤怠管理' },
+  { href: '/staff/sales', icon: PieChart, label: 'スタッフ売上' },
   { href: '/settings', icon: Settings, label: 'サロン設定' },
   { href: '/line', icon: Smartphone, label: 'LINE連携' },
   { href: '/qa-chat', icon: MessageSquare, label: 'Q&Aチャット' },
@@ -46,11 +52,14 @@ export default function Sidebar() {
   return (
     <aside className="w-60 min-h-screen bg-white border-r border-[#E8E0F0] flex flex-col shrink-0">
       <div className="p-5 border-b border-[#E8E0F0]">
-        <Link href="/dashboard" className="block">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] bg-clip-text text-transparent">
-            SOLA
-          </h1>
-          <p className="text-[10px] text-[#6B7280] mt-0.5 tracking-wider">AI SALON MANAGER</p>
+        <Link href="/dashboard" className="flex min-w-0 items-center gap-3">
+          <SolaNavLogo size="md" lightBackdrop={false} />
+          <div className="min-w-0 flex-1 leading-tight">
+            <h1 className="truncate text-xl font-bold leading-tight bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] bg-clip-text text-transparent">
+              SOLA
+            </h1>
+            <p className="mt-0.5 truncate text-[10px] tracking-wider text-[#6B7280]">AI SALON MANAGER</p>
+          </div>
         </Link>
       </div>
       <nav className="flex-1 py-4 overflow-y-auto">

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
+import { pickSaleCustomerDisplayName } from '@/lib/sale-customer-display'
 
 /**
  * 日別売上明細取得
@@ -29,6 +31,7 @@ export async function GET(req: NextRequest) {
       .from('sales')
       .select('id, sale_date, amount, customer_id, customer_name, menu, staff_name, payment_method, sale_type, ticket_id, created_at, customers(name)')
       .eq('salon_id', salonId)
+      .eq('status', ACTIVE_SALE_STATUS)
       .eq('sale_date', date)
       .order('created_at', { ascending: true })
 
@@ -42,12 +45,8 @@ export async function GET(req: NextRequest) {
       : sales.filter(s => s.sale_type === 'ticket_consume' || s.sale_type === 'subscription_consume')
 
     const getCustomerName = (s: Record<string, unknown>) => {
-      const cn = s.customer_name
-      if (cn && typeof cn === 'string') return cn
-      const cust = s.customers
-      if (cust && typeof cust === 'object' && !Array.isArray(cust) && 'name' in cust) return String((cust as { name?: unknown }).name ?? '-')
-      if (Array.isArray(cust) && cust[0] && typeof cust[0] === 'object' && 'name' in cust[0]) return String((cust[0] as { name?: unknown }).name ?? '-')
-      return '-'
+      const d = pickSaleCustomerDisplayName(s)
+      return d === '—' ? '-' : d
     }
 
     if (type === 'consume' && filtered.some(s => s.ticket_id)) {

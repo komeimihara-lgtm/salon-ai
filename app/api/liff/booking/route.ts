@@ -1,11 +1,20 @@
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { parseSalonIdQueryValue } from '@/lib/salon-id-format'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
-  const salonId = getSalonIdFromCookie()
   const supabase = getSupabaseAdmin()
   const body = await req.json()
+  const salonId = parseSalonIdQueryValue(body.salon_id)
+  if (!salonId) {
+    return NextResponse.json({ error: 'salon_id が必要です（有効なUUID）' }, { status: 400 })
+  }
+
+  const { data: salonExists } = await supabase.from('salons').select('id, line_channel_access_token').eq('id', salonId).maybeSingle()
+  if (!salonExists) {
+    return NextResponse.json({ error: 'サロンが見つかりません' }, { status: 404 })
+  }
+
   const {
     line_user_id,
     display_name,
@@ -62,6 +71,8 @@ export async function POST(req: NextRequest) {
     customer = newCustomer
   }
 
+  const isCourse = body.is_course || false
+
   // 予約を登録
   const { data: reservation, error } = await supabase
     .from('reservations')
@@ -76,18 +87,23 @@ export async function POST(req: NextRequest) {
       menu: menu_name,
       staff_name,
       bed_id: bed_id || null,
-      price: price || 0,
+      price: isCourse ? 0 : (price || 0),
       duration_minutes: duration || 60,
       memo: memo || '',
       status: 'confirmed',
+      is_course: isCourse,
+      ticket_id: body.ticket_id || null,
+      subscription_id: body.subscription_id || null,
     })
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // LINE確認メッセージ送信
-  if (line_user_id && process.env.LINE_CHANNEL_ACCESS_TOKEN) {
+  const lineToken = salonExists.line_channel_access_token || process.env.LINE_CHANNEL_ACCESS_TOKEN
+
+  // LINE確認メッセージ送信（サロンごとのトークン優先）
+  if (line_user_id && lineToken) {
     try {
       const dateObj = new Date(date + 'T00:00:00')
       const weekdays = ['日', '月', '火', '水', '木', '金', '土']
@@ -97,13 +113,13 @@ export async function POST(req: NextRequest) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+          'Authorization': `Bearer ${lineToken}`,
         },
         body: JSON.stringify({
           to: line_user_id,
           messages: [{
             type: 'text',
-            text: `✅ ご予約が確定しました！\n\n📋 ${menu_name}\n📅 ${dateLabel}\n⏰ ${start_time}〜${end_time}\n${staff_name ? `👤 担当：${staff_name}\n` : ''}💴 料金：¥${(price ?? 0).toLocaleString()}\n\n${memo ? `📝 ${memo}\n\n` : ''}ご来店をお待ちしております✨\n\n「予約確認」と送っていただくといつでもご予約内容を確認できます😊`
+            text: `✅ ご予約が確定しました！\n\n📋 ${menu_name}\n📅 ${dateLabel}\n⏰ ${start_time}〜${end_time}\n${staff_name ? `👤 担当：${staff_name}\n` : ''}💴 ${isCourse ? 'コース消化（¥0）' : `料金：¥${(price ?? 0).toLocaleString()}`}\n\n${memo ? `📝 ${memo}\n\n` : ''}ご来店をお待ちしております✨\n\n「予約確認」と送っていただくといつでもご予約内容を確認できます😊`
           }]
         })
       })

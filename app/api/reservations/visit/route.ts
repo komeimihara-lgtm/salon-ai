@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { overwriteSaleCustomerNamesFromDb } from '@/lib/sale-customer-display'
 
-/** 来店処理: ステータスを visited に変更、回数券があれば消化、sales に計上 */
+/**
+ * 来店処理: ステータスを visited に変更。
+ * sales への自動計上は ticket_consume / subscription_consume のみ（着金はレジ登録のみ）。
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -10,12 +14,13 @@ export async function POST(req: NextRequest) {
     if (!id) return NextResponse.json({ error: 'id が必要です' }, { status: 400 })
 
     const supabase = getSupabaseAdmin()
+    const salonId = getSalonIdFromCookie()
 
     const { data: reservation, error: fetchErr } = await supabase
       .from('reservations')
       .select('*')
       .eq('id', id)
-      .eq('salon_id', getSalonIdFromCookie())
+      .eq('salon_id', salonId)
       .single()
 
     if (fetchErr || !reservation) {
@@ -25,69 +30,142 @@ export async function POST(req: NextRequest) {
     const customerId = reservation.customer_id ?? ''
     const customerName = reservation.customer_name ?? ''
     const menu = reservation.menu ?? ''
-    const price = Number(reservation.price ?? 0)
+
+    const visitNameRow = [{ customer_id: customerId || null, customer_name: customerName || null }]
+    await overwriteSaleCustomerNamesFromDb(supabase, salonId, visitNameRow)
+    const saleCustomerName =
+      (typeof visitNameRow[0].customer_name === 'string' && visitNameRow[0].customer_name) ||
+      customerName ||
+      null
     const reservationDate = reservation.reservation_date
+    const ticketId = reservation.ticket_id as string | null | undefined
+    const subscriptionId = reservation.subscription_id as string | null | undefined
 
-    // 回数券を検索（customer_tickets）— 期限が近い順に消化
-    const { data: tickets } = await supabase
-      .from('customer_tickets')
-      .select('id, customer_id, menu_name, remaining_sessions, unit_price, ticket_plan_id, expiry_date, customers(name)')
-      .eq('salon_id', getSalonIdFromCookie())
-      .gt('remaining_sessions', 0)
-      .order('expiry_date', { ascending: true, nullsFirst: false })
+    // ticket_id が付いていれば is_course フラグに依存せず回数券消化（UI/APIの不整合を吸収）
+    if (ticketId) {
+      // --- コース消化: 回数券 ---
+      const { data: ticket } = await supabase
+        .from('customer_tickets')
+        .select('id, remaining_sessions, unit_price, ticket_plan_id, plan_name, salon_id')
+        .eq('id', ticketId)
+        .eq('salon_id', salonId)
+        .maybeSingle()
 
-    const matchingTicket = (tickets || []).find((t: Record<string, unknown>) => {
-      const cust = t.customers as { name?: string } | { name?: string }[] | null | undefined
-      const tName = Array.isArray(cust) ? cust[0]?.name : cust?.name
-      return (t.customer_id === customerId || (tName && tName === customerName)) &&
-        (t.menu_name === menu || !menu)
-    })
-
-    if (matchingTicket) {
-      const newRemaining = Number(matchingTicket.remaining_sessions ?? 0) - 1
-      let unitPrice = matchingTicket.unit_price != null ? Number(matchingTicket.unit_price) : null
-      if (unitPrice == null && matchingTicket.ticket_plan_id) {
-        const { data: plan } = await supabase
-          .from('ticket_plans')
-          .select('price, total_sessions')
-          .eq('id', matchingTicket.ticket_plan_id)
-          .single()
-        if (plan && plan.total_sessions > 0) {
-          unitPrice = Math.round(Number(plan.price) / Number(plan.total_sessions))
+      const remaining = Number(ticket?.remaining_sessions ?? 0)
+      if (ticket && remaining > 0) {
+        const newRemaining = remaining - 1
+        let unitPrice = ticket.unit_price != null ? Number(ticket.unit_price) : null
+        if (unitPrice == null && ticket.ticket_plan_id) {
+          const { data: plan } = await supabase
+            .from('ticket_plans')
+            .select('price, total_sessions')
+            .eq('id', ticket.ticket_plan_id)
+            .single()
+          if (plan && plan.total_sessions > 0) {
+            unitPrice = Math.round(Number(plan.price) / Number(plan.total_sessions))
+          }
         }
-      }
-      if (unitPrice == null) unitPrice = 0
+        if (unitPrice == null) unitPrice = 0
 
-      const ticketUpdate: Record<string, unknown> = { remaining_sessions: newRemaining }
-      if (newRemaining === 0) ticketUpdate.status = 'expired'
-      await supabase.from('customer_tickets').update(ticketUpdate).eq('id', matchingTicket.id)
+        const ticketUpdate: Record<string, unknown> = { remaining_sessions: newRemaining }
+        if (newRemaining === 0) ticketUpdate.status = 'expired'
+        await supabase.from('customer_tickets').update(ticketUpdate).eq('id', ticketId)
 
-      await supabase.from('sales').insert({
-        salon_id: getSalonIdFromCookie(),
-        sale_date: reservationDate,
-        amount: unitPrice,
-        customer_id: customerId || null,
-        customer_name: customerName,
-        sale_type: 'ticket_consume',
-        ticket_id: matchingTicket.id,
-        memo: `予約来店: ${menu || '施術'}（残${newRemaining}回）`,
-      })
-    } else {
-      // 都度払い: 消化売上を計上
-      const amount = price > 0 ? price : 0
-      if (amount > 0) {
         await supabase.from('sales').insert({
-          salon_id: getSalonIdFromCookie(),
+          salon_id: salonId,
           sale_date: reservationDate,
-          amount,
+          amount: unitPrice,
           customer_id: customerId || null,
-          customer_name: customerName,
+          customer_name: saleCustomerName,
+          sale_type: 'ticket_consume',
+          ticket_id: ticketId,
           menu: menu || null,
           staff_name: reservation.staff_name || null,
-          sale_type: 'cash',
-          memo: `予約来店: ${menu || '施術'}`,
+          memo: `コース消化: ${ticket.plan_name || menu || '施術'}（残${newRemaining}回）`,
+          status: 'active',
         })
       }
+    } else if (subscriptionId) {
+      // --- コース消化: サブスク ---
+      const { data: sub } = await supabase
+        .from('customer_subscriptions')
+        .select('id, sessions_used_in_period, plan_name, price, sessions_per_month, salon_id')
+        .eq('id', subscriptionId)
+        .eq('salon_id', salonId)
+        .maybeSingle()
+
+      if (sub) {
+        const newUsed = (sub.sessions_used_in_period || 0) + 1
+        await supabase
+          .from('customer_subscriptions')
+          .update({ sessions_used_in_period: newUsed })
+          .eq('id', subscriptionId)
+
+        const unitPrice = sub.sessions_per_month > 0
+          ? Math.round(Number(sub.price) / sub.sessions_per_month)
+          : 0
+
+        await supabase.from('sales').insert({
+          salon_id: salonId,
+          sale_date: reservationDate,
+          amount: unitPrice,
+          customer_id: customerId || null,
+          customer_name: saleCustomerName,
+          sale_type: 'subscription_consume',
+          menu: menu || null,
+          staff_name: reservation.staff_name || null,
+          memo: `サブスク消化: ${sub.plan_name || menu || '施術'}（今月${newUsed}/${sub.sessions_per_month}回）`,
+          status: 'active',
+        })
+      }
+    } else {
+      // --- 通常予約: 回数券が自動マッチした場合のみ ticket_consume（都度払いの着金はレジのみ） ---
+      const { data: tickets } = await supabase
+        .from('customer_tickets')
+        .select('id, customer_id, menu_name, remaining_sessions, unit_price, ticket_plan_id, expiry_date, customers(name)')
+        .eq('salon_id', salonId)
+        .gt('remaining_sessions', 0)
+        .order('expiry_date', { ascending: true, nullsFirst: false })
+
+      const matchingTicket = (tickets || []).find((t: Record<string, unknown>) => {
+        const cust = t.customers as { name?: string } | { name?: string }[] | null | undefined
+        const tName = Array.isArray(cust) ? cust[0]?.name : cust?.name
+        return (t.customer_id === customerId || (tName && tName === customerName)) &&
+          (t.menu_name === menu || !menu)
+      })
+
+      if (matchingTicket) {
+        const newRemaining = Number(matchingTicket.remaining_sessions ?? 0) - 1
+        let unitPrice = matchingTicket.unit_price != null ? Number(matchingTicket.unit_price) : null
+        if (unitPrice == null && matchingTicket.ticket_plan_id) {
+          const { data: plan } = await supabase
+            .from('ticket_plans')
+            .select('price, total_sessions')
+            .eq('id', matchingTicket.ticket_plan_id)
+            .single()
+          if (plan && plan.total_sessions > 0) {
+            unitPrice = Math.round(Number(plan.price) / Number(plan.total_sessions))
+          }
+        }
+        if (unitPrice == null) unitPrice = 0
+
+        const ticketUpdate: Record<string, unknown> = { remaining_sessions: newRemaining }
+        if (newRemaining === 0) ticketUpdate.status = 'expired'
+        await supabase.from('customer_tickets').update(ticketUpdate).eq('id', matchingTicket.id)
+
+        await supabase.from('sales').insert({
+          salon_id: salonId,
+          sale_date: reservationDate,
+          amount: unitPrice,
+          customer_id: customerId || null,
+          customer_name: saleCustomerName,
+          sale_type: 'ticket_consume',
+          ticket_id: matchingTicket.id,
+          memo: `予約来店: ${menu || '施術'}（残${newRemaining}回）`,
+          status: 'active',
+        })
+      }
+      // 都度払い・マッチなし: sales には書かない（着金は /sales レジで計上）
     }
 
     const { data: updated, error: updateErr } = await supabase

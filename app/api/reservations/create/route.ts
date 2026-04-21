@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
         .eq('reservation_date', reservation_date)
         .eq('bed_id', bed_id)
         .neq('status', 'cancelled')
+        .neq('status', 'no_show')
         .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`)
 
       if (bedConflict && bedConflict.length > 0) {
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
         .eq('reservation_date', reservation_date)
         .eq('staff_name', staff_name)
         .neq('status', 'cancelled')
+        .neq('status', 'no_show')
         .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`)
 
       if (staffConflict && staffConflict.length > 0) {
@@ -65,24 +67,60 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // --- 重複チェック3: 同一顧客の時間重複（ダブルブッキング防止） ---
+    const customerIdForDup = body.customer_id || null
+    const customerNameTrim = String(body.customer_name || '').trim()
+    let customerDupQuery = supabase
+      .from('reservations')
+      .select('id, customer_name, start_time, end_time')
+      .eq('salon_id', salonId)
+      .eq('reservation_date', reservation_date)
+      .neq('status', 'cancelled')
+      .neq('status', 'no_show')
+      .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`)
+
+    if (customerIdForDup) {
+      customerDupQuery = customerDupQuery.eq('customer_id', customerIdForDup)
+    } else {
+      customerDupQuery = customerDupQuery.eq('customer_name', customerNameTrim)
+    }
+
+    const { data: customerDup } = await customerDupQuery.limit(1)
+    if (customerDup && customerDup.length > 0) {
+      const c = customerDup[0]
+      return NextResponse.json(
+        {
+          error: `このお客様は ${c.start_time}〜${c.end_time} に既に予約があります。別の時間を選ぶか、既存予約を変更してください。`,
+          conflict: c,
+          conflictType: 'customer',
+        },
+        { status: 409 }
+      )
+    }
+
+    const insertData: Record<string, unknown> = {
+      salon_id: salonId,
+      customer_id: body.customer_id || null,
+      customer_name: body.customer_name,
+      customer_phone: body.customer_phone || null,
+      reservation_date,
+      start_time,
+      end_time,
+      menu: body.menu || null,
+      staff_name,
+      price: body.is_course ? 0 : (body.price || 0),
+      status: 'confirmed',
+      memo: body.memo || null,
+      bed_id,
+      duration_minutes: durationMin,
+      is_course: body.is_course || false,
+      ticket_id: body.ticket_id || null,
+      subscription_id: body.subscription_id || null,
+    }
+
     const { data, error } = await supabase
       .from('reservations')
-      .insert({
-        salon_id: salonId,
-        customer_id: body.customer_id || null,
-        customer_name: body.customer_name,
-        customer_phone: body.customer_phone || null,
-        reservation_date,
-        start_time,
-        end_time,
-        menu: body.menu || null,
-        staff_name,
-        price: body.price || 0,
-        status: 'confirmed',
-        memo: body.memo || null,
-        bed_id,
-        duration_minutes: durationMin,
-      })
+      .insert(insertData)
       .select()
       .single()
 

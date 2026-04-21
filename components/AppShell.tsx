@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { SolaNavLogo } from '@/components/SolaNavLogo'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
@@ -30,6 +31,8 @@ import {
   ChevronDown,
   ChevronRight,
   LogOut,
+  Fingerprint,
+  BarChart3,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
@@ -74,7 +77,11 @@ const NAV_ITEMS: NavItem[] = [
   { type: 'link', href: '/products', icon: Package, label: '商品管理' },
   { type: 'link', href: '/courses', icon: Ticket, label: '回数券管理' },
   { type: 'link', href: '/subscriptions', icon: Repeat, label: 'サブスク管理' },
+  { type: 'link', href: '/contracts', icon: FileText, label: '契約書' },
   { type: 'link', href: '/staff', icon: Clock, label: 'スタッフ管理' },
+  { type: 'link', href: '/attendance', icon: Fingerprint, label: 'タイムカード' },
+  { type: 'link', href: '/attendance/manage', icon: Clock, label: '勤怠管理' },
+  { type: 'link', href: '/staff/sales', icon: BarChart3, label: 'スタッフ売上' },
   { type: 'link', href: '/settings', icon: Settings, label: 'サロン設定' },
 ]
 
@@ -149,9 +156,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen flex">
       {/* サイドバー - PC */}
       <aside className="hidden lg:flex lg:w-[240px] lg:flex-col lg:fixed lg:inset-y-0 bg-deep z-30">
-        <div className="flex flex-col justify-center h-16 px-6 border-b border-white/10">
-          <span className="font-serif-jp text-xl font-bold text-white">SOLA</span>
-          <span className="text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
+        <div className="flex h-16 min-h-16 shrink-0 items-center gap-3 px-6 border-b border-white/10">
+          <SolaNavLogo size="sm" lightBackdrop />
+          <div className="flex min-w-0 flex-1 flex-col justify-center leading-tight">
+            <span className="truncate font-serif-jp text-xl font-bold text-white">SOLA</span>
+            <span className="truncate text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
+          </div>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
@@ -266,10 +276,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="flex items-center justify-between h-16 px-6 border-b border-white/10">
-          <div className="flex flex-col">
-            <span className="font-serif-jp text-xl font-bold text-white">SOLA</span>
-            <span className="text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
+        <div className="flex h-16 min-h-16 shrink-0 items-center justify-between px-6 border-b border-white/10">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <SolaNavLogo size="sm" lightBackdrop />
+            <div className="flex min-w-0 flex-1 flex-col leading-tight">
+              <span className="truncate font-serif-jp text-xl font-bold text-white">SOLA</span>
+              <span className="truncate text-[10px] text-white/80 tracking-wider">AI SALON MANAGER</span>
+            </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="p-2 text-white/80">
             <X className="w-5 h-5" />

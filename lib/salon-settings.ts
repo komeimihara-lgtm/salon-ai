@@ -13,6 +13,10 @@ export interface BusinessHours {
 export interface SalonSettings {
   salonName: string
   address: string
+  /** 郵便番号（表示用、ハイフンあり推奨） */
+  postalCode: string
+  /** 店舗連絡メール（クーリングオフ受付等） */
+  email: string
   phone: string
   businessHours: BusinessHours
   beds: string[]
@@ -34,6 +38,8 @@ export interface SalonSettings {
 const DEFAULT: SalonSettings = {
   salonName: '',
   address: '',
+  postalCode: '',
+  email: '',
   phone: '',
   businessHours: { openTime: '10:00', closeTime: '21:00' },
   beds: ['A', 'B'],

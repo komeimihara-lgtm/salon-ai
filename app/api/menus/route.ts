@@ -1,9 +1,13 @@
-import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+import { getSalonIdFromCookie, resolveSalonTenantId } from '@/lib/get-salon-id'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 
-export async function GET() {
-  const salonId = getSalonIdFromCookie()
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const salonId = resolveSalonTenantId(searchParams)
+  if (!salonId) {
+    return NextResponse.json({ error: 'salon_id が必要です（ログインするか、LIFF URL に ?salon_id=<UUID> を付与）' }, { status: 401 })
+  }
   const supabase = getSupabaseAdmin()
   const { data, error } = await supabase
     .from('menus')
@@ -18,6 +22,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const salonId = getSalonIdFromCookie()
+  if (!salonId) {
+    return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 })
+  }
   const supabase = getSupabaseAdmin()
   const body = await req.json()
 

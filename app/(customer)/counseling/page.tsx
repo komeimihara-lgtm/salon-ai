@@ -25,6 +25,142 @@ const STORAGE_KEY = 'sola_counseling_draft'
 
 const SOLA_AVATAR_URL = '/images/sola-avatar.png'
 
+/** 末尾の「／」区切り選択肢行を除いたアシスタント文面（複数選択判定用） */
+function stripAssistantChoiceLine(content: string): string {
+  const lines = content.trim().split('\n')
+  const last = lines[lines.length - 1]?.trim() ?? ''
+  if (last.includes('／') && lines.length >= 2 && !last.includes('？') && !last.includes('?')) {
+    return lines.slice(0, -1).join('\n').trim()
+  }
+  return content.trim()
+}
+
+/**
+ * 複数選択（タップで選択→「選択して送信」）にする質問のみ true。
+ * - PHASE 2.5 禁忌 / PHASE 3 期待 / PHASE 4 Step2・Step3 / PHASE 5 Q2（サロンに求めること）
+ * 上記以外は単一タップで即送信。
+ */
+function isCounselingMultiSelectPrompt(assistantContent: string): boolean {
+  const raw = assistantContent.trim()
+  const body = stripAssistantChoiceLine(assistantContent)
+  const zones = body === raw ? [raw] : [body, raw]
+  return zones.some((q) => {
+    if (!q) return false
+    // PHASE 2.5 禁忌確認
+    if (q.includes('施術前に確認させてください')) return true
+    // PHASE 3 期待確認
+    if (q.includes('期待することは何ですか')) return true
+    if (q.includes('本日の施術で期待') && q.includes('いくつでも')) return true
+    // PHASE 4 Step2 場面・目的
+    if (q.includes('場面でその変化を感じたい')) return true
+    if (q.includes('どんな場面で') && q.includes('感じたいですか')) return true
+    // PHASE 4 Step3 状態ゴール（分岐ごと。自由回答のみの分岐は通常選択肢行なし）
+    if (q.includes('どのくらいの状態を目指していますか')) return true
+    if (q.includes('理想のお肌はどんな状態ですか')) return true
+    if (q.includes('目標の体型・サイズはありますか')) return true
+    if (q.includes('どんな状態になりたいですか')) return true
+    // PHASE 5 Q2（Q1「通い続けて…予定は」のあとの2問目のみ）
+    if (q.includes('通い続けるサロンとして') && q.includes('大切に')) return true
+    if (q.includes('どんな点を大切にされますか')) return true
+    return false
+  })
+}
+
+/** カウンセリング読み上げ用（MediaSource + ElevenLabs ストリーム） */
+const COUNSELING_SPEECH_MPEG = 'audio/mpeg'
+
+/**
+ * ElevenLabs 相当の MP3 ストリームを MediaSource で再生。
+ * 先頭チャンクを append した時点で play() し、以降のチャンクを継続 append する。
+ */
+async function playCounselingSpeechFromMpegStream(response: Response, audio: HTMLAudioElement): Promise<void> {
+  const body = response.body
+  if (!body) throw new Error('ストリームがありません')
+
+  if (typeof MediaSource === 'undefined' || !MediaSource.isTypeSupported(COUNSELING_SPEECH_MPEG)) {
+    throw new Error('MSE_MPEG_UNSUPPORTED')
+  }
+
+  const mediaSource = new MediaSource()
+  const objectUrl = URL.createObjectURL(mediaSource)
+  audio.src = objectUrl
+
+  await new Promise<void>((resolve, reject) => {
+    mediaSource.addEventListener('sourceopen', () => resolve(), { once: true })
+    mediaSource.addEventListener('error', () => reject(new Error('MediaSource error')), { once: true })
+  })
+
+  const sourceBuffer = mediaSource.addSourceBuffer(COUNSELING_SPEECH_MPEG)
+  const reader = body.getReader()
+  let playbackStarted = false
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        if (mediaSource.readyState === 'open') {
+          mediaSource.endOfStream()
+        }
+        break
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const onEnd = () => {
+          sourceBuffer.removeEventListener('updateend', onEnd)
+          sourceBuffer.removeEventListener('error', onErr)
+          resolve()
+        }
+        const onErr = () => {
+          sourceBuffer.removeEventListener('updateend', onEnd)
+          sourceBuffer.removeEventListener('error', onErr)
+          reject(new Error('SourceBuffer error'))
+        }
+        sourceBuffer.addEventListener('updateend', onEnd, { once: true })
+        sourceBuffer.addEventListener('error', onErr, { once: true })
+        try {
+          sourceBuffer.appendBuffer(value)
+        } catch (err) {
+          sourceBuffer.removeEventListener('updateend', onEnd)
+          sourceBuffer.removeEventListener('error', onErr)
+          reject(err)
+        }
+      })
+
+      if (!playbackStarted) {
+        playbackStarted = true
+        await audio.play()
+      }
+    }
+  } catch (e) {
+    URL.revokeObjectURL(objectUrl)
+    if (mediaSource.readyState === 'open') {
+      try {
+        mediaSource.endOfStream('decode')
+      } catch (_) {
+        /* noop */
+      }
+    }
+    throw e
+  }
+
+  const revokeMsObject = () => URL.revokeObjectURL(objectUrl)
+  audio.addEventListener('ended', revokeMsObject, { once: true })
+  audio.addEventListener('error', revokeMsObject, { once: true })
+}
+
+/** 非ストリーミングフォールバック（Blob 全体取得後に再生） */
+async function playCounselingSpeechFromBlobResponse(
+  response: Response,
+  audio: HTMLAudioElement,
+): Promise<string> {
+  const blob = await response.blob()
+  if (blob.size === 0) throw new Error('音声データが空です')
+  const audioUrl = URL.createObjectURL(blob)
+  audio.src = audioUrl
+  await audio.play()
+  return audioUrl
+}
+
 function TypingDots() {
   return (
     <span className="inline-flex gap-1">
@@ -174,6 +310,7 @@ interface MenuItem {
 interface SessionData {
   customerName: string
   customerId?: string
+  courseName: string
   visitPurpose: string
   messages: { role: 'user' | 'assistant'; content: string }[]
   skinAnswers: Record<string, string>
@@ -190,6 +327,7 @@ interface SessionData {
 
 const DEFAULT_SESSION: SessionData = {
   customerName: '',
+  courseName: '',
   visitPurpose: 'first',
   messages: [],
   skinAnswers: {},
@@ -217,13 +355,22 @@ function CounselingContent() {
   const [solaComment, setSolaComment] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
   const [searchResults, setSearchResults] = useState<{ id: string; name: string }[]>([])
-  const [newCustomer, setNewCustomer] = useState(true)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [speechError, setSpeechError] = useState<string | null>(null)
+  const [salonMenus, setSalonMenus] = useState<{ id: string; name: string; price?: number }[]>([])
+  const [autoSaved, setAutoSaved] = useState(false)
+  const [karteEndSaving, setKarteEndSaving] = useState(false)
+  /** 複数選択モード時の仮選択（送信順はタップ順） */
+  const [multiSelected, setMultiSelected] = useState<string[]>([])
   const chatEndRef = useRef<HTMLDivElement>(null)
   const initialSpokenRef = useRef(false)
   const audioUnlockedRef = useRef(false)
+  /** PHASE8 時の save-karte 用（STEP6 で update する） */
+  const counselingSessionIdRef = useRef<string | null>(null)
+  const phase8KarteSavedRef = useRef(false)
+  const speechAbortRef = useRef<AbortController | null>(null)
+  const speechAudioRef = useRef<HTMLAudioElement | null>(null)
 
   const unlockAudio = useCallback(() => {
     if (audioUnlockedRef.current) return
@@ -237,18 +384,10 @@ function CounselingContent() {
     } catch (_) {}
   }, [])
 
+  // リロード時は常にリセット（新しいカウンセリングとして開始）
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        if (parsed.mode === mode && parsed.step > 1) {
-          setData(parsed.data || DEFAULT_SESSION)
-          setStep(parsed.step || 1)
-        }
-      }
-    } catch (_) {}
-  }, [mode])
+    localStorage.removeItem(STORAGE_KEY)
+  }, [])
 
   useEffect(() => {
     if (step > 1 && !completed) {
@@ -258,17 +397,33 @@ function CounselingContent() {
     }
   }, [step, data, mode, completed])
 
+  useEffect(() => {
+    fetch('/api/menus').then(r => r.json()).then(j => setSalonMenus(j.menus || [])).catch(() => {})
+  }, [])
+
   const scrollChatToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
 
   const speakMessage = useCallback(async (text: string) => {
     if (!voiceEnabled || !text.trim()) return
     setSpeechError(null)
+
+    speechAbortRef.current?.abort()
+    speechAbortRef.current = null
+    speechAudioRef.current?.pause()
+    speechAudioRef.current = null
+
+    const ac = new AbortController()
+    speechAbortRef.current = ac
+
+    let blobUrlToRevoke: string | null = null
+
     try {
       setIsSpeaking(true)
       const response = await fetch('/api/counseling/speech', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: text.trim() }),
+        signal: ac.signal,
       })
       if (!response.ok) {
         const errBody = await response.text()
@@ -276,24 +431,60 @@ function CounselingContent() {
         try {
           const parsed = JSON.parse(errBody)
           if (parsed.error) errMsg = parsed.error
-        } catch (_) {}
+        } catch (_) {
+          /* noop */
+        }
         throw new Error(errMsg)
       }
-      const audioBlob = await response.blob()
-      if (audioBlob.size === 0) throw new Error('音声データが空です')
-      const audioUrl = URL.createObjectURL(audioBlob)
-      const audio = new Audio(audioUrl)
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl)
+
+      const audio = new Audio()
+      speechAudioRef.current = audio
+
+      const finish = () => {
+        if (blobUrlToRevoke) {
+          URL.revokeObjectURL(blobUrlToRevoke)
+          blobUrlToRevoke = null
+        }
         setIsSpeaking(false)
+        if (speechAudioRef.current === audio) speechAudioRef.current = null
       }
+
+      audio.onended = finish
       audio.onerror = () => {
-        URL.revokeObjectURL(audioUrl)
-        setIsSpeaking(false)
+        finish()
         setSpeechError('音声の再生に失敗しました')
       }
-      await audio.play()
+
+      const canMse =
+        !!response.body &&
+        typeof MediaSource !== 'undefined' &&
+        MediaSource.isTypeSupported(COUNSELING_SPEECH_MPEG)
+
+      if (canMse) {
+        const cloned = response.clone()
+        try {
+          await playCounselingSpeechFromMpegStream(response, audio)
+          cloned.body?.cancel().catch(() => {})
+        } catch (streamErr) {
+          console.warn('[counseling] MediaSource ストリーム再生に失敗、Blob にフォールバック', streamErr)
+          try {
+            blobUrlToRevoke = await playCounselingSpeechFromBlobResponse(cloned, audio)
+          } catch {
+            throw streamErr instanceof Error ? streamErr : new Error('音声再生に失敗しました')
+          }
+        }
+      } else {
+        blobUrlToRevoke = await playCounselingSpeechFromBlobResponse(response, audio)
+      }
+
+      if (audio.paused) {
+        await audio.play()
+      }
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setIsSpeaking(false)
+        return
+      }
       const msg = error instanceof Error ? error.message : '音声再生エラー'
       console.error('音声再生エラー:', error)
       setSpeechError(msg)
@@ -308,11 +499,12 @@ function CounselingContent() {
     setSearchResults(json.customers || [])
   }, [customerSearch])
 
-  const sendChat = useCallback(async () => {
-    if (!chatInput.trim() || chatLoading) return
+  const sendChat = useCallback(async (overrideMsg?: string) => {
+    const msg = overrideMsg || chatInput
+    if (!msg.trim() || chatLoading) return
     unlockAudio()
-    const userMsg = chatInput.trim()
-    setChatInput('')
+    const userMsg = msg.trim()
+    if (!overrideMsg) setChatInput('')
     const newMessages = [...data.messages, { role: 'user' as const, content: userMsg }]
     setData((d) => ({ ...d, messages: newMessages }))
     setChatLoading(true)
@@ -321,7 +513,13 @@ function CounselingContent() {
       const res = await fetch('/api/counseling/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'chat', messages: newMessages, customer_name: data.customerName || undefined }),
+        body: JSON.stringify({
+          mode: 'chat',
+          messages: newMessages,
+          customer_id: data.customerId || undefined,
+          customer_name: data.customerName || undefined,
+          course_name: data.courseName || undefined,
+        }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'エラー')
@@ -334,7 +532,69 @@ function CounselingContent() {
     } finally {
       setChatLoading(false)
     }
-  }, [chatInput, chatLoading, data.messages, data.customerName, speakMessage, unlockAudio])
+  }, [chatInput, chatLoading, data.messages, data.customerId, data.customerName, data.courseName, speakMessage, unlockAudio])
+
+  const handleEndCounselingSave = useCallback(async () => {
+    if (data.messages.length < 2) return
+    setKarteEndSaving(true)
+    try {
+      const visit_date = new Date().toISOString().slice(0, 10)
+      const res = await fetch('/api/counseling/save-karte', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: data.customerId || null,
+          customer_name: data.customerName || 'お客様',
+          course_name: data.courseName || null,
+          visit_date,
+          messages: data.messages,
+          session_id: counselingSessionIdRef.current,
+        }),
+      })
+      if (!res.ok) throw new Error('保存に失敗しました')
+      const j = await res.json()
+      if (j.session?.id) counselingSessionIdRef.current = j.session.id
+      phase8KarteSavedRef.current = true
+      setAutoSaved(true)
+    } catch {
+      alert('カルテへの保存に失敗しました')
+    } finally {
+      setKarteEndSaving(false)
+    }
+  }, [data.customerId, data.customerName, data.courseName, data.messages])
+
+  // PHASE 8（締め文）検出 → 構造化カルテを自動保存
+  useEffect(() => {
+    if (phase8KarteSavedRef.current || data.messages.length < 4) return
+    const lastMsg = data.messages.at(-1)
+    if (lastMsg?.role !== 'assistant') return
+    if (!lastMsg.content.includes('これより施術に入ります')) return
+
+    phase8KarteSavedRef.current = true
+    const visit_date = new Date().toISOString().slice(0, 10)
+    const body = {
+      customer_id: data.customerId || null,
+      customer_name: data.customerName || 'お客様',
+      course_name: data.courseName || null,
+      visit_date,
+      messages: data.messages,
+      session_id: counselingSessionIdRef.current,
+    }
+    fetch('/api/counseling/save-karte', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('save-karte failed')
+        const j = await res.json()
+        if (j.session?.id) counselingSessionIdRef.current = j.session.id
+        setAutoSaved(true)
+      })
+      .catch(() => {
+        phase8KarteSavedRef.current = false
+      })
+  }, [data.messages, data.customerName, data.customerId, data.courseName])
 
   const diagnoseSkinType = (answers: Record<string, string>): SkinType => {
     const q1 = answers.q1
@@ -368,13 +628,34 @@ function CounselingContent() {
     if (step === 5 && data.menus.length === 0) fetchMenus()
   }, [step, data.menus.length, fetchMenus])
 
-  const INITIAL_GREETING = 'はじめまして、私はSOLAのAIビューティーカウンセラーです。今日は施術前に、あなたのお肌やお悩みについてゆっくりお聞きしたいと思います。本日はどんなことでお越しになりましたか？'
+  const customerName = data.customerName || 'お客様'
+  const buildInitialGreeting = useCallback(() => {
+    return `${customerName}様、本日はご来店いただきありがとうございます😊
+はじめまして、私はSOLAと申します。
+これまで80万件以上の施術に関わってきた経験と知見をもとに、
+${customerName}様の施術をより心地よく、より効果的なものにするために
+サポートさせていただきます。
+お話は、画面のテキストで入力いただくか、
+マイクボタンを押して音声でお話しいただくこともできます😊
+どちらでもお好きな方法でお答えください。
+AIがお伺いするので、
+スタッフには少し話しにくいことも、
+どうか気兼ねなくお話しいただけたら嬉しいです😊
+
+まず最初に教えてください。
+当サロンのことは、どちらでお知りになりましたか？
+ホットペッパー／SNS／ご紹介／Google／その他`
+  }, [customerName])
+
+  // step 2 に入ったとき、挨拶をassistantメッセージとして追加（会話履歴に含める）
   useEffect(() => {
     if (step === 2 && data.messages.length === 0 && !initialSpokenRef.current) {
       initialSpokenRef.current = true
-      speakMessage(INITIAL_GREETING)
+      const greeting = buildInitialGreeting()
+      setData((d) => ({ ...d, messages: [{ role: 'assistant', content: greeting }] }))
+      speakMessage(greeting)
     }
-  }, [step, data.messages.length, speakMessage])
+  }, [step, data.messages.length, speakMessage, buildInitialGreeting])
 
   const fetchSolaComment = useCallback(async () => {
     const summary = [
@@ -401,23 +682,27 @@ function CounselingContent() {
   const handleSave = useCallback(async () => {
     setSaving(true)
     try {
-      const res = await fetch('/api/counseling/sessions', {
+      const visit_date = new Date().toISOString().slice(0, 10)
+      const res = await fetch('/api/counseling/save-karte', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer_id: data.customerId || null,
           customer_name: data.customerName || 'お客様',
-          mode,
-          concerns: data.concerns,
+          course_name: data.courseName || null,
+          visit_date,
+          messages: data.messages,
+          session_id: counselingSessionIdRef.current,
           skin_type: data.skinType ? SKIN_TYPE_LABELS[data.skinType] : null,
           allergies: data.hasAllergy ? data.allergyDetail : null,
           cautions: [data.pregnancy && '妊娠中・授乳中', data.otherCautions, data.medication].filter(Boolean).join('\n') || null,
           selected_menu: data.selectedMenu?.name || null,
           aria_comment: solaComment || null,
-          chat_history: data.messages,
         }),
       })
       if (!res.ok) throw new Error()
+      const j = await res.json()
+      if (j.session?.id) counselingSessionIdRef.current = j.session.id
       localStorage.removeItem(STORAGE_KEY)
       setCompleted(true)
       if (mode === 'salon' && data.customerId) {
@@ -430,12 +715,68 @@ function CounselingContent() {
     }
   }, [data, mode, solaComment])
 
+  // AIの返答から選択肢を抽出
+  /** 末尾などの「／」区切り行からボタン用ラベルを抽出（長い日本語ラベル用に文字数上限を緩める） */
+  const extractChoices = (text: string): string[] => {
+    const lines = text.split('\n')
+    const maxChoiceLen = 80
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (trimmed.includes('／')) {
+        const parts = trimmed
+          .split('／')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0 && s.length <= maxChoiceLen)
+        if (parts.length >= 2) return parts
+      }
+    }
+    return []
+  }
+
+  // 最後のassistantメッセージの選択肢
+  const lastAssistantMsg = data.messages.filter(m => m.role === 'assistant').at(-1)
+  const lastMsgIsAssistant = data.messages.at(-1)?.role === 'assistant'
+  const choices = lastAssistantMsg && lastMsgIsAssistant && !chatLoading ? extractChoices(lastAssistantMsg.content) : []
+  const isMultiSelectRound =
+    !!lastAssistantMsg &&
+    lastMsgIsAssistant &&
+    !chatLoading &&
+    choices.length > 0 &&
+    isCounselingMultiSelectPrompt(lastAssistantMsg.content)
+
+  useEffect(() => {
+    setMultiSelected([])
+  }, [lastAssistantMsg?.content])
+
+  const toggleMultiChoice = useCallback((c: string) => {
+    setMultiSelected((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]))
+  }, [])
+
+  const submitMultiSelect = useCallback(() => {
+    if (multiSelected.length === 0 || chatLoading) return
+    const text = multiSelected.join('、')
+    setMultiSelected([])
+    void sendChat(text)
+  }, [multiSelected, chatLoading, sendChat])
+
+  const hasPhase8Closing = data.messages.some(
+    (m) => m.role === 'assistant' && m.content.includes('これより施術に入ります'),
+  )
+
   const resetAndStartOver = () => {
     setData(DEFAULT_SESSION)
     setStep(1)
     setCompleted(false)
     setSolaComment('')
+    setAutoSaved(false)
+    setChatInput('')
+    setCustomerSearch('')
+    setSearchResults([])
     initialSpokenRef.current = false
+    counselingSessionIdRef.current = null
+    phase8KarteSavedRef.current = false
+    setKarteEndSaving(false)
+    setMultiSelected([])
     localStorage.removeItem(STORAGE_KEY)
   }
 
@@ -542,63 +883,61 @@ function CounselingContent() {
         {step === 1 && (
           <div className="space-y-4">
             <h3 className="font-semibold text-[#3D3D3D]">基本情報</h3>
-            {mode === 'salon' && (
-              <div>
-                <label className="text-xs text-gray-500 block mb-2">顧客</label>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={customerSearch}
-                    onChange={(e) => setCustomerSearch(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && doSearch()}
-                    placeholder="名前で検索"
-                    className="flex-1 px-3 py-2 rounded-lg border border-gray-200"
-                  />
-                  <button onClick={doSearch} className="p-2 bg-[#C4728A] text-white rounded-lg">
-                    <Search className="w-5 h-5" />
+            <div>
+              <label className="text-xs text-gray-500 block mb-2">顧客（必須）</label>
+              <p className="text-xs text-gray-500 mb-2">
+                名前で検索し、一覧から顧客を選んでください。新規のお客様は顧客管理に登録してから開始してください。
+              </p>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && doSearch()}
+                  placeholder="名前で検索"
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-200"
+                />
+                <button type="button" onClick={doSearch} className="p-2 bg-[#C4728A] text-white rounded-lg">
+                  <Search className="w-5 h-5" />
+                </button>
+              </div>
+              {searchResults.length > 0 && (
+                <div className="space-y-1 mb-2">
+                  {searchResults.map((c) => (
+                    <button
+                      type="button"
+                      key={c.id}
+                      onClick={() => {
+                        setData((d) => ({ ...d, customerName: c.name, customerId: c.id }))
+                        setSearchResults([])
+                        setCustomerSearch('')
+                      }}
+                      className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-[#F8F5FF] text-left"
+                    >
+                      <User className="w-4 h-4 text-[#C4728A]" /> {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {data.customerId ? (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-[#F8F5FF] border border-[#9B8EC4]/30">
+                  <span className="font-medium text-[#3D3D3D]">{data.customerName}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setData((d) => ({ ...d, customerId: undefined, customerName: '' }))
+                    }}
+                    className="text-xs text-[#C4728A] hover:underline"
+                  >
+                    変更
                   </button>
                 </div>
-                {searchResults.length > 0 && (
-                  <div className="space-y-1 mb-2">
-                    {searchResults.map((c) => (
-                      <button
-                        key={c.id}
-                        onClick={() => {
-                          setData((d) => ({ ...d, customerName: c.name, customerId: c.id }))
-                          setNewCustomer(false)
-                          setSearchResults([])
-                        }}
-                        className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-[#F8F5FF] text-left"
-                      >
-                        <User className="w-4 h-4 text-[#C4728A]" /> {c.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {newCustomer ? (
-                  <input
-                    type="text"
-                    value={data.customerName}
-                    onChange={(e) => setData((d) => ({ ...d, customerName: e.target.value }))}
-                    placeholder="新規のお客様のお名前"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200"
-                  />
-                ) : (
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-[#F8F5FF] border border-[#9B8EC4]/30">
-                    <span className="font-medium text-[#3D3D3D]">{data.customerName}</span>
-                    <button type="button" onClick={() => { setNewCustomer(true); setData((d) => ({ ...d, customerId: undefined, customerName: '' })) }} className="text-xs text-[#C4728A] hover:underline">
-                      変更
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-            {mode === 'online' && (
-              <div>
-                <label className="text-xs text-gray-500 block mb-2">お名前</label>
-                <VoiceInputField value={data.customerName} onChange={(v) => setData((d) => ({ ...d, customerName: v }))} placeholder="お名前を入力" rows={1} />
-              </div>
-            )}
+              ) : (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  顧客が未選択です。検索して一覧から選択するとカウンセリングを開始できます。
+                </p>
+              )}
+            </div>
             <div>
               <label className="text-xs text-gray-500 block mb-2">来店目的</label>
               <div className="flex flex-wrap gap-2">
@@ -616,6 +955,27 @@ function CounselingContent() {
                   </button>
                 ))}
               </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-2">本日のメニュー</label>
+              {salonMenus.length === 0 ? (
+                <p className="text-xs text-gray-400">メニューを読み込み中...</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {salonMenus.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => setData((d) => ({ ...d, courseName: m.name }))}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium ${data.courseName === m.name ? 'bg-[#C4728A] text-white' : 'bg-[#F8F5FF] text-[#3D3D3D]'}`}
+                    >
+                      {m.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {data.courseName && (
+                <p className="text-xs text-[#C4728A] mt-1">選択中: {data.courseName}</p>
+              )}
             </div>
           </div>
         )}
@@ -640,16 +1000,6 @@ function CounselingContent() {
             {/* 右60% チャットエリア */}
             <div className="flex flex-col flex-1 min-h-0 lg:w-3/5 lg:border-l lg:border-gray-100">
             <div className="flex-1 overflow-y-auto space-y-4 pt-4 pb-4 px-2 lg:px-6 lg:pt-20">
-              {data.messages.length === 0 && (
-                <div className="flex gap-2">
-                  <SolaAvatarImg size={48} isSpeaking={isSpeaking} />
-                  <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%] leading-relaxed">
-                    はじめまして、私はSOLAのAIビューティーカウンセラーです ✨
-                    今日は施術前に、あなたのお肌やお悩みについてゆっくりお聞きしたいと思います。
-                    本日はどんなことでお越しになりましたか？ 🌸
-                  </div>
-                </div>
-              )}
               {data.messages.map((m, i) =>
                 m.role === 'user' ? (
                   <div key={i} className="flex justify-end">
@@ -660,7 +1010,7 @@ function CounselingContent() {
                 ) : (
                   <div key={i} className="flex gap-2">
                     <SolaAvatarImg size={48} isSpeaking={isSpeaking} />
-                    <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%] leading-relaxed">
+                    <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-base text-[#3D3D3D] max-w-[85%] leading-relaxed whitespace-pre-line">
                       {m.content}
                     </div>
                   </div>
@@ -672,6 +1022,70 @@ function CounselingContent() {
                   <div className="bg-[#F8F5FF] rounded-2xl rounded-tl-none px-4 py-3 text-sm text-[#3D3D3D]">
                     <TypingDots />
                   </div>
+                </div>
+              )}
+              {choices.length > 0 && (
+                <div className="pl-14 space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    {choices.map((choice) => {
+                      const selected = multiSelected.includes(choice)
+                      if (isMultiSelectRound) {
+                        return (
+                          <button
+                            key={choice}
+                            type="button"
+                            onClick={() => toggleMultiChoice(choice)}
+                            className={`px-4 py-2 rounded-xl border-2 text-sm font-medium transition-colors ${
+                              selected
+                                ? 'bg-[#C4728A] border-[#C4728A] text-white shadow-sm'
+                                : 'bg-white border-[#C4728A]/30 text-[#C4728A] hover:bg-[#C4728A]/10'
+                            }`}
+                          >
+                            {choice}
+                          </button>
+                        )
+                      }
+                      return (
+                        <button
+                          key={choice}
+                          type="button"
+                          onClick={() => sendChat(choice)}
+                          className="px-4 py-2 rounded-xl bg-white border-2 border-[#C4728A]/30 text-sm font-medium text-[#C4728A] hover:bg-[#C4728A] hover:text-white transition-colors"
+                        >
+                          {choice}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {isMultiSelectRound && (
+                    <button
+                      type="button"
+                      onClick={() => void submitMultiSelect()}
+                      disabled={multiSelected.length === 0 || chatLoading}
+                      className="w-full max-w-sm py-2.5 rounded-xl bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      選択して送信{multiSelected.length > 0 ? `（${multiSelected.length}件）` : ''}
+                    </button>
+                  )}
+                </div>
+              )}
+              {hasPhase8Closing && (
+                <div className="pl-2 pr-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleEndCounselingSave()}
+                    disabled={karteEndSaving}
+                    className="w-full py-3 rounded-xl border-2 border-emerald-600/70 bg-emerald-50 text-emerald-800 text-sm font-semibold disabled:opacity-50"
+                  >
+                    {karteEndSaving ? '保存中…' : 'カウンセリングを終了してカルテに保存'}
+                  </button>
+                </div>
+              )}
+              {autoSaved && (
+                <div className="text-center py-2">
+                  <span className="inline-flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
+                    <Check className="w-3 h-3" /> カウンセリング内容を保存しました
+                  </span>
                 </div>
               )}
               <div ref={chatEndRef} />
@@ -688,7 +1102,7 @@ function CounselingContent() {
                   <VoiceInputField value={chatInput} onChange={setChatInput} onFocus={unlockAudio} placeholder="メッセージを入力..." rows={1} disabled={chatLoading} />
                 </div>
                 <button
-                  onClick={sendChat}
+                  onClick={() => sendChat()}
                   disabled={!chatInput.trim() || chatLoading}
                   className="shrink-0 px-4 py-3 rounded-xl bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white disabled:opacity-50 flex items-center justify-center"
                 >
@@ -833,8 +1247,22 @@ function CounselingContent() {
             <ChevronLeft className="w-5 h-5" /> 戻る
           </button>
           <button
-            onClick={() => {
-              if (step === 1) unlockAudio()
+            onClick={async () => {
+              if (step === 1) {
+                unlockAudio()
+                if (data.customerId) {
+                  try {
+                    await fetch('/api/counseling/clear-thread', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ customer_id: data.customerId }),
+                      credentials: 'same-origin',
+                    })
+                  } catch (e) {
+                    console.warn('[counseling] clear-thread', e)
+                  }
+                }
+              }
               if (step === 2) {
                 const concerns = data.messages.filter((m) => m.role === 'user').map((m) => m.content)
                 setData((d) => ({ ...d, concerns }))
@@ -842,7 +1270,7 @@ function CounselingContent() {
               setStep((s) => Math.min(6, s + 1))
             }}
             disabled={
-              (step === 1 && !data.customerName.trim()) ||
+              (step === 1 && (!data.courseName || !data.customerId)) ||
               (step === 2 && data.messages.filter((m) => m.role === 'user').length < 1) ||
               (step === 3 && Object.keys(data.skinAnswers).length < 4) ||
               (step === 5 && !data.selectedMenu)

@@ -17,6 +17,12 @@ import {
   MapPin,
   Calendar,
   Mail,
+  FileText,
+  Plus,
+  Trash2,
+  Pencil,
+  MessageCircle,
+  ChevronDown,
 } from 'lucide-react'
 import {
   fetchCustomerTickets,
@@ -39,6 +45,36 @@ import {
   daysUntilNextBilling,
   type CustomerSubscription,
 } from '@/lib/subscriptions'
+import type { CounselingKartePayload } from '@/lib/counseling-karte-types'
+import { emptyCounselingKarte } from '@/lib/counseling-karte-types'
+
+function normalizeKarte(raw: unknown, fallbackDate: string): CounselingKartePayload {
+  const e = emptyCounselingKarte(fallbackDate)
+  if (!raw || typeof raw !== 'object') return e
+  const k = raw as Partial<CounselingKartePayload>
+  return {
+    date: typeof k.date === 'string' && k.date ? k.date : e.date,
+    phase1: { ...e.phase1, ...(k.phase1 && typeof k.phase1 === 'object' ? k.phase1 : {}) },
+    phase2: { ...e.phase2, ...(k.phase2 && typeof k.phase2 === 'object' ? k.phase2 : {}) },
+    phase2_5: { ...e.phase2_5, ...(k.phase2_5 && typeof k.phase2_5 === 'object' ? k.phase2_5 : {}) },
+    phase3: { ...e.phase3, ...(k.phase3 && typeof k.phase3 === 'object' ? k.phase3 : {}) },
+    phase4: { ...e.phase4, ...(k.phase4 && typeof k.phase4 === 'object' ? k.phase4 : {}) },
+    phase5: { ...e.phase5, ...(k.phase5 && typeof k.phase5 === 'object' ? k.phase5 : {}) },
+    phase7: { ...e.phase7, ...(k.phase7 && typeof k.phase7 === 'object' ? k.phase7 : {}) },
+    phase7_5: { ...e.phase7_5, ...(k.phase7_5 && typeof k.phase7_5 === 'object' ? k.phase7_5 : {}) },
+  }
+}
+
+type CounselingSessionRow = {
+  id: string
+  customer_name: string
+  selected_menu?: string | null
+  concerns?: string[] | string | null
+  chat_history?: { role: string; content: string }[] | null
+  karte_data?: CounselingKartePayload | null
+  visit_date?: string | null
+  created_at: string
+}
 
 interface Customer {
   id: string
@@ -121,12 +157,37 @@ export default function CustomerDetailPage() {
   const [unmatchedUsers, setUnmatchedUsers] = useState<{ line_user_id: string; followed_at: string }[]>([])
   const [linkingLine, setLinkingLine] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  // 既存コース登録
+  const [existingCourseOpen, setExistingCourseOpen] = useState(false)
+  const [existingCourseName, setExistingCourseName] = useState('')
+  const [existingCourseCount, setExistingCourseCount] = useState(5)
+  const [existingCourseExpiry, setExistingCourseExpiry] = useState('')
+  const [existingCourseSaving, setExistingCourseSaving] = useState(false)
+  const [ticketAdjust, setTicketAdjust] = useState<CustomerTicket | null>(null)
+  const [ticketAdjustRemaining, setTicketAdjustRemaining] = useState('')
+  const [ticketAdjustReason, setTicketAdjustReason] = useState('')
+  const [ticketAdjustSaving, setTicketAdjustSaving] = useState(false)
+  const [subAdjust, setSubAdjust] = useState<CustomerSubscription | null>(null)
+  const [subAdjustStatus, setSubAdjustStatus] = useState<'active' | 'paused' | 'cancelled'>('active')
+  const [subAdjustRemaining, setSubAdjustRemaining] = useState('')
+  const [subAdjustReason, setSubAdjustReason] = useState('')
+  const [subAdjustSaving, setSubAdjustSaving] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<Partial<Customer>>({})
   const [editSaving, setEditSaving] = useState(false)
   const [visits, setVisits] = useState<VisitRecord[]>([])
   const [visitsLoading, setVisitsLoading] = useState(false)
   const [visitsExpanded, setVisitsExpanded] = useState(false)
+  const [visitModalOpen, setVisitModalOpen] = useState(false)
+  const [visitEditing, setVisitEditing] = useState<VisitRecord | null>(null)
+  const [visitForm, setVisitForm] = useState({ visit_date: '', menu: '', staff_name: '', amount: '' })
+  const [visitSaving, setVisitSaving] = useState(false)
+  const [counselingSessions, setCounselingSessions] = useState<CounselingSessionRow[]>([])
+  const [counselingLoading, setCounselingLoading] = useState(false)
+  const [expandedSession, setExpandedSession] = useState<string | null>(null)
+  const [karteEditId, setKarteEditId] = useState<string | null>(null)
+  const [karteEditForm, setKarteEditForm] = useState<CounselingKartePayload | null>(null)
+  const [karteEditSaving, setKarteEditSaving] = useState(false)
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -135,7 +196,7 @@ export default function CustomerDetailPage() {
 
   const fetchCustomer = useCallback(async () => {
     if (!id) return
-    const res = await fetch(`/api/customers/${id}`)
+    const res = await fetch(`/api/customers/${id}`, { credentials: 'include' })
     const data = await res.json()
     setCustomer(data.customer ?? null)
   }, [id])
@@ -149,6 +210,7 @@ export default function CustomerDetailPage() {
       email: customer.email || '',
       address: customer.address || '',
       birthday: customer.birthday || '',
+      gender: customer.gender || 'unknown',
       first_visit_date: customer.first_visit_date || '',
       visit_count: customer.visit_count,
       status: customer.status || 'active',
@@ -163,6 +225,7 @@ export default function CustomerDetailPage() {
     try {
       const res = await fetch(`/api/customers/${customer.id}`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm),
       })
@@ -170,6 +233,8 @@ export default function CustomerDetailPage() {
         await fetchCustomer()
         setEditOpen(false)
         showToast('更新しました')
+      } else {
+        showToast('更新に失敗しました')
       }
     } catch {
       showToast('更新に失敗しました')
@@ -192,6 +257,115 @@ export default function CustomerDetailPage() {
     }
   }, [id])
 
+  const fetchCounselingSessions = useCallback(async () => {
+    if (!id) return
+    setCounselingLoading(true)
+    try {
+      const res = await fetch(`/api/counseling/sessions?customer_id=${id}`, { credentials: 'include' })
+      const data = await res.json()
+      setCounselingSessions(data.sessions || [])
+    } catch {
+      setCounselingSessions([])
+    } finally {
+      setCounselingLoading(false)
+    }
+  }, [id])
+
+  const openKarteEdit = (s: CounselingSessionRow) => {
+    const d = (s.visit_date || s.created_at).slice(0, 10)
+    setKarteEditId(s.id)
+    setKarteEditForm(normalizeKarte(s.karte_data, d))
+  }
+
+  const handleKarteEditSave = async () => {
+    if (!karteEditId || !karteEditForm) return
+    setKarteEditSaving(true)
+    try {
+      const res = await fetch(`/api/counseling/sessions/${karteEditId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ karte_data: karteEditForm }),
+      })
+      if (res.ok) {
+        showToast('カウンセリング記録を更新しました')
+        setKarteEditId(null)
+        setKarteEditForm(null)
+        await fetchCounselingSessions()
+      } else {
+        showToast('更新に失敗しました')
+      }
+    } catch {
+      showToast('更新に失敗しました')
+    } finally {
+      setKarteEditSaving(false)
+    }
+  }
+
+  const openVisitAdd = () => {
+    setVisitEditing(null)
+    setVisitForm({ visit_date: new Date().toISOString().slice(0, 10), menu: '', staff_name: '', amount: '' })
+    setVisitModalOpen(true)
+  }
+
+  const openVisitEdit = (v: VisitRecord) => {
+    setVisitEditing(v)
+    setVisitForm({
+      visit_date: v.visit_date || '',
+      menu: v.menu || '',
+      staff_name: v.staff_name || '',
+      amount: v.amount != null ? String(v.amount) : '',
+    })
+    setVisitModalOpen(true)
+  }
+
+  const handleVisitSave = async () => {
+    if (!id) return
+    setVisitSaving(true)
+    try {
+      const payload: Record<string, unknown> = {
+        visit_date: visitForm.visit_date,
+        menu: visitForm.menu,
+        staff_name: visitForm.staff_name,
+        amount: visitForm.amount ? Number(visitForm.amount) : null,
+      }
+      if (visitEditing) {
+        payload.visitId = visitEditing.id
+        await fetch(`/api/customers/${id}/visits`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      } else {
+        await fetch(`/api/customers/${id}/visits`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      }
+      await fetchVisits()
+      await fetchCustomer()
+      setVisitModalOpen(false)
+      showToast(visitEditing ? '来店履歴を更新しました' : '来店履歴を追加しました')
+    } catch {
+      showToast('保存に失敗しました')
+    } finally {
+      setVisitSaving(false)
+    }
+  }
+
+  const handleVisitDelete = async (visitId: string) => {
+    if (!confirm('この来店履歴を削除しますか？')) return
+    try {
+      await fetch(`/api/customers/${id}/visits?visitId=${visitId}`, { method: 'DELETE' })
+      await fetchVisits()
+      await fetchCustomer()
+      showToast('来店履歴を削除しました')
+    } catch {
+      showToast('削除に失敗しました')
+    }
+  }
+
   const fetchUnmatchedUsers = async () => {
     const res = await fetch('/api/line/unmatched')
     const json = await res.json()
@@ -204,6 +378,7 @@ export default function CustomerDetailPage() {
     try {
       await fetch(`/api/customers/${customer.id}`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ line_user_id: lineUserId, line_status: 'followed' })
       })
@@ -245,7 +420,7 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    fetch(`/api/customers/${id}`)
+    fetch(`/api/customers/${id}`, { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
         if (!cancelled) setCustomer(data.customer ?? null)
@@ -259,8 +434,9 @@ export default function CustomerDetailPage() {
     if (customer) {
       refresh()
       fetchVisits()
+      fetchCounselingSessions()
     }
-  }, [customer, refresh, fetchVisits])
+  }, [customer, refresh, fetchVisits, fetchCounselingSessions])
 
   useEffect(() => {
     if (purchaseOpen) {
@@ -313,6 +489,93 @@ export default function CustomerDetailPage() {
     }
   }
 
+  const openTicketAdjustModal = (c: CustomerTicket) => {
+    setTicketAdjust(c)
+    setTicketAdjustRemaining(String(c.remainingSessions))
+    setTicketAdjustReason('')
+  }
+
+  const handleTicketAdjustSave = async () => {
+    if (!ticketAdjust || !ticketAdjustReason.trim()) {
+      showToast('変更理由を入力してください')
+      return
+    }
+    const r = parseInt(ticketAdjustRemaining, 10)
+    if (!Number.isFinite(r) || r < 0) {
+      showToast('残回数が不正です')
+      return
+    }
+    setTicketAdjustSaving(true)
+    try {
+      const res = await fetch(`/api/customer-tickets/${ticketAdjust.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          remaining_sessions: r,
+          reason: ticketAdjustReason.trim(),
+        }),
+      })
+      if (res.ok) {
+        await refresh()
+        setTicketAdjust(null)
+        showToast('回数券を更新しました')
+      } else {
+        const j = await res.json().catch(() => ({}))
+        showToast(typeof j.error === 'string' ? j.error : '更新に失敗しました')
+      }
+    } catch {
+      showToast('更新に失敗しました')
+    } finally {
+      setTicketAdjustSaving(false)
+    }
+  }
+
+  const openSubAdjustModal = (s: CustomerSubscription) => {
+    const z = ensureBillingPeriodCurrent(s)
+    setSubAdjust(z)
+    setSubAdjustStatus(z.status)
+    setSubAdjustRemaining(String(getRemainingSessions(z)))
+    setSubAdjustReason('')
+  }
+
+  const handleSubAdjustSave = async () => {
+    if (!subAdjust || !subAdjustReason.trim()) {
+      showToast('変更理由を入力してください')
+      return
+    }
+    const rem = parseInt(subAdjustRemaining, 10)
+    if (!Number.isFinite(rem) || rem < 0) {
+      showToast('残回数が不正です')
+      return
+    }
+    setSubAdjustSaving(true)
+    try {
+      const res = await fetch(`/api/customer-subscriptions/${subAdjust.id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: subAdjustStatus,
+          remaining_sessions: rem,
+          reason: subAdjustReason.trim(),
+        }),
+      })
+      if (res.ok) {
+        await refresh()
+        setSubAdjust(null)
+        showToast('サブスクを更新しました')
+      } else {
+        const j = await res.json().catch(() => ({}))
+        showToast(typeof j.error === 'string' ? j.error : '更新に失敗しました')
+      }
+    } catch {
+      showToast('更新に失敗しました')
+    } finally {
+      setSubAdjustSaving(false)
+    }
+  }
+
   const handleSubJoin = async () => {
     if (!selectedSubPlan || !customer) return
     setActionLoading(true)
@@ -339,6 +602,38 @@ export default function CustomerDetailPage() {
       setSubUseTarget(null)
     } finally {
       setActionLoading(false)
+    }
+  }
+
+  const handleExistingCourse = async () => {
+    if (!customer || !existingCourseName.trim() || existingCourseCount <= 0) return
+    setExistingCourseSaving(true)
+    try {
+      const res = await fetch('/api/customer-tickets/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: customer.id,
+          plan_name: existingCourseName.trim(),
+          remaining_count: existingCourseCount,
+          expiry_date: existingCourseExpiry || null,
+          is_existing: true,
+        }),
+      })
+      if (res.ok) {
+        await refresh()
+        setExistingCourseOpen(false)
+        setExistingCourseName('')
+        setExistingCourseCount(5)
+        setExistingCourseExpiry('')
+        showToast('既存コースを登録しました')
+      } else {
+        alert('登録に失敗しました')
+      }
+    } catch {
+      alert('登録に失敗しました')
+    } finally {
+      setExistingCourseSaving(false)
     }
   }
 
@@ -373,6 +668,12 @@ export default function CustomerDetailPage() {
           >
             <Edit2 className="w-3.5 h-3.5" /> 編集
           </button>
+          <Link
+            href={`/contracts/new?customer_id=${customer.id}`}
+            className="px-3 py-1.5 rounded-lg border border-rose text-rose text-sm font-medium hover:bg-rose/5 flex items-center gap-1"
+          >
+            <FileText className="w-3.5 h-3.5" /> 契約書作成
+          </Link>
           <Link
             href={`/karute?customer_id=${customer.id}`}
             className="px-3 py-1.5 rounded-lg bg-rose text-white text-sm font-medium hover:opacity-90"
@@ -461,12 +762,20 @@ export default function CustomerDetailPage() {
             <Ticket className="w-4 h-4 text-rose" />
             保有回数券
           </h2>
-          <button
-            onClick={() => setPurchaseOpen(true)}
-            className="text-xs font-semibold text-rose hover:underline"
-          >
-            + 購入
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setExistingCourseOpen(true)}
+              className="text-xs font-semibold text-[#0891B2] hover:underline"
+            >
+              + 既存コース
+            </button>
+            <button
+              onClick={() => setPurchaseOpen(true)}
+              className="text-xs font-semibold text-rose hover:underline"
+            >
+              + 購入
+            </button>
+          </div>
         </div>
         {ticketsLoading ? (
           <p className="text-sm text-text-sub py-4 flex items-center gap-2">
@@ -493,15 +802,27 @@ export default function CustomerDetailPage() {
                       {!expired && c.remainingSessions > 0 && ` (残${days}日)`}
                     </p>
                   </div>
-                  {c.remainingSessions > 0 && !expired && (
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => setConsumeTarget(c)}
+                      type="button"
+                      onClick={() => openTicketAdjustModal(c)}
                       disabled={actionLoading}
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded disabled:opacity-50"
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-[#4A5568] hover:bg-gray-100 rounded disabled:opacity-50"
                     >
-                      <Minus className="w-3 h-3" />消化
+                      <Pencil className="w-3 h-3" />
+                      調整
                     </button>
-                  )}
+                    {c.remainingSessions > 0 && !expired && (
+                      <button
+                        type="button"
+                        onClick={() => setConsumeTarget(c)}
+                        disabled={actionLoading}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded disabled:opacity-50"
+                      >
+                        <Minus className="w-3 h-3" />消化
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -545,15 +866,27 @@ export default function CustomerDetailPage() {
                       今月残り{remaining}/{s.sessionsPerMonth}回 · 次回課金{s.nextBillingDate}（残{days}日）
                     </p>
                   </div>
-                  {remaining > 0 && (
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => setSubUseTarget(s)}
+                      type="button"
+                      onClick={() => openSubAdjustModal(s)}
                       disabled={actionLoading}
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded disabled:opacity-50"
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-[#4A5568] hover:bg-gray-100 rounded disabled:opacity-50"
                     >
-                      <Minus className="w-3 h-3" />利用
+                      <Pencil className="w-3 h-3" />
+                      調整
                     </button>
-                  )}
+                    {remaining > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setSubUseTarget(s)}
+                        disabled={actionLoading}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded disabled:opacity-50"
+                      >
+                        <Minus className="w-3 h-3" />利用
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -603,10 +936,19 @@ export default function CustomerDetailPage() {
 
       {/* 来店・売上履歴 */}
       <div className="bg-white rounded-2xl p-5 card-shadow mb-6">
-        <h2 className="font-semibold text-text-main flex items-center gap-2 mb-3">
-          <Receipt className="w-4 h-4 text-rose" />
-          来店・売上履歴
-        </h2>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold text-text-main flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-rose" />
+            来店・売上履歴
+          </h2>
+          <button
+            onClick={openVisitAdd}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-rose text-white text-xs font-bold hover:opacity-90 transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            追加
+          </button>
+        </div>
         {visitsLoading ? (
           <p className="text-sm text-text-sub py-4 flex items-center gap-2">
             <Loader2 className="w-4 h-4 animate-spin" /> 読み込み中...
@@ -618,15 +960,23 @@ export default function CustomerDetailPage() {
             <div className="space-y-2">
               {(visitsExpanded ? visits : visits.slice(0, 10)).map(v => (
                 <div key={v.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#F8F5FF] border border-[#BAE6FD]">
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[#1A202C]">{v.menu || '—'}</p>
                     <p className="text-xs text-[#4A5568]">
                       {v.visit_date}{v.staff_name ? ` · ${v.staff_name}` : ''}
                     </p>
                   </div>
-                  {v.amount != null && (
-                    <p className="text-sm font-bold text-[#1A202C]">¥{v.amount.toLocaleString()}</p>
-                  )}
+                  <div className="flex items-center gap-2 ml-2 shrink-0">
+                    {v.amount != null && (
+                      <p className="text-sm font-bold text-[#1A202C]">¥{v.amount.toLocaleString()}</p>
+                    )}
+                    <button onClick={() => openVisitEdit(v)} className="p-1 text-[#4A5568] hover:text-rose transition" title="編集">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => handleVisitDelete(v.id)} className="p-1 text-[#4A5568] hover:text-red-500 transition" title="削除">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -641,6 +991,352 @@ export default function CustomerDetailPage() {
           </>
         )}
       </div>
+
+      {/* カウンセリング記録（構造化カルテ） */}
+      <div className="bg-white rounded-2xl p-5 card-shadow mb-6">
+        <h2 className="font-semibold text-text-main flex items-center gap-2 mb-3">
+          <MessageCircle className="w-4 h-4 text-[#9B8EC4]" />
+          カウンセリング記録
+        </h2>
+        {counselingLoading ? (
+          <p className="text-sm text-text-sub py-4 flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> 読み込み中...
+          </p>
+        ) : counselingSessions.length === 0 ? (
+          <p className="text-sm text-[#4A5568] py-2">カウンセリング記録はありません</p>
+        ) : (
+          <div className="space-y-3">
+            {counselingSessions.map(s => {
+              const kd = s.karte_data
+              const visitLabel = s.visit_date
+                ? new Date(s.visit_date).toLocaleDateString('ja-JP')
+                : new Date(s.created_at).toLocaleDateString('ja-JP')
+              const concernsText = Array.isArray(s.concerns)
+                ? s.concerns.join('、')
+                : typeof s.concerns === 'string'
+                  ? s.concerns
+                  : ''
+              const goalSummary = kd
+                ? [kd.phase4?.goal_timing, kd.phase4?.goal_scene, kd.phase4?.goal_state].filter(Boolean).join(' / ')
+                : ''
+              return (
+              <div key={s.id} className="rounded-lg border border-[#9B8EC4]/20 overflow-hidden">
+                <div className="px-3 py-2.5 bg-[#F8F5FF] border-b border-[#9B8EC4]/10 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium text-[#1A202C]">
+                      {visitLabel}
+                      {s.selected_menu ? ` · ${s.selected_menu}` : ''}
+                    </p>
+                    {kd && (
+                      <dl className="mt-2 grid gap-1.5 text-xs text-[#4A5568]">
+                        {kd.phase2?.menu_category ? (
+                          <div><span className="font-semibold text-[#1A202C]">来店目的</span> {kd.phase2.menu_category}</div>
+                        ) : null}
+                        {goalSummary ? (
+                          <div><span className="font-semibold text-[#1A202C]">目標</span> {goalSummary}</div>
+                        ) : null}
+                        {kd.phase2_5?.contraindications ? (
+                          <div><span className="font-semibold text-[#1A202C]">禁忌</span> {kd.phase2_5.contraindications}</div>
+                        ) : null}
+                        {kd.phase7_5?.anxiety ? (
+                          <div><span className="font-semibold text-[#1A202C]">不安</span> {kd.phase7_5.anxiety}</div>
+                        ) : null}
+                      </dl>
+                    )}
+                    {!kd && concernsText && (
+                      <p className="text-xs text-[#4A5568] mt-1">
+                        お悩み: {concernsText.slice(0, 80)}{concernsText.length > 80 ? '…' : ''}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openKarteEdit(s)}
+                      className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-[#9B8EC4] text-[#6B5B8C] hover:bg-white"
+                    >
+                      編集
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
+                      className="p-1 rounded hover:bg-[#E8E0F5]"
+                      title="会話ログ"
+                    >
+                      <ChevronDown className={`w-4 h-4 text-[#4A5568] transition-transform ${expandedSession === s.id ? 'rotate-180' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+                {expandedSession === s.id && s.chat_history && s.chat_history.length > 0 && (
+                  <div className="px-3 py-3 space-y-2 max-h-80 overflow-y-auto bg-white">
+                    {s.chat_history.map((m, i) => (
+                      <div key={i} className={`text-xs ${m.role === 'user' ? 'text-right' : ''}`}>
+                        <span className={`inline-block px-2.5 py-1.5 rounded-lg max-w-[85%] ${
+                          m.role === 'user'
+                            ? 'bg-gradient-to-r from-[#C4728A] to-[#9B8EC4] text-white'
+                            : 'bg-gray-100 text-[#1A202C]'
+                        }`}>
+                          {m.content.length > 200 ? m.content.slice(0, 200) + '...' : m.content}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* カウンセリング記録の編集モーダル */}
+      {karteEditForm && karteEditId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-lg max-h-[88vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">カウンセリング記録を編集</h3>
+              <button
+                type="button"
+                onClick={() => { setKarteEditId(null); setKarteEditForm(null) }}
+                className="p-2 text-text-sub"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="text-xs text-[#4A5568] block mb-1">来店日</label>
+                <input
+                  type="date"
+                  value={karteEditForm.date}
+                  onChange={(e) => setKarteEditForm((f) => (f ? { ...f, date: e.target.value } : null))}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2"
+                />
+              </div>
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 1</p>
+              {(
+                [
+                  ['source', 'どこで知ったか'],
+                  ['experience', 'エステ・クリニック経験'],
+                  ['experience_detail', '経験した施術・内容'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <label className="text-xs text-[#4A5568] block mb-1">{label}</label>
+                  <textarea
+                    value={karteEditForm.phase1[key]}
+                    onChange={(e) =>
+                      setKarteEditForm((f) =>
+                        f ? { ...f, phase1: { ...f.phase1, [key]: e.target.value } } : null,
+                      )
+                    }
+                    rows={2}
+                    className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 2</p>
+              {(
+                [
+                  ['menu_category', '来店目的・お悩みカテゴリ'],
+                  ['symptom', '症状の詳細'],
+                  ['home_care', 'ホームケア'],
+                  ['since', 'いつ頃から気になるか'],
+                  ['timing', '気になるタイミング'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <label className="text-xs text-[#4A5568] block mb-1">{label}</label>
+                  <textarea
+                    value={karteEditForm.phase2[key]}
+                    onChange={(e) =>
+                      setKarteEditForm((f) =>
+                        f ? { ...f, phase2: { ...f.phase2, [key]: e.target.value } } : null,
+                      )
+                    }
+                    rows={2}
+                    className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 2.5 禁忌</p>
+              <textarea
+                value={karteEditForm.phase2_5.contraindications}
+                onChange={(e) =>
+                  setKarteEditForm((f) =>
+                    f ? { ...f, phase2_5: { contraindications: e.target.value } } : null,
+                  )
+                }
+                rows={2}
+                className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 3 期待すること</p>
+              <textarea
+                value={karteEditForm.phase3.expectation}
+                onChange={(e) =>
+                  setKarteEditForm((f) => (f ? { ...f, phase3: { expectation: e.target.value } } : null))
+                }
+                rows={2}
+                className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 4 ゴール</p>
+              {(
+                [
+                  ['goal_timing', 'いつまでに悩みを解決したいか'],
+                  ['goal_scene', 'どんな場面で変化を感じたいか'],
+                  ['goal_state', '目指す状態'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <label className="text-xs text-[#4A5568] block mb-1">{label}</label>
+                  <textarea
+                    value={karteEditForm.phase4[key]}
+                    onChange={(e) =>
+                      setKarteEditForm((f) =>
+                        f ? { ...f, phase4: { ...f.phase4, [key]: e.target.value } } : null,
+                      )
+                    }
+                    rows={2}
+                    className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 5</p>
+              {(
+                [
+                  ['continue', '継続意向'],
+                  ['salon_value', 'サロンに求めること'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <label className="text-xs text-[#4A5568] block mb-1">{label}</label>
+                  <textarea
+                    value={karteEditForm.phase5[key]}
+                    onChange={(e) =>
+                      setKarteEditForm((f) =>
+                        f ? { ...f, phase5: { ...f.phase5, [key]: e.target.value } } : null,
+                      )
+                    }
+                    rows={2}
+                    className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+              ))}
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 7 スタッフとの関わり方</p>
+              <textarea
+                value={karteEditForm.phase7.staff_style}
+                onChange={(e) =>
+                  setKarteEditForm((f) =>
+                    f ? { ...f, phase7: { staff_style: e.target.value } } : null,
+                  )
+                }
+                rows={2}
+                className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+              <p className="text-xs font-bold text-[#1A202C] pt-2">PHASE 7.5 不安・心配事</p>
+              <textarea
+                value={karteEditForm.phase7_5.anxiety}
+                onChange={(e) =>
+                  setKarteEditForm((f) =>
+                    f ? { ...f, phase7_5: { anxiety: e.target.value } } : null,
+                  )
+                }
+                rows={2}
+                className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                type="button"
+                onClick={() => { setKarteEditId(null); setKarteEditForm(null) }}
+                className="flex-1 py-2 rounded-xl border border-gray-300 text-sm font-medium text-[#4A5568]"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleKarteEditSave()}
+                disabled={karteEditSaving}
+                className="flex-1 py-2 rounded-xl bg-rose text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {karteEditSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 来店履歴 追加/編集モーダル */}
+      {visitModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">{visitEditing ? '来店履歴を編集' : '来店履歴を追加'}</h3>
+              <button onClick={() => setVisitModalOpen(false)} className="p-2 text-text-sub">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">来店日 *</label>
+                <input
+                  type="date"
+                  value={visitForm.visit_date}
+                  onChange={e => setVisitForm(f => ({ ...f, visit_date: e.target.value }))}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">メニュー</label>
+                <input
+                  type="text"
+                  value={visitForm.menu}
+                  onChange={e => setVisitForm(f => ({ ...f, menu: e.target.value }))}
+                  placeholder="例: カット、カラー"
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">担当スタッフ</label>
+                <input
+                  type="text"
+                  value={visitForm.staff_name}
+                  onChange={e => setVisitForm(f => ({ ...f, staff_name: e.target.value }))}
+                  placeholder="例: 山田"
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">金額</label>
+                <input
+                  type="number"
+                  value={visitForm.amount}
+                  onChange={e => setVisitForm(f => ({ ...f, amount: e.target.value }))}
+                  placeholder="例: 8000"
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setVisitModalOpen(false)}
+                className="flex-1 py-2 rounded-xl border border-gray-300 text-sm font-medium text-[#4A5568]"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleVisitSave}
+                disabled={visitSaving || !visitForm.visit_date}
+                className="flex-1 py-2 rounded-xl bg-rose text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {visitSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {visitEditing ? '更新' : '追加'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 編集モーダル */}
       {editOpen && (
@@ -718,6 +1414,24 @@ export default function CustomerDetailPage() {
                   onChange={e => setEditForm(f => ({ ...f, birthday: e.target.value }))}
                   className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
                 />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">性別</label>
+                <select
+                  value={editForm.gender || 'unknown'}
+                  onChange={e =>
+                    setEditForm(f => ({
+                      ...f,
+                      gender: e.target.value as Customer['gender'],
+                    }))
+                  }
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="female">女性</option>
+                  <option value="male">男性</option>
+                  <option value="other">その他</option>
+                  <option value="unknown">不明</option>
+                </select>
               </div>
               <div>
                 <label className="text-xs text-[#4A5568] mb-1 block">初回来店日</label>
@@ -977,6 +1691,67 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
+      {/* 既存コース登録モーダル */}
+      {existingCourseOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold">既存コースを登録</h3>
+              <button onClick={() => setExistingCourseOpen(false)} className="p-2 text-text-sub">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-text-sub mb-3">他サロンや以前のコースを登録できます（売上計上なし）</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">コース名 *</label>
+                <input
+                  type="text"
+                  value={existingCourseName}
+                  onChange={e => setExistingCourseName(e.target.value)}
+                  placeholder="例: 全身脱毛コース"
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">残り回数 *</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={existingCourseCount}
+                  onChange={e => setExistingCourseCount(parseInt(e.target.value) || 0)}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">有効期限（任意）</label>
+                <input
+                  type="date"
+                  value={existingCourseExpiry}
+                  onChange={e => setExistingCourseExpiry(e.target.value)}
+                  className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={() => setExistingCourseOpen(false)}
+                className="flex-1 py-2 rounded-xl border"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleExistingCourse}
+                disabled={existingCourseSaving || !existingCourseName.trim() || existingCourseCount <= 0}
+                className="flex-1 py-2 rounded-xl bg-[#0891B2] text-white font-medium disabled:opacity-50"
+              >
+                {existingCourseSaving ? '登録中...' : '登録'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* サブスク利用確認 */}
       {subUseTarget && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
@@ -996,6 +1771,120 @@ export default function CustomerDetailPage() {
                 className="flex-1 py-2 rounded-lg bg-rose text-white font-medium disabled:opacity-50"
               >
                 {actionLoading ? '処理中...' : '利用する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {ticketAdjust && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-xl p-5 max-w-sm w-full max-h-[85vh] overflow-y-auto">
+            <h3 className="font-semibold text-sm mb-1">回数券の手動調整</h3>
+            <p className="text-xs text-text-sub mb-3">{ticketAdjust.planName}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">残回数（最大{ticketAdjust.totalSessions}回）</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={ticketAdjust.totalSessions}
+                  value={ticketAdjustRemaining}
+                  onChange={e => setTicketAdjustRemaining(e.target.value)}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">変更理由 *</label>
+                <textarea
+                  value={ticketAdjustReason}
+                  onChange={e => setTicketAdjustReason(e.target.value)}
+                  rows={3}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  placeholder="例: 誤登録の修正"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setTicketAdjust(null)}
+                className="flex-1 py-2 rounded-lg border"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleTicketAdjustSave}
+                disabled={ticketAdjustSaving}
+                className="flex-1 py-2 rounded-lg bg-rose text-white font-medium disabled:opacity-50"
+              >
+                {ticketAdjustSaving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subAdjust && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]">
+          <div className="bg-white rounded-xl p-5 max-w-sm w-full max-h-[85vh] overflow-y-auto">
+            <h3 className="font-semibold text-sm mb-1">サブスクの手動調整</h3>
+            <p className="text-xs text-text-sub mb-3">{subAdjust.planName}</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">ステータス</label>
+                <select
+                  value={subAdjustStatus}
+                  onChange={e =>
+                    setSubAdjustStatus(e.target.value as 'active' | 'paused' | 'cancelled')
+                  }
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="active">アクティブ</option>
+                  <option value="paused">一時停止</option>
+                  <option value="cancelled">解約</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">
+                  今月の残回数（最大{subAdjust.sessionsPerMonth}回）
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={subAdjust.sessionsPerMonth}
+                  value={subAdjustRemaining}
+                  onChange={e => setSubAdjustRemaining(e.target.value)}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-[#4A5568] mb-1 block">変更理由 *</label>
+                <textarea
+                  value={subAdjustReason}
+                  onChange={e => setSubAdjustReason(e.target.value)}
+                  rows={3}
+                  className="w-full border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
+                  placeholder="例: 店舗都合の補填"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setSubAdjust(null)}
+                className="flex-1 py-2 rounded-lg border"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={handleSubAdjustSave}
+                disabled={subAdjustSaving}
+                className="flex-1 py-2 rounded-lg bg-rose text-white font-medium disabled:opacity-50"
+              >
+                {subAdjustSaving ? '保存中...' : '保存'}
               </button>
             </div>
           </div>

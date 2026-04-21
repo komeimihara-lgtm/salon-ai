@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
+import { formatSignUpError } from '@/lib/auth-errors'
+import { normalizeOwnerEmail } from '@/lib/normalize-owner-email'
 
 const PLANS = [
   { value: 'lite', label: 'LITE', desc: '小規模サロン向け' },
@@ -30,47 +32,72 @@ export default function RegisterPage() {
     setError('')
     setLoading(true)
 
+    const trimmedEmail = form.email.trim()
+    const normalizedEmail = normalizeOwnerEmail(trimmedEmail)
+
     // 1. Supabase Auth でユーザー作成
     const supabase = createSupabaseBrowser()
-    const { error: authError } = await supabase.auth.signUp({
-      email: form.email,
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: trimmedEmail,
       password: form.password,
     })
 
     if (authError) {
-      setError(authError.message)
+      console.warn('[register] signUp:', authError.message, authError.status)
+      setError(formatSignUpError(authError))
       setLoading(false)
       return
     }
 
-    // 2. サーバーAPI経由でsalonsテーブルに新規レコード作成（admin clientでRLSバイパス）
+    // 2. サーバーAPI経由で salons 作成（service role・owner_email は API 内で正規化）
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        salonName: form.salonName,
-        ownerName: form.ownerName,
-        email: form.email,
+        salonName: form.salonName.trim(),
+        ownerName: form.ownerName.trim(),
+        email: normalizedEmail,
         plan: form.plan,
       }),
+      credentials: 'include',
     })
 
-    if (!res.ok) {
-      const { error: regError } = await res.json()
-      setError(regError || 'サロン登録に失敗しました')
+    let payload: { salon_id?: string; error?: string } = {}
+    try {
+      payload = await res.json()
+    } catch (parseErr) {
+      console.error('[register] JSON parse error:', parseErr)
+      setError('サロン登録の応答を解釈できませんでした')
       setLoading(false)
       return
     }
 
-    const { salon_id } = await res.json()
+    if (!res.ok) {
+      console.error('[register] /api/auth/register failed:', res.status, payload.error)
+      setError(payload.error || 'サロン登録に失敗しました')
+      setLoading(false)
+      return
+    }
 
-    // 3. salon_id を cookie にセット（サーバー側でもセット済みだがクライアント側でも確実に）
+    const { salon_id } = payload
+
+    // 3. salon_id を cookie にセット（サーバー応答の Set-Cookie に加えクライアントでも確実に）
     if (salon_id) {
-      document.cookie = `salon_id=${salon_id}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`
+      const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : ''
+      document.cookie = `salon_id=${encodeURIComponent(salon_id)}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax${secure}`
+    }
+
+    // メール確認必須のプロジェクトでは session が null → ダッシュボードへ行くと middleware で /login に戻る
+    if (!authData.session) {
+      router.push('/login?registered=1')
+      router.refresh()
+      setLoading(false)
+      return
     }
 
     router.push('/dashboard')
     router.refresh()
+    setLoading(false)
   }
 
   return (

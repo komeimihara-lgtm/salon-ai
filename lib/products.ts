@@ -11,6 +11,10 @@ export type Product = {
   low_stock_threshold: number
   barcode?: string
   memo?: string
+  /** 販売日からの消費期限までの日数。未設定なら期限トラッキングしない */
+  expiry_days?: number | null
+  /** 期限の何日前からアラートするか（既定14） */
+  expiry_alert_days?: number | null
   created_at?: string
 }
 

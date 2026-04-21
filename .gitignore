@@ -18,6 +18,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Cursor / Claude 作業用（誤ってサブモジュール化しない）
+.claude/worktrees/
+
 # OS
 .DS_Store
 

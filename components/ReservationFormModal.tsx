@@ -1,9 +1,30 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, Plus, Loader2 } from 'lucide-react'
+import { X, Plus, Loader2, Ticket } from 'lucide-react'
 import type { Customer } from '@/types'
 import { fetchMenus, getCategories, type MenuItem } from '@/lib/menus'
+
+interface CourseTicket {
+  id: string
+  plan_name: string
+  menu_name: string
+  remaining_count: number
+  total_sessions: number
+  unit_price: number | null
+  expiry_date: string | null
+  ticket_type: 'ticket'
+}
+
+interface CourseSub {
+  id: string
+  plan_name: string
+  menu_name: string
+  sessions_per_month: number
+  sessions_used: number
+  price: number
+  ticket_type: 'subscription'
+}
 
 type ShiftItem = { staff_id: string; staff_name?: string; date: string; start_time: string; end_time: string; staff?: { id: string; name: string; color: string } | { id: string; name: string; color: string }[] | null }
 
@@ -87,6 +108,9 @@ export default function ReservationFormModal({
     price: '',
     memo: '',
   })
+  const [courseTickets, setCourseTickets] = useState<CourseTicket[]>([])
+  const [courseSubs, setCourseSubs] = useState<CourseSub[]>([])
+  const [selectedCourse, setSelectedCourse] = useState<{ type: 'ticket' | 'subscription'; id: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [conflictInfo, setConflictInfo] = useState<{ customer_name: string; start_time: string; end_time: string; type: string } | null>(null)
@@ -291,6 +315,21 @@ export default function ReservationFormModal({
     setSearchQuery('')
     setCandidates([])
     setShowDropdown(false)
+    // 保有コース・サブスクを取得
+    fetchCustomerCourses(c.id)
+  }
+
+  function fetchCustomerCourses(customerId: string) {
+    setCourseTickets([])
+    setCourseSubs([])
+    setSelectedCourse(null)
+    fetch(`/api/customers/${customerId}/tickets`)
+      .then(r => r.json())
+      .then(d => {
+        setCourseTickets(d.tickets || [])
+        setCourseSubs(d.subscriptions || [])
+      })
+      .catch(() => {})
   }
 
   function resetCustomerFields() {
@@ -298,6 +337,9 @@ export default function ReservationFormModal({
     setSearchQuery('')
     setCandidates([])
     setShowDropdown(false)
+    setCourseTickets([])
+    setCourseSubs([])
+    setSelectedCourse(null)
   }
 
   async function handleSubmit() {
@@ -334,23 +376,28 @@ export default function ReservationFormModal({
         customerId = customer.id
       }
 
+      const reservationBody: Record<string, unknown> = {
+        customer_id: customerId,
+        customer_name: form.customer_name.trim(),
+        customer_phone: form.customer_phone.trim() || undefined,
+        reservation_date: form.reservation_date,
+        start_time: form.start_time,
+        end_time: form.end_time,
+        bed_id: form.bed_id || undefined,
+        duration_minutes: durationMinutes,
+        menu: form.menus.length > 0 ? form.menus.join(', ') : undefined,
+        staff_name: form.staff_name || undefined,
+        price: selectedCourse ? 0 : (parseInt(form.price) || 0),
+        memo: form.memo || undefined,
+        is_course: !!selectedCourse,
+        ticket_id: selectedCourse?.type === 'ticket' ? selectedCourse.id : undefined,
+        subscription_id: selectedCourse?.type === 'subscription' ? selectedCourse.id : undefined,
+      }
+
       const res = await fetch('/api/reservations/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customer_id: customerId,
-          customer_name: form.customer_name.trim(),
-          customer_phone: form.customer_phone.trim() || undefined,
-          reservation_date: form.reservation_date,
-          start_time: form.start_time,
-          end_time: form.end_time,
-          bed_id: form.bed_id || undefined,
-          duration_minutes: durationMinutes,
-          menu: form.menus.length > 0 ? form.menus.join(', ') : undefined,
-          staff_name: form.staff_name || undefined,
-          price: parseInt(form.price) || 0,
-          memo: form.memo || undefined,
-        }),
+        body: JSON.stringify(reservationBody),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -508,9 +555,77 @@ export default function ReservationFormModal({
             </div>
           )}
 
-          {/* 5. 施術メニュー（メニュー管理と連動・カテゴリでフィルタ） */}
+          {/* 5a. 保有コース・サブスク */}
+          {(courseTickets.length > 0 || courseSubs.length > 0) && (
+            <div>
+              <label className="text-xs text-[#4A5568] mb-1 block flex items-center gap-1">
+                <Ticket className="w-3.5 h-3.5" /> 保有コース・サブスク
+              </label>
+              <div className="border border-[#BAE6FD] rounded-lg p-2 space-y-1 bg-[#F0FFF4]">
+                {courseTickets.map(t => (
+                  <label key={t.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-white ${selectedCourse?.id === t.id ? 'bg-white border border-[#0891B2]' : ''}`}>
+                    <input
+                      type="radio"
+                      name="course_select"
+                      checked={selectedCourse?.id === t.id}
+                      onChange={() => {
+                        setSelectedCourse({ type: 'ticket', id: t.id })
+                        const menuName = t.menu_name || t.plan_name
+                        setForm(p => ({ ...p, menus: menuName ? [menuName] : p.menus, price: '0' }))
+                      }}
+                      className="accent-[#0891B2]"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm text-[#1A202C]">{t.plan_name}</span>
+                      <span className="text-xs text-[#4A5568] ml-2">残{t.remaining_count}/{t.total_sessions}回</span>
+                    </div>
+                    <span className="text-xs font-medium text-emerald-600 shrink-0">コース消化</span>
+                  </label>
+                ))}
+                {courseSubs.map(s => {
+                  const remaining = s.sessions_per_month - s.sessions_used
+                  return (
+                    <label key={s.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-white ${selectedCourse?.id === s.id ? 'bg-white border border-[#0891B2]' : ''}`}>
+                      <input
+                        type="radio"
+                        name="course_select"
+                        checked={selectedCourse?.id === s.id}
+                        onChange={() => {
+                          setSelectedCourse({ type: 'subscription', id: s.id })
+                          const menuName = s.menu_name || s.plan_name
+                          setForm(p => ({ ...p, menus: menuName ? [menuName] : p.menus, price: '0' }))
+                        }}
+                        className="accent-[#0891B2]"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-[#1A202C]">{s.plan_name}</span>
+                        <span className="text-xs text-[#4A5568] ml-2">今月残{remaining}/{s.sessions_per_month}回</span>
+                      </div>
+                      <span className="text-xs font-medium text-emerald-600 shrink-0">サブスク消化</span>
+                    </label>
+                  )
+                })}
+                {selectedCourse && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedCourse(null); setForm(p => ({ ...p, price: '' })) }}
+                    className="text-xs text-[#4A5568] hover:text-red-500 px-2 py-1"
+                  >
+                    選択を解除
+                  </button>
+                )}
+              </div>
+              {selectedCourse && (
+                <p className="text-xs text-emerald-600 mt-1 font-medium">コース消化予約（金額: ¥0）</p>
+              )}
+            </div>
+          )}
+
+          {/* 5b. 施術メニュー（メニュー管理と連動・カテゴリでフィルタ） */}
           <div>
-            <label className="text-xs text-[#4A5568] mb-1 block">施術メニュー</label>
+            <label className="text-xs text-[#4A5568] mb-1 block">
+              {(courseTickets.length > 0 || courseSubs.length > 0) ? 'その他メニュー' : '施術メニュー'}
+            </label>
             <div className="space-y-2">
               {categories.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
@@ -640,7 +755,11 @@ export default function ReservationFormModal({
             <p className="text-sm text-red-600 font-medium">{error}</p>
             {conflictInfo && (
               <p className="text-xs text-red-500 mt-1">
-                {conflictInfo.type === 'staff' ? '⚠️ スタッフの予約が重複しています' : '⚠️ ベッドの予約が重複しています'}
+                {conflictInfo.type === 'staff'
+                  ? '⚠️ スタッフの予約が重複しています'
+                  : conflictInfo.type === 'customer'
+                    ? '⚠️ 同一お客様の予約が時間重複しています'
+                    : '⚠️ ベッドの予約が重複しています'}
                 ：{conflictInfo.customer_name}様 {conflictInfo.start_time}〜{conflictInfo.end_time}
               </p>
             )}

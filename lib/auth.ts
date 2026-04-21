@@ -1,7 +1,7 @@
 import { createSupabaseBrowser } from './supabase-browser'
 import { getSalonId } from './supabase'
 
-/** ログイン中ユーザーのサロンIDを取得（未ログインはcookie/環境変数から） */
+/** ログイン中ユーザーのサロンIDを取得（DB優先、なければ cookie） */
 export async function getCurrentSalonId(): Promise<string> {
   const supabase = createSupabaseBrowser()
   const { data: { user } } = await supabase.auth.getUser()

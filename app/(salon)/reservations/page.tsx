@@ -791,26 +791,50 @@ export default function ReservationsPage() {
     [reservations, selectedDate]
   )
 
-  // アクションハンドラ
+  /** タイムライン（カレンダー格子）にはキャンセル・無断欠席を出さない */
+  const timelineReservations = useMemo(
+    () => selectedReservations.filter(r => r.status !== 'cancelled' && r.status !== 'no_show'),
+    [selectedReservations]
+  )
+
+  // アクションハンドラ（来店 = 回数券/サブスク消化込みの /visit を呼ぶ）
   const handleVisit = async (id: string) => {
-    await fetch('/api/reservations/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status: 'visited' }),
-    })
-    setDetailTarget(null)
-    fetchReservations()
+    try {
+      const res = await fetch('/api/reservations/visit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        alert(json.error || '来店処理に失敗しました')
+        return
+      }
+      setDetailTarget(null)
+      fetchReservations()
+    } catch {
+      alert('来店処理中にエラーが発生しました')
+    }
   }
 
   const handleCancel = async (id: string) => {
     if (!confirm('この予約をキャンセルしますか？')) return
-    await fetch('/api/reservations/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status: 'cancelled' }),
-    })
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelled' } : r))
-    setDetailTarget(null)
+    try {
+      const res = await fetch('/api/reservations/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: 'cancelled' }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(`キャンセルに失敗しました: ${err.error || res.statusText}`)
+        return
+      }
+      setReservations(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelled' } : r))
+      setDetailTarget(null)
+    } catch {
+      alert('キャンセル処理中にエラーが発生しました')
+    }
   }
 
   // 空き枠クリック — アクション選択
@@ -909,7 +933,7 @@ export default function ReservationsPage() {
       ) : (
         <Timeline
           beds={beds}
-          reservations={selectedReservations}
+          reservations={timelineReservations}
           shifts={shifts}
           staffColorMap={staffColorMap}
           blockedTimes={blockedTimes.filter(b => b.block_date === selectedDate)}
