@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Plus, Trash2, Save, Pencil, X, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Save, Pencil, X, Loader2, Copy, RefreshCw, AlertTriangle } from 'lucide-react'
 import { getSalonSettings, setSalonSettings, type SalonSettings } from '@/lib/salon-settings'
 
 type BedsState = string[]
@@ -41,6 +41,26 @@ export default function SettingsPage() {
   const [lineStatus, setLineStatus] = useState<'unknown' | 'connected' | 'error'>('unknown')
   const [lineToast, setLineToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
+  // HP連携
+  const [hpEnabled, setHpEnabled] = useState(false)
+  const [hpEmail, setHpEmail] = useState('')
+  const [hpPassword, setHpPassword] = useState('')
+  const [hpPasswordSet, setHpPasswordSet] = useState(false)
+  const [hpPasswordMasked, setHpPasswordMasked] = useState('')
+  const [hpSyncEmail, setHpSyncEmail] = useState('')
+  const [hpLastSyncedAt, setHpLastSyncedAt] = useState<string | null>(null)
+  const [hpSaving, setHpSaving] = useState(false)
+  const [hpSyncing, setHpSyncing] = useState(false)
+  const [hpCopied, setHpCopied] = useState(false)
+  const [hpLogs, setHpLogs] = useState<Array<{
+    id: string
+    source: string
+    status: string
+    message: string | null
+    created_at: string
+  }>>([])
+  const [hpToast, setHpToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
   useEffect(() => {
     // DBから全設定を取得
     fetch('/api/settings/salon')
@@ -72,6 +92,97 @@ export default function SettingsPage() {
       return () => clearTimeout(t)
     }
   }, [lineToast])
+
+  // HP連携の初期読込
+  const loadHpLogs = async () => {
+    try {
+      const res = await fetch('/api/hp-sync/logs')
+      const j = await res.json()
+      setHpLogs(j.logs || [])
+    } catch {}
+  }
+
+  useEffect(() => {
+    fetch('/api/settings/hp-sync')
+      .then(r => r.json())
+      .then(j => {
+        setHpEnabled(!!j.hp_sync_enabled)
+        setHpEmail(j.hp_email || '')
+        setHpPasswordSet(!!j.hp_password_set)
+        setHpPasswordMasked(j.hp_password_masked || '')
+        setHpSyncEmail(j.hp_sync_email || '')
+        setHpLastSyncedAt(j.hp_last_synced_at || null)
+      })
+      .catch(() => {})
+    loadHpLogs()
+  }, [])
+
+  useEffect(() => {
+    if (hpToast) {
+      const t = setTimeout(() => setHpToast(null), 3000)
+      return () => clearTimeout(t)
+    }
+  }, [hpToast])
+
+  const saveHpSettings = async () => {
+    setHpSaving(true)
+    try {
+      const payload: Record<string, unknown> = {
+        hp_email: hpEmail,
+        hp_sync_enabled: hpEnabled,
+      }
+      if (hpPassword) {
+        payload.hp_password = hpPassword
+      }
+      const res = await fetch('/api/settings/hp-sync', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error()
+      setHpPassword('')
+      setHpToast({ message: 'HP連携設定を保存しました', type: 'success' })
+      // 再読込
+      const r2 = await fetch('/api/settings/hp-sync')
+      const j2 = await r2.json()
+      setHpPasswordSet(!!j2.hp_password_set)
+      setHpPasswordMasked(j2.hp_password_masked || '')
+    } catch {
+      setHpToast({ message: '保存に失敗しました', type: 'error' })
+    } finally {
+      setHpSaving(false)
+    }
+  }
+
+  const runManualSync = async () => {
+    setHpSyncing(true)
+    try {
+      const res = await fetch('/api/hp-sync/manual', { method: 'POST' })
+      const j = await res.json()
+      if (!res.ok || j.error) {
+        setHpToast({ message: j.error || '同期に失敗しました', type: 'error' })
+      } else {
+        setHpToast({
+          message: `同期完了：新規${j.inserted} / 更新${j.updated} / 重複${j.duplicate}`,
+          type: 'success',
+        })
+        setHpLastSyncedAt(new Date().toISOString())
+      }
+      await loadHpLogs()
+    } catch {
+      setHpToast({ message: '同期に失敗しました', type: 'error' })
+    } finally {
+      setHpSyncing(false)
+    }
+  }
+
+  const copySyncEmail = () => {
+    if (!hpSyncEmail) return
+    navigator.clipboard.writeText(hpSyncEmail).then(() => {
+      setHpCopied(true)
+      setTimeout(() => setHpCopied(false), 1500)
+    })
+  }
 
   const save = async () => {
     try {
@@ -436,6 +547,180 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      {/* HP連携（ホットペッパービューティー自動同期） */}
+      <section>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="gradient-line rounded-full" />
+          <span className="section-label font-dm-sans">HP連携</span>
+        </div>
+        <div className="bg-white rounded-2xl p-6 card-shadow overflow-hidden">
+          <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender -mx-6 -mt-6 mb-6" />
+
+          {/* 免責事項 */}
+          <div className="flex items-start gap-2 mb-4 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800 leading-relaxed">
+              HP連携はサロンボードの自動取得を含みます。ログイン情報はAES-256で暗号化して保存されます。
+              リクルート社の規約により自動アクセスは禁止されているため、
+              <strong>本機能は自己責任でご利用ください</strong>。アクセス制限・BANが発生した場合、
+              当社は責任を負いかねます。
+            </p>
+          </div>
+
+          {/* ON/OFFトグル */}
+          <div className="flex items-center justify-between mb-4 py-2">
+            <div>
+              <p className="font-medium text-text-main text-sm">HP連携を有効化</p>
+              <p className="text-xs text-text-sub mt-0.5">メール＋スクレイピングによる自動同期</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setHpEnabled(v => !v)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                hpEnabled ? 'bg-gradient-to-r from-rose to-lavender' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  hpEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* 専用メールアドレス */}
+          <div className="mb-4">
+            <label className="text-xs text-text-sub block mb-1">
+              専用メールアドレス（HPの予約通知をこのアドレスに転送）
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                readOnly
+                value={hpSyncEmail}
+                className="flex-1 px-4 py-2 rounded-xl border border-gray-200 bg-gray-50 text-sm font-mono"
+              />
+              <button
+                type="button"
+                onClick={copySyncEmail}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-text-main hover:bg-gray-50 flex items-center gap-1.5 text-sm"
+              >
+                <Copy className="w-4 h-4" />
+                {hpCopied ? 'コピー済' : 'コピー'}
+              </button>
+            </div>
+          </div>
+
+          {/* ログイン情報 */}
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="text-xs text-text-sub block mb-1">HPログインメールアドレス</label>
+              <input
+                type="email"
+                value={hpEmail}
+                onChange={e => setHpEmail(e.target.value)}
+                placeholder="your-salon@example.com"
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-sub block mb-1">
+                HPログインパスワード
+                {hpPasswordSet && !hpPassword && (
+                  <span className="ml-2 text-[10px] text-emerald-600">
+                    ● 保存済み（{hpPasswordMasked}）
+                  </span>
+                )}
+              </label>
+              <input
+                type="password"
+                value={hpPassword}
+                onChange={e => setHpPassword(e.target.value)}
+                placeholder={hpPasswordSet ? '変更しない場合は空欄のまま' : 'パスワードを入力'}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-rose text-sm"
+              />
+            </div>
+          </div>
+
+          {/* 保存＋同期ボタン */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={saveHpSettings}
+              disabled={hpSaving}
+              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {hpSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />}
+              設定を保存
+            </button>
+            <button
+              onClick={runManualSync}
+              disabled={hpSyncing || !hpEnabled || !hpPasswordSet}
+              className="px-4 py-3 rounded-xl border border-rose/50 text-rose font-bold disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+              title={!hpEnabled ? 'HP連携をONにしてください' : ''}
+            >
+              {hpSyncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              今すぐ同期
+            </button>
+          </div>
+
+          {/* 最終同期日時 */}
+          {hpLastSyncedAt && (
+            <p className="text-xs text-text-sub mb-4">
+              最終同期: {new Date(hpLastSyncedAt).toLocaleString('ja-JP')}
+            </p>
+          )}
+
+          {/* 同期ログ（直近10件） */}
+          {hpLogs.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-text-main mb-2">同期ログ（直近{hpLogs.length}件）</p>
+              <div className="space-y-1 max-h-64 overflow-y-auto">
+                {hpLogs.map(log => (
+                  <div
+                    key={log.id}
+                    className="flex items-start gap-2 px-3 py-2 rounded-lg bg-light-lav/30 text-xs"
+                  >
+                    <span
+                      className={`shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full ${
+                        log.status === 'success'
+                          ? 'bg-emerald-500'
+                          : log.status === 'duplicate'
+                            ? 'bg-gray-400'
+                            : log.status === 'skipped'
+                              ? 'bg-amber-400'
+                              : 'bg-red-500'
+                      }`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between gap-2">
+                        <span className="font-medium text-text-main">
+                          {log.source === 'email'
+                            ? 'メール'
+                            : log.source === 'scrape'
+                              ? 'スクレイピング'
+                              : '手動'}
+                        </span>
+                        <span className="text-text-sub shrink-0">
+                          {new Date(log.created_at).toLocaleString('ja-JP', {
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      {log.message && (
+                        <p className="text-text-sub mt-0.5 break-all">{log.message}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* LINE連携 */}
       <section>
         <div className="flex items-center gap-3 mb-4">
@@ -477,6 +762,11 @@ export default function SettingsPage() {
       {lineToast && (
         <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-lg font-medium ${lineToast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'} text-white`}>
           {lineToast.message}
+        </div>
+      )}
+      {hpToast && (
+        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl shadow-lg font-medium ${hpToast.type === 'success' ? 'bg-emerald-600' : 'bg-red-600'} text-white`}>
+          {hpToast.message}
         </div>
       )}
     </div>

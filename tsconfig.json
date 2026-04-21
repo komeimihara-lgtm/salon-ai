@@ -35,6 +35,7 @@
   ],
   "exclude": [
     "node_modules",
-    "Users/komeimihara/salon-ai-build"
+    "Users/komeimihara/salon-ai-build",
+    "scraper-service"
   ]
 }
