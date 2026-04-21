@@ -190,6 +190,31 @@ export async function addCustomerSubscription(
   return mapRowToSub(json.subscription)
 }
 
+export async function updateCustomerSubscription(
+  subId: string,
+  updates: { planName?: string; menuName?: string; price?: number; sessionsPerMonth?: number }
+): Promise<void> {
+  const body: Record<string, unknown> = {}
+  if (updates.planName !== undefined) body.plan_name = updates.planName
+  if (updates.menuName !== undefined) body.menu_name = updates.menuName
+  if (updates.price !== undefined) body.price = updates.price
+  if (updates.sessionsPerMonth !== undefined) body.sessions_per_month = updates.sessionsPerMonth
+
+  const res = await fetch(`/api/customer-subscriptions/${subId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error('更新に失敗しました')
+  window.dispatchEvent(new Event('customer-subscriptions-updated'))
+}
+
+export async function deleteCustomerSubscription(subId: string): Promise<void> {
+  const res = await fetch(`/api/customer-subscriptions/${subId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('削除に失敗しました')
+  window.dispatchEvent(new Event('customer-subscriptions-updated'))
+}
+
 export async function useSubscriptionSession(subId: string): Promise<boolean> {
   const all = await fetchCustomerSubscriptions()
   const sub = all.find(s => s.id === subId)

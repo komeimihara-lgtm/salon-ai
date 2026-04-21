@@ -12,12 +12,16 @@ import {
   Calendar,
   Pause,
   Play,
+  Pencil,
+  Trash2,
 } from 'lucide-react'
 import {
   fetchSubscriptionPlans,
   fetchCustomerSubscriptions,
   addCustomerSubscription,
   useSubscriptionSession,
+  updateCustomerSubscription,
+  deleteCustomerSubscription,
   cancelSubscription,
   pauseSubscription,
   resumeSubscription,
@@ -35,6 +39,8 @@ export default function SubscriptionsPage() {
   const [filter, setFilter] = useState<'all' | 'active' | 'paused'>('all')
   const [purchaseModalOpen, setPurchaseModalOpen] = useState(false)
   const [useModalOpen, setUseModalOpen] = useState<CustomerSubscription | null>(null)
+  const [editModalOpen, setEditModalOpen] = useState<CustomerSubscription | null>(null)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<CustomerSubscription | null>(null)
 
   const refresh = useCallback(async () => {
     const [subsData, plansData] = await Promise.all([
@@ -99,7 +105,7 @@ export default function SubscriptionsPage() {
                 <th className="text-left p-3 text-text-sub font-medium">今月の残り</th>
                 <th className="text-left p-3 text-text-sub font-medium">次回課金</th>
                 <th className="text-left p-3 text-text-sub font-medium">ステータス</th>
-                <th className="text-left p-3 text-text-sub font-medium w-28">操作</th>
+                <th className="text-left p-3 text-text-sub font-medium">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -147,27 +153,55 @@ export default function SubscriptionsPage() {
                         </span>
                       </td>
                       <td className="p-3">
-                        {s.status === 'active' && remaining > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {s.status === 'active' && remaining > 0 && (
+                            <button
+                              onClick={() => setUseModalOpen(s)}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded-lg"
+                            >
+                              <Minus className="w-3 h-3" />
+                              利用
+                            </button>
+                          )}
+                          {s.status === 'active' && (
+                            <button
+                              onClick={async () => {
+                                await pauseSubscription(s.id)
+                                refresh()
+                              }}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-50 rounded-lg"
+                              title="一時停止"
+                            >
+                              <Pause className="w-3 h-3" />
+                            </button>
+                          )}
+                          {s.status === 'paused' && (
+                            <button
+                              onClick={async () => {
+                                await resumeSubscription(s.id)
+                                refresh()
+                              }}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50 rounded-lg"
+                              title="再開"
+                            >
+                              <Play className="w-3 h-3" />
+                            </button>
+                          )}
                           <button
-                            onClick={() => setUseModalOpen(s)}
-                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-rose hover:bg-rose/10 rounded-lg"
+                            onClick={() => setEditModalOpen(s)}
+                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-text-sub hover:bg-gray-100 rounded-lg"
+                            title="編集"
                           >
-                            <Minus className="w-3 h-3" />
-                            1回利用
+                            <Pencil className="w-3 h-3" />
                           </button>
-                        )}
-                        {s.status === 'paused' && (
                           <button
-                            onClick={async () => {
-                              await resumeSubscription(s.id)
-                              refresh()
-                            }}
-                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-600"
+                            onClick={() => setDeleteConfirmOpen(s)}
+                            className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-400 hover:bg-red-50 rounded-lg"
+                            title="削除"
                           >
-                            <Play className="w-3 h-3" />
-                            再開
+                            <Trash2 className="w-3 h-3" />
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   )
@@ -184,6 +218,45 @@ export default function SubscriptionsPage() {
         </Link>
         でサブスクプランを登録できます
       </p>
+
+      {editModalOpen && (
+        <EditModal
+          subscription={editModalOpen}
+          onClose={() => setEditModalOpen(null)}
+          onSaved={refresh}
+        />
+      )}
+
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <h3 className="font-semibold text-text-main mb-2">サブスクを削除しますか？</h3>
+            <p className="text-sm text-text-sub mb-4">
+              {deleteConfirmOpen.customerName} 様の {deleteConfirmOpen.planName} を削除します。
+              <br />
+              この操作は取り消せません。
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDeleteConfirmOpen(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-text-main"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={async () => {
+                  await deleteCustomerSubscription(deleteConfirmOpen.id)
+                  refresh()
+                  setDeleteConfirmOpen(null)
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600"
+              >
+                削除する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {purchaseModalOpen && (
         <PurchaseModal
@@ -418,6 +491,111 @@ function PurchaseModal({
             </div>
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function EditModal({
+  subscription,
+  onClose,
+  onSaved,
+}: {
+  subscription: CustomerSubscription
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [planName, setPlanName] = useState(subscription.planName)
+  const [menuName, setMenuName] = useState(subscription.menuName)
+  const [price, setPrice] = useState(String(subscription.price))
+  const [sessionsPerMonth, setSessionsPerMonth] = useState(String(subscription.sessionsPerMonth))
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await updateCustomerSubscription(subscription.id, {
+        planName,
+        menuName,
+        price: Number(price),
+        sessionsPerMonth: Number(sessionsPerMonth),
+      })
+      onSaved()
+      onClose()
+    } catch {
+      alert('更新に失敗しました')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-text-main">サブスク編集</h3>
+          <button onClick={onClose} className="p-2 text-text-sub hover:text-text-main rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="text-sm text-text-sub mb-4">
+          {subscription.customerName} 様
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-text-sub mb-1 block">プラン名</label>
+            <input
+              type="text"
+              value={planName}
+              onChange={e => setPlanName(e.target.value)}
+              className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-text-sub mb-1 block">メニュー名</label>
+            <input
+              type="text"
+              value={menuName}
+              onChange={e => setMenuName(e.target.value)}
+              className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-text-sub mb-1 block">月額料金 (円)</label>
+              <input
+                type="number"
+                value={price}
+                onChange={e => setPrice(e.target.value)}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-sub mb-1 block">月回数</label>
+              <input
+                type="number"
+                value={sessionsPerMonth}
+                onChange={e => setSessionsPerMonth(e.target.value)}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-text-main"
+          >
+            キャンセル
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || !planName.trim()}
+            className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-medium disabled:opacity-50"
+          >
+            {saving ? '保存中...' : '保存'}
+          </button>
+        </div>
       </div>
     </div>
   )
