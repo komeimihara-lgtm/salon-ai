@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { overwriteSaleCustomerNamesFromDb } from '@/lib/sale-customer-display'
 
-const PAYMENT_METHODS = ['cash', 'card', 'online', 'loan'] as const
+import { PAYMENT_METHODS } from '@/lib/payment-methods'
 
 function toCustomerSubscription(row: Record<string, unknown>): Record<string, unknown> {
   return {

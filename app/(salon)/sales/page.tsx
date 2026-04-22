@@ -16,6 +16,8 @@ import { fetchProducts, adjustStock, type Product } from '@/lib/products'
 const PAYMENTS = [
   { value: 'cash', label: '現金' },
   { value: 'card', label: 'カード' },
+  { value: 'transit_ic', label: '交通系IC' },
+  { value: 'qr_code', label: 'QR決済' },
   { value: 'online', label: 'オンライン決済' },
   { value: 'loan', label: 'ローン' },
 ]
@@ -23,6 +25,8 @@ const PAYMENTS = [
 const SALE_TYPE_LABELS: Record<string, string> = {
   cash: '現金',
   card: 'カード',
+  transit_ic: '交通系IC',
+  qr_code: 'QR決済',
   online: 'オンライン決済',
   loan: 'ローン',
   product: '物販',
@@ -429,7 +433,7 @@ export default function SalesPage() {
           for (let i = 0; i < c.qty; i++) {
             // 売上は app/api/customer-tickets POST（record_sale）のみで1件計上。ここでは二重登録しない
             await addCustomerTicket(custId, selectedCustomer!.name, c.ticketPlan, {
-              paymentMethod: paymentMethod as 'cash' | 'card' | 'online' | 'loan',
+              paymentMethod: paymentMethod as import('@/lib/payment-methods').PaymentMethod,
               campaignId: c.campaign?.id,
             })
           }
@@ -439,7 +443,7 @@ export default function SalesPage() {
           for (let i = 0; i < c.qty; i++) {
             // 売上は app/api/customer-subscriptions POST（record_sale）のみで1件計上
             await addCustomerSubscription(custId, selectedCustomer!.name, c.subPlan, {
-              paymentMethod: paymentMethod as 'cash' | 'card' | 'online' | 'loan',
+              paymentMethod: paymentMethod as import('@/lib/payment-methods').PaymentMethod,
               campaignId: c.campaign?.id,
             })
           }
@@ -454,7 +458,14 @@ export default function SalesPage() {
           credentials: 'include',
           body: JSON.stringify({ sales: salesToCreate }),
         })
-        if (!res.ok) throw new Error()
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}))
+          const detail =
+            (j && (j.error || j.message)) ||
+            `サーバエラー (HTTP ${res.status})`
+          console.error('sales POST failed', { status: res.status, body: j })
+          throw new Error(`売上登録に失敗しました: ${detail}`)
+        }
       }
       for (const c of cart) {
         if (c.category === '物販' && c.productId && c.qty > 0) {
@@ -1165,6 +1176,8 @@ export default function SalesPage() {
                 >
                   <option value="cash">現金</option>
                   <option value="card">カード</option>
+                  <option value="transit_ic">交通系IC</option>
+                  <option value="qr_code">QR決済</option>
                   <option value="online">オンライン</option>
                   <option value="loan">ローン</option>
                   <option value="product">物販</option>

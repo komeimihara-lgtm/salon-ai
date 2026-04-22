@@ -160,7 +160,7 @@ export async function addCustomerTicket(
   plan: TicketPlan,
   options?: {
     purchasedAt?: string
-    paymentMethod?: 'cash' | 'card' | 'online' | 'loan'
+    paymentMethod?: import('@/lib/payment-methods').PaymentMethod
     campaignId?: string
   }
 ): Promise<CustomerTicket> {

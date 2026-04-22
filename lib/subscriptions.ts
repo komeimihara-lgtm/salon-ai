@@ -153,7 +153,7 @@ export async function addCustomerSubscription(
   plan: SubscriptionPlan,
   options?: {
     startedAt?: string
-    paymentMethod?: 'cash' | 'card' | 'online' | 'loan'
+    paymentMethod?: import('@/lib/payment-methods').PaymentMethod
     campaignId?: string
   }
 ): Promise<CustomerSubscription> {

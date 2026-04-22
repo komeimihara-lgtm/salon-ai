@@ -47,6 +47,8 @@ import {
 } from '@/lib/subscriptions'
 import type { CounselingKartePayload } from '@/lib/counseling-karte-types'
 import { emptyCounselingKarte } from '@/lib/counseling-karte-types'
+import type { PaymentMethod } from '@/lib/payment-methods'
+import { PAYMENT_METHODS } from '@/lib/payment-methods'
 
 function normalizeKarte(raw: unknown, fallbackDate: string): CounselingKartePayload {
   const e = emptyCounselingKarte(fallbackDate)
@@ -151,9 +153,9 @@ export default function CustomerDetailPage() {
   const [ticketModalCategory, setTicketModalCategory] = useState('')
   const [subModalCategory, setSubModalCategory] = useState('')
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().slice(0, 10))
-  const [purchasePaymentMethod, setPurchasePaymentMethod] = useState<'cash' | 'card' | 'online' | 'loan'>('card')
+  const [purchasePaymentMethod, setPurchasePaymentMethod] = useState<PaymentMethod>('card')
   const [subJoinDate, setSubJoinDate] = useState(new Date().toISOString().slice(0, 10))
-  const [subPaymentMethod, setSubPaymentMethod] = useState<'cash' | 'card' | 'online' | 'loan'>('card')
+  const [subPaymentMethod, setSubPaymentMethod] = useState<PaymentMethod>('card')
   const [unmatchedUsers, setUnmatchedUsers] = useState<{ line_user_id: string; followed_at: string }[]>([])
   const [linkingLine, setLinkingLine] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -1540,11 +1542,13 @@ export default function CustomerDetailPage() {
                   <label className="text-xs text-[#4A5568] mb-1 block">支払方法</label>
                   <select
                     value={purchasePaymentMethod}
-                    onChange={e => setPurchasePaymentMethod(e.target.value as 'cash' | 'card' | 'online' | 'loan')}
+                    onChange={e => setPurchasePaymentMethod(e.target.value as PaymentMethod)}
                     className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
                   >
                     <option value="cash">現金</option>
                     <option value="card">カード</option>
+                    <option value="transit_ic">交通系IC</option>
+                    <option value="qr_code">QR決済</option>
                     <option value="online">オンライン</option>
                     <option value="loan">ローン</option>
                   </select>
@@ -1629,11 +1633,13 @@ export default function CustomerDetailPage() {
                   <label className="text-xs text-[#4A5568] mb-1 block">支払方法</label>
                   <select
                     value={subPaymentMethod}
-                    onChange={e => setSubPaymentMethod(e.target.value as 'cash' | 'card' | 'online' | 'loan')}
+                    onChange={e => setSubPaymentMethod(e.target.value as PaymentMethod)}
                     className="w-full bg-white border border-[#BAE6FD] rounded-lg px-3 py-2 text-sm"
                   >
                     <option value="cash">現金</option>
                     <option value="card">カード</option>
+                    <option value="transit_ic">交通系IC</option>
+                    <option value="qr_code">QR決済</option>
                     <option value="online">オンライン</option>
                     <option value="loan">ローン</option>
                   </select>

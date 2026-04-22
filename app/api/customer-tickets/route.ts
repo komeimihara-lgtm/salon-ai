@@ -3,7 +3,7 @@ import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { overwriteSaleCustomerNamesFromDb } from '@/lib/sale-customer-display'
 
-const PAYMENT_METHODS = ['cash', 'card', 'online', 'loan'] as const
+import { PAYMENT_METHODS } from '@/lib/payment-methods'
 
 const SELECT_COLS = 'id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, unit_price, purchased_at, expiry_date, customers(name)'
 const SELECT_COLS_NO_UNIT_PRICE = 'id, customer_id, ticket_plan_id, plan_name, menu_name, total_sessions, remaining_sessions, purchased_at, expiry_date, customers(name)'

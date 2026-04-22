@@ -154,6 +154,9 @@ export async function POST(req: NextRequest) {
       }))
     )
 
+    // 監査ログは best-effort: 失敗しても売上自体はロールバックしない。
+    // 以前は1件でも失敗すると全売上を物理削除していたが、それにより
+    // 「登録成功したのに見かけ上消える」事故が起きるため警告ログのみに変更。
     for (const row of rows) {
       const { error: logErr } = await insertSaleLog({
         saleId: row.id,
@@ -164,12 +167,12 @@ export async function POST(req: NextRequest) {
         operatedBy,
       })
       if (logErr) {
-        console.error(`${LOG_TAG} POST insertSaleLog failed`, { saleId: row.id, err: logErr })
-        await supabase.from('sales').delete().in(
-          'id',
-          rows.map((r) => r.id)
-        )
-        return jsonErrorWithDetails(500, '監査ログの記録に失敗しました', { caught: logErr })
+        console.error(`${LOG_TAG} POST insertSaleLog failed (non-fatal)`, {
+          saleId: row.id,
+          salonId_suffix: String(row.salon_id ?? '').slice(-8),
+          operatedBy,
+          err: logErr,
+        })
       }
     }
 
