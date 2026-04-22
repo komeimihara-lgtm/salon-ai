@@ -11,7 +11,7 @@ declare global {
 interface MenuItem { id: string; name: string; duration: number; price: number; category: string }
 interface Slot { staff_id: string; staff_name: string; staff_color: string; start: string; end: string; bed_id?: string }
 interface CourseTicket { id: string; plan_name: string; menu_name: string; remaining_count: number; total_sessions: number; ticket_type: 'ticket' }
-interface CourseSub { id: string; plan_name: string; menu_name: string; sessions_per_month: number; sessions_used: number; ticket_type: 'subscription' }
+interface CourseSub { id: string; plan_name: string; menu_name: string; sessions_per_month: number; sessions_used: number; duration_minutes?: number; ticket_type: 'subscription' }
 
 const WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
 
@@ -390,7 +390,7 @@ export default function LiffBookingPage() {
                     </button>
                   ))}
                   {courseSubs.map(s => (
-                    <button key={s.id} onClick={() => handleSelectCourse({ type: 'subscription', id: s.id, name: s.menu_name || s.plan_name, duration: 60 })}
+                    <button key={s.id} onClick={() => handleSelectCourse({ type: 'subscription', id: s.id, name: s.menu_name || s.plan_name, duration: s.duration_minutes || 60 })}
                       className="w-full bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-left flex items-center justify-between hover:shadow-md transition-all">
                       <div>
                         <p className="font-bold text-gray-800">{s.plan_name}</p>
