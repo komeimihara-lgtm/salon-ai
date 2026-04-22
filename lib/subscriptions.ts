@@ -76,6 +76,37 @@ export async function createSubscriptionPlan(plan: {
   return mapRowToPlan(json.plan as Record<string, unknown>)
 }
 
+export async function updateSubscriptionPlan(
+  id: string,
+  updates: {
+    name?: string
+    menuName?: string
+    price?: number
+    sessionsPerMonth?: number
+    billingDay?: number
+    category?: string
+    durationMinutes?: number
+  }
+): Promise<SubscriptionPlan> {
+  const body: Record<string, unknown> = {}
+  if (updates.name !== undefined) body.name = updates.name
+  if (updates.menuName !== undefined) body.menu_name = updates.menuName
+  if (updates.price !== undefined) body.price = updates.price
+  if (updates.sessionsPerMonth !== undefined) body.sessions_per_month = updates.sessionsPerMonth
+  if (updates.billingDay !== undefined) body.billing_day = updates.billingDay
+  if (updates.category !== undefined) body.category = updates.category
+  if (updates.durationMinutes !== undefined) body.duration_minutes = updates.durationMinutes
+
+  const res = await fetch(`/api/subscription-plans/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const json = await res.json()
+  if (!res.ok) throw new Error(json.error || '更新に失敗しました')
+  return mapRowToPlan(json.plan as Record<string, unknown>)
+}
+
 export async function deleteSubscriptionPlan(id: string): Promise<void> {
   const res = await fetch(`/api/subscription-plans/${id}`, { method: 'DELETE' })
   const json = await res.json()
@@ -210,13 +241,20 @@ export async function addCustomerSubscription(
 
 export async function updateCustomerSubscription(
   subId: string,
-  updates: { planName?: string; menuName?: string; price?: number; sessionsPerMonth?: number }
+  updates: {
+    planName?: string
+    menuName?: string
+    price?: number
+    sessionsPerMonth?: number
+    durationMinutes?: number
+  }
 ): Promise<void> {
   const body: Record<string, unknown> = {}
   if (updates.planName !== undefined) body.plan_name = updates.planName
   if (updates.menuName !== undefined) body.menu_name = updates.menuName
   if (updates.price !== undefined) body.price = updates.price
   if (updates.sessionsPerMonth !== undefined) body.sessions_per_month = updates.sessionsPerMonth
+  if (updates.durationMinutes !== undefined) body.duration_minutes = updates.durationMinutes
 
   const res = await fetch(`/api/customer-subscriptions/${subId}`, {
     method: 'PATCH',

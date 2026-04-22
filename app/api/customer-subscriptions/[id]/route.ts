@@ -18,6 +18,7 @@ function toCustomerSubscription(row: Record<string, unknown>): Record<string, un
     nextBillingDate: row.next_billing_date,
     sessionsUsedInPeriod: row.sessions_used_in_period,
     status: row.status,
+    durationMinutes: Number((row as { duration_minutes?: number }).duration_minutes ?? 60),
   }
 }
 
@@ -76,18 +77,37 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const spm = Number(body.sessions_per_month)
       if (Number.isFinite(spm) && spm >= 0) updates.sessions_per_month = spm
     }
+    if (body.duration_minutes !== undefined) {
+      const d = Number(body.duration_minutes)
+      if (Number.isFinite(d) && d >= 1) updates.duration_minutes = Math.max(1, Math.round(d))
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: '更新する項目がありません' }, { status: 400 })
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('customer_subscriptions')
       .update(updates)
       .eq('id', id)
       .eq('salon_id', salonId)
       .select()
       .single()
+
+    // duration_minutes 列が未適用のDBでも動くようフォールバック
+    if (error && String(error.message ?? '').includes('duration_minutes')) {
+      const { duration_minutes: _dm, ...noDuration } = updates
+      void _dm
+      const retry = await supabase
+        .from('customer_subscriptions')
+        .update(noDuration)
+        .eq('id', id)
+        .eq('salon_id', salonId)
+        .select()
+        .single()
+      data = retry.data
+      error = retry.error
+    }
 
     if (error) throw error
 

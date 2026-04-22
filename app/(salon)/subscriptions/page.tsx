@@ -509,6 +509,7 @@ function EditModal({
   const [menuName, setMenuName] = useState(subscription.menuName)
   const [price, setPrice] = useState(String(subscription.price))
   const [sessionsPerMonth, setSessionsPerMonth] = useState(String(subscription.sessionsPerMonth))
+  const [durationMinutes, setDurationMinutes] = useState(String(subscription.durationMinutes ?? 60))
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
@@ -519,6 +520,7 @@ function EditModal({
         menuName,
         price: Number(price),
         sessionsPerMonth: Number(sessionsPerMonth),
+        durationMinutes: Math.max(1, Number(durationMinutes) || 60),
       })
       onSaved()
       onClose()
@@ -579,6 +581,18 @@ function EditModal({
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
               />
             </div>
+          </div>
+          <div>
+            <label className="text-xs text-text-sub mb-1 block">所要時間 (分)</label>
+            <input
+              type="number"
+              min={1}
+              step={5}
+              value={durationMinutes}
+              onChange={e => setDurationMinutes(e.target.value)}
+              className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none"
+            />
+            <p className="text-[11px] text-text-sub mt-1">予約枠の計算に使用されます。サブスク＋追加メニューがあれば合算されます。</p>
           </div>
         </div>
         <div className="flex gap-2 mt-6">

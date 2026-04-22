@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, Pencil, X, Ticket, Repeat } from 'lucide-react'
 import { fetchTicketPlans, createTicketPlan, deleteTicketPlan, type TicketPlan } from '@/lib/tickets'
-import { fetchSubscriptionPlans, createSubscriptionPlan, deleteSubscriptionPlan, type SubscriptionPlan } from '@/lib/subscriptions'
+import { fetchSubscriptionPlans, createSubscriptionPlan, updateSubscriptionPlan, deleteSubscriptionPlan, type SubscriptionPlan } from '@/lib/subscriptions'
 import { fetchMenus, saveMenu, updateMenu, deleteMenu, migrateMenusFromLocalStorage, type MenuItem } from '@/lib/menus'
 
 export default function MenuSettingsPage() {
@@ -33,6 +33,14 @@ export default function MenuSettingsPage() {
   const [subSessions, setSubSessions] = useState(2)
   const [subBillingDay, setSubBillingDay] = useState(1)
   const [subDuration, setSubDuration] = useState(60)
+
+  const [editingSubId, setEditingSubId] = useState<string | null>(null)
+  const [editSubName, setEditSubName] = useState('')
+  const [editSubMenuNames, setEditSubMenuNames] = useState<string[]>([])
+  const [editSubPrice, setEditSubPrice] = useState(0)
+  const [editSubSessions, setEditSubSessions] = useState(0)
+  const [editSubBillingDay, setEditSubBillingDay] = useState(1)
+  const [editSubDuration, setEditSubDuration] = useState(60)
 
   useEffect(() => {
     migrateMenusFromLocalStorage().then(() => {
@@ -154,6 +162,38 @@ export default function MenuSettingsPage() {
       setSubPlansState(prev => prev.filter(p => p.id !== id))
     } catch {
       alert('削除に失敗しました')
+    }
+  }
+
+  const startEditSubPlan = (p: SubscriptionPlan) => {
+    setEditingSubId(p.id)
+    setEditSubName(p.name)
+    // menuName が "A, B" のようにカンマ連結されている想定で元に戻す
+    setEditSubMenuNames(p.menuName.split(',').map(s => s.trim()).filter(Boolean))
+    setEditSubPrice(p.price)
+    setEditSubSessions(p.sessionsPerMonth)
+    setEditSubBillingDay(p.billingDay)
+    setEditSubDuration(p.durationMinutes)
+  }
+
+  const cancelEditSubPlan = () => setEditingSubId(null)
+
+  const saveEditSubPlan = async () => {
+    if (!editingSubId) return
+    if (!editSubName.trim() || editSubMenuNames.length === 0) return
+    try {
+      const updated = await updateSubscriptionPlan(editingSubId, {
+        name: editSubName.trim(),
+        menuName: editSubMenuNames.join(', '),
+        price: editSubPrice,
+        sessionsPerMonth: editSubSessions,
+        billingDay: Math.min(28, Math.max(1, editSubBillingDay)),
+        durationMinutes: Math.max(1, editSubDuration),
+      })
+      setSubPlansState(prev => prev.map(p => p.id === editingSubId ? updated : p))
+      setEditingSubId(null)
+    } catch {
+      alert('更新に失敗しました')
     }
   }
 
@@ -379,20 +419,75 @@ export default function MenuSettingsPage() {
           </p>
           <div className="space-y-3">
             {subPlans.map((p) => (
-              <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
-                <div>
-                  <p className="font-medium text-text-main">{p.name}</p>
-                  <p className="text-xs text-text-sub">
-                    ¥{p.price.toLocaleString()}/月 · {p.menuName} {p.sessionsPerMonth}回 · {p.durationMinutes}分 · 毎月{p.billingDay}日課金
-                  </p>
+              editingSubId === p.id ? (
+                <div key={p.id} className="py-3 px-4 bg-light-lav/50 rounded-xl space-y-2">
+                  <input
+                    type="text"
+                    value={editSubName}
+                    onChange={e => setEditSubName(e.target.value)}
+                    placeholder="プラン名"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-rose outline-none text-sm"
+                  />
+                  <div>
+                    <p className="text-xs text-text-sub mb-1">メニュー（複数選択可）</p>
+                    <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1 bg-white">
+                      {menus.map(m => (
+                        <label key={m.id} className={`flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer hover:bg-rose/5 ${editSubMenuNames.includes(m.name) ? 'bg-rose/10' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={editSubMenuNames.includes(m.name)}
+                            onChange={() => setEditSubMenuNames(prev => prev.includes(m.name) ? prev.filter(n => n !== m.name) : [...prev, m.name])}
+                            className="accent-rose"
+                          />
+                          <span className="text-sm">{m.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <input type="number" value={editSubPrice} onChange={e => setEditSubPrice(Number(e.target.value))} className="px-3 py-2 rounded-lg border border-gray-200 outline-none w-24 text-sm" />
+                    <span className="text-xs text-text-sub">円/月</span>
+                    <input type="number" value={editSubSessions} onChange={e => setEditSubSessions(Number(e.target.value))} min={1} className="px-3 py-2 rounded-lg border border-gray-200 outline-none w-16 text-sm" />
+                    <span className="text-xs text-text-sub">回/月</span>
+                    <input type="number" value={editSubBillingDay} onChange={e => setEditSubBillingDay(Number(e.target.value))} min={1} max={28} className="px-3 py-2 rounded-lg border border-gray-200 outline-none w-16 text-sm" />
+                    <span className="text-xs text-text-sub">日課金</span>
+                    <input type="number" value={editSubDuration} onChange={e => setEditSubDuration(Number(e.target.value))} min={1} step={5} className="px-3 py-2 rounded-lg border border-gray-200 outline-none w-20 text-sm" />
+                    <span className="text-xs text-text-sub">分</span>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={saveEditSubPlan} className="px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-lg text-sm font-medium hover:opacity-90">
+                      保存
+                    </button>
+                    <button onClick={cancelEditSubPlan} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-text-main hover:bg-gray-50">
+                      キャンセル
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => removeSubPlan(p.id)}
-                  className="p-2 text-text-sub hover:text-red-600 rounded-lg hover:bg-red-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
+              ) : (
+                <div key={p.id} className="flex items-center justify-between py-3 px-4 bg-light-lav/50 rounded-xl">
+                  <div>
+                    <p className="font-medium text-text-main">{p.name}</p>
+                    <p className="text-xs text-text-sub">
+                      ¥{p.price.toLocaleString()}/月 · {p.menuName} {p.sessionsPerMonth}回 · {p.durationMinutes}分 · 毎月{p.billingDay}日課金
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => startEditSubPlan(p)}
+                      className="p-2 text-text-sub hover:text-rose rounded-lg hover:bg-rose/5"
+                      title="編集"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => removeSubPlan(p.id)}
+                      className="p-2 text-text-sub hover:text-red-600 rounded-lg hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )
             ))}
             <div className="flex gap-2 flex-wrap pt-4 border-t border-gray-100">
               <input
