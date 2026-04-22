@@ -1,4 +1,11 @@
-import { createClient, getSalonId } from '@/lib/supabase'
+/**
+ * 商品 (物販) 管理クライアント。
+ *
+ * 従来はクライアント側 Supabase (anon key) を直接使っていたが、
+ * RLS ポリシーで 42501 (row-level security policy violation) により
+ * INSERT/UPDATE/DELETE が全拒否されていた。
+ * service_role を使うサーバ API 経由に統一している。
+ */
 
 export type Product = {
   id: string
@@ -18,49 +25,54 @@ export type Product = {
   created_at?: string
 }
 
-export async function fetchProducts(): Promise<Product[]> {
-  const supabase = createClient()
-  const { data, error } = await supabase
-    .from('products')
-    .select('*')
-    .eq('salon_id', getSalonId())
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data || []
+async function readJsonOrThrow(res: Response): Promise<Record<string, unknown>> {
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  if (!res.ok) {
+    const msg =
+      (typeof json?.error === 'string' && json.error) ||
+      (typeof json?.message === 'string' && json.message) ||
+      `HTTP ${res.status}`
+    throw new Error(msg as string)
+  }
+  return json
 }
 
-export async function createProduct(data: Omit<Product, 'id' | 'salon_id' | 'created_at'>): Promise<Product> {
-  const supabase = createClient()
-  const { data: row, error } = await supabase
-    .from('products')
-    .insert({ ...data, salon_id: getSalonId() })
-    .select()
-    .single()
-  if (error) throw error
-  return row
+export async function fetchProducts(): Promise<Product[]> {
+  const res = await fetch('/api/products', { credentials: 'include' })
+  const j = await readJsonOrThrow(res)
+  return (j.products as Product[]) || []
+}
+
+export async function createProduct(
+  data: Omit<Product, 'id' | 'salon_id' | 'created_at'>
+): Promise<Product> {
+  const res = await fetch('/api/products', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  })
+  const j = await readJsonOrThrow(res)
+  return j.product as Product
 }
 
 export async function updateProduct(id: string, data: Partial<Product>): Promise<Product> {
-  const supabase = createClient()
-  const { data: row, error } = await supabase
-    .from('products')
-    .update(data)
-    .eq('id', id)
-    .eq('salon_id', getSalonId())
-    .select()
-    .single()
-  if (error) throw error
-  return row
+  const res = await fetch(`/api/products/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(data),
+  })
+  const j = await readJsonOrThrow(res)
+  return j.product as Product
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  const supabase = createClient()
-  const { error } = await supabase
-    .from('products')
-    .delete()
-    .eq('id', id)
-    .eq('salon_id', getSalonId())
-  if (error) throw error
+  const res = await fetch(`/api/products/${id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  })
+  await readJsonOrThrow(res)
 }
 
 export async function adjustStock(
@@ -69,23 +81,11 @@ export async function adjustStock(
   quantity: number,
   memo?: string
 ): Promise<void> {
-  const supabase = createClient()
-  const { data: product, error: fetchError } = await supabase
-    .from('products')
-    .select('stock')
-    .eq('id', productId)
-    .single()
-  if (fetchError) throw fetchError
-  const newStock =
-    type === 'in' ? product.stock + quantity :
-    type === 'out' ? Math.max(0, product.stock - quantity) :
-    quantity
-  const { error: updateError } = await supabase
-    .from('products')
-    .update({ stock: newStock })
-    .eq('id', productId)
-  if (updateError) throw updateError
-  await supabase
-    .from('product_stock_logs')
-    .insert({ salon_id: getSalonId(), product_id: productId, type, quantity, memo })
+  const res = await fetch('/api/products/stock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ product_id: productId, type, quantity, memo }),
+  })
+  await readJsonOrThrow(res)
 }

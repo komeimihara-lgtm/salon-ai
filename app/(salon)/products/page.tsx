@@ -96,14 +96,22 @@ export default function ProductsPage() {
       else { const created = await createProduct(data); setProducts(prev => [created, ...prev]) }
       setShowForm(false)
       showToast(editTarget ? '商品を更新しました' : '商品を追加しました')
-    } catch { showToast('保存に失敗しました', 'error') }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '保存に失敗しました'
+      console.error('product save failed', e)
+      showToast(`保存に失敗しました: ${msg}`, 'error')
+    }
     finally { setFormSaving(false) }
   }
 
   const handleDelete = async (p: Product) => {
     if (!confirm(`「${p.name}」を削除しますか？`)) return
     try { await deleteProduct(p.id); setProducts(prev => prev.filter(x => x.id !== p.id)); showToast('削除しました') }
-    catch { showToast('削除に失敗しました', 'error') }
+    catch (e) {
+      const msg = e instanceof Error ? e.message : '削除に失敗しました'
+      console.error('product delete failed', e)
+      showToast(`削除に失敗しました: ${msg}`, 'error')
+    }
   }
 
   const handleStock = async () => {
@@ -114,7 +122,11 @@ export default function ProductsPage() {
       showToast('在庫を更新しました')
       setStockTarget(null)
       load()
-    } catch { showToast('在庫更新に失敗しました', 'error') }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '在庫更新に失敗しました'
+      console.error('stock update failed', e)
+      showToast(`在庫更新に失敗しました: ${msg}`, 'error')
+    }
     finally { setStockSaving(false) }
   }
 
