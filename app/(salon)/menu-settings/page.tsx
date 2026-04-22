@@ -32,6 +32,7 @@ export default function MenuSettingsPage() {
   const [subPrice, setSubPrice] = useState(8000)
   const [subSessions, setSubSessions] = useState(2)
   const [subBillingDay, setSubBillingDay] = useState(1)
+  const [subDuration, setSubDuration] = useState(60)
 
   useEffect(() => {
     migrateMenusFromLocalStorage().then(() => {
@@ -132,6 +133,7 @@ export default function MenuSettingsPage() {
         price: subPrice,
         sessionsPerMonth: subSessions,
         billingDay: Math.min(28, Math.max(1, subBillingDay)),
+        durationMinutes: Math.max(1, subDuration),
       })
       setSubPlansState(prev => [...prev, plan])
       setSubName('')
@@ -139,6 +141,7 @@ export default function MenuSettingsPage() {
       setSubPrice(8000)
       setSubSessions(2)
       setSubBillingDay(1)
+      setSubDuration(60)
     } catch {
       alert('登録に失敗しました')
     }
@@ -380,7 +383,7 @@ export default function MenuSettingsPage() {
                 <div>
                   <p className="font-medium text-text-main">{p.name}</p>
                   <p className="text-xs text-text-sub">
-                    ¥{p.price.toLocaleString()}/月 · {p.menuName} {p.sessionsPerMonth}回 · 毎月{p.billingDay}日課金
+                    ¥{p.price.toLocaleString()}/月 · {p.menuName} {p.sessionsPerMonth}回 · {p.durationMinutes}分 · 毎月{p.billingDay}日課金
                   </p>
                 </div>
                 <button
@@ -437,6 +440,16 @@ export default function MenuSettingsPage() {
                 className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-16"
               />
               <span className="self-center text-text-sub text-sm">日課金</span>
+              <input
+                type="number"
+                value={subDuration}
+                onChange={e => setSubDuration(Number(e.target.value))}
+                min={1}
+                step={5}
+                className="px-4 py-2 rounded-xl border border-gray-200 focus:border-rose outline-none w-20"
+                title="サブスクメニューの施術時間(分)"
+              />
+              <span className="self-center text-text-sub text-sm">分</span>
               <button
                 onClick={addSubPlan}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose to-lavender text-white rounded-xl font-medium hover:opacity-90"

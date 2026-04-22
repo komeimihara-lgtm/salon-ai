@@ -24,13 +24,23 @@ export async function GET(
       .gt('remaining_sessions', 0)
       .order('expiry_date', { ascending: true, nullsFirst: false })
 
-    // 有効なサブスク
-    const { data: subscriptions } = await getSupabaseAdmin()
+    // 有効なサブスク (duration_minutes 列が未適用DBでも動くようフォールバック)
+    const subPrimary = await getSupabaseAdmin()
       .from('customer_subscriptions')
-      .select('id, plan_name, menu_name, sessions_per_month, sessions_used_in_period, price')
+      .select('id, plan_name, menu_name, sessions_per_month, sessions_used_in_period, price, duration_minutes')
       .eq('salon_id', salonId)
       .eq('customer_id', customerId)
       .eq('status', 'active')
+    let subscriptions: Array<Record<string, unknown>> | null = subPrimary.data as Array<Record<string, unknown>> | null
+    if (subPrimary.error && String(subPrimary.error.message ?? '').includes('duration_minutes')) {
+      const retry = await getSupabaseAdmin()
+        .from('customer_subscriptions')
+        .select('id, plan_name, menu_name, sessions_per_month, sessions_used_in_period, price')
+        .eq('salon_id', salonId)
+        .eq('customer_id', customerId)
+        .eq('status', 'active')
+      subscriptions = retry.data as Array<Record<string, unknown>> | null
+    }
 
     return NextResponse.json({
       tickets: (tickets || []).map(t => ({
@@ -50,6 +60,7 @@ export async function GET(
         sessions_per_month: s.sessions_per_month,
         sessions_used: s.sessions_used_in_period || 0,
         price: s.price,
+        duration_minutes: (s as { duration_minutes?: number }).duration_minutes ?? 60,
         ticket_type: 'subscription',
       })),
     })

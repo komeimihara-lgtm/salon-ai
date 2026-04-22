@@ -23,6 +23,7 @@ interface CourseSub {
   sessions_per_month: number
   sessions_used: number
   price: number
+  duration_minutes: number
   ticket_type: 'subscription'
 }
 
@@ -257,18 +258,32 @@ export default function ReservationFormModal({
     }))
   }, [defaultDate, defaultStartTime, defaultEndTime, defaultBed])
 
+  // サブスクが選択されていれば固定時間、追加メニューの合計時間も加算
+  const selectedSub = selectedCourse?.type === 'subscription'
+    ? courseSubs.find(s => s.id === selectedCourse.id) ?? null
+    : null
+  const subDurationMin = selectedSub?.duration_minutes ?? 0
+  const subMenuName = selectedSub?.menu_name ?? null
+
   // 開始時間またはメニューが変わったら終了時間を再計算
+  //   合計 = サブスク時間 + 追加メニュー時間の合計
+  //   サブスクの menu_name と同じ追加メニューが form.menus に入っていた場合は
+  //   二重計上しない
   const startTime = form.start_time
   const selectedMenuNames = form.menus
   useEffect(() => {
     if (!startTime) return
-    const totalDuration = selectedMenuNames.reduce((sum, name) => {
+    const additional = subMenuName
+      ? selectedMenuNames.filter(n => n !== subMenuName)
+      : selectedMenuNames
+    const menuDuration = additional.reduce((sum, name) => {
       const m = menus.find(menu => menu.name === name)
       return sum + (m?.duration ?? 0)
-    }, 0) || 60
+    }, 0)
+    const totalDuration = (subDurationMin + menuDuration) || 60
     const end = calculateEndTime(startTime, totalDuration)
     setForm(p => ({ ...p, end_time: end }))
-  }, [startTime, selectedMenuNames, menus])
+  }, [startTime, selectedMenuNames, menus, subDurationMin, subMenuName])
 
   useEffect(() => {
     if (!searchQuery.trim() || mode !== 'existing') {
@@ -679,11 +694,22 @@ export default function ReservationFormModal({
                   </label>
                 ))}
               </div>
-              {form.menus.length > 0 && (
-                <p className="text-xs text-[#0891B2] mt-1">
-                  {form.menus.length}件選択 · 合計{menus.filter(m => form.menus.includes(m.name)).reduce((s, m) => s + m.duration, 0)}分
-                </p>
-              )}
+              {(form.menus.length > 0 || subDurationMin > 0) && (() => {
+                const additional = subMenuName
+                  ? form.menus.filter(n => n !== subMenuName)
+                  : form.menus
+                const menuDuration = additional.reduce((s, name) => {
+                  const m = menus.find(menu => menu.name === name)
+                  return s + (m?.duration ?? 0)
+                }, 0)
+                const totalDuration = subDurationMin + menuDuration
+                return (
+                  <p className="text-xs text-[#0891B2] mt-1">
+                    {form.menus.length}件選択 · 合計{totalDuration}分
+                    {subDurationMin > 0 && <span className="text-text-sub ml-1">(サブスク{subDurationMin}分＋追加{menuDuration}分)</span>}
+                  </p>
+                )
+              })()}
             </div>
           </div>
 

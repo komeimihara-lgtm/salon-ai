@@ -240,7 +240,12 @@ export default function ManagementPage() {
           {tab === 'daily' ? (
             <>
               <button
-                onClick={() => { if (month === 1) { setYear(y => y - 1); setMonth(12) } else setMonth(m => m - 1) }}
+                onClick={() => {
+                  const newMonth = month === 1 ? 12 : month - 1
+                  const newYear = month === 1 ? year - 1 : year
+                  setYear(newYear)
+                  setMonth(newMonth)
+                }}
                 className="p-2 rounded-lg bg-white border border-gray-200 hover:bg-light-lav"
               >
                 <ChevronLeft className="w-5 h-5 text-text-main" />
@@ -249,7 +254,12 @@ export default function ManagementPage() {
                 {year}年{month}月
               </span>
               <button
-                onClick={() => { if (month === 12) { setYear(y => y + 1); setMonth(1) } else setMonth(m => m + 1) }}
+                onClick={() => {
+                  const newMonth = month === 12 ? 1 : month + 1
+                  const newYear = month === 12 ? year + 1 : year
+                  setYear(newYear)
+                  setMonth(newMonth)
+                }}
                 className="p-2 rounded-lg bg-white border border-gray-200 hover:bg-light-lav"
               >
                 <ChevronRight className="w-5 h-5 text-text-main" />

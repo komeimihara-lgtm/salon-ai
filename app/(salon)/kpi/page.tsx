@@ -171,8 +171,18 @@ export default function KPIPage() {
 
   useEffect(() => { fetchData() }, [fetchData])
 
-  function prevMonth() { if (month === 1) { setYear(y => y - 1); setMonth(12) } else setMonth(m => m - 1) }
-  function nextMonth() { if (month === 12) { setYear(y => y + 1); setMonth(1) } else setMonth(m => m + 1) }
+  function prevMonth() {
+    const newMonth = month === 1 ? 12 : month - 1
+    const newYear = month === 1 ? year - 1 : year
+    setYear(newYear)
+    setMonth(newMonth)
+  }
+  function nextMonth() {
+    const newMonth = month === 12 ? 1 : month + 1
+    const newYear = month === 12 ? year + 1 : year
+    setYear(newYear)
+    setMonth(newMonth)
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-5">

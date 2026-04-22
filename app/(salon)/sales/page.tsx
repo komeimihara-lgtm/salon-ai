@@ -365,6 +365,7 @@ export default function SalesPage() {
           menuName: camp.menuDescription ?? name,
           billingDay: 1,
           category,
+          durationMinutes: 60,
         }
         return [...prev, { type: 'subscription' as const, menuId: key, name, price, qty: 1, category, subPlan: virtualPlan, campaign: camp }]
       })

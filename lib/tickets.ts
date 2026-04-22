@@ -165,11 +165,13 @@ export async function addCustomerTicket(
     campaignId?: string
   }
 ): Promise<CustomerTicket> {
-  const purchasedAt = options?.purchasedAt ?? new Date().toISOString().slice(0, 10)
+  const purchasedAt = options?.purchasedAt ?? todayJstString()
   const expiryDays = plan.expiryDays ?? 180
-  const expiry = new Date(purchasedAt)
-  expiry.setDate(expiry.getDate() + expiryDays)
-  const expiryDate = expiry.toISOString().slice(0, 10)
+  // 期限日を TZ 非依存で計算
+  const [py, pm, pd] = purchasedAt.split('-').map(Number)
+  const expiryUtc = new Date(Date.UTC(py, (pm || 1) - 1, pd || 1))
+  expiryUtc.setUTCDate(expiryUtc.getUTCDate() + expiryDays)
+  const expiryDate = `${expiryUtc.getUTCFullYear()}-${String(expiryUtc.getUTCMonth() + 1).padStart(2, '0')}-${String(expiryUtc.getUTCDate()).padStart(2, '0')}`
 
   const unitPrice = plan.unitPrice ?? (plan.totalSessions > 0 ? Math.round(plan.price / plan.totalSessions) : 0)
   const isCampaign = !!options?.campaignId

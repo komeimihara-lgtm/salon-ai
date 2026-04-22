@@ -15,6 +15,7 @@ function toCustomerSubscription(row: Record<string, unknown>): Record<string, un
     menuName: row.menu_name,
     price: row.price,
     sessionsPerMonth: row.sessions_per_month,
+    durationMinutes: row.duration_minutes,
     startedAt: row.started_at,
     nextBillingDate: row.next_billing_date,
     sessionsUsedInPeriod: row.sessions_used_in_period,
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
       menu_name,
       price,
       sessions_per_month,
+      duration_minutes,
       started_at,
       next_billing_date,
       payment_method,
@@ -79,6 +81,7 @@ export async function POST(req: NextRequest) {
       menu_name,
       price: Number(price),
       sessions_per_month: Number(sessions_per_month),
+      duration_minutes: Math.max(1, Number(duration_minutes) || 60),
       started_at,
       next_billing_date,
       sessions_used_in_period: 0,
@@ -86,11 +89,26 @@ export async function POST(req: NextRequest) {
     }
     if (campaign_id) insertData.campaign_id = campaign_id
 
-    const { data, error } = await getSupabaseAdmin()
+    let { data, error } = await getSupabaseAdmin()
       .from('customer_subscriptions')
       .insert(insertData)
       .select()
       .single()
+
+    // customer_subscriptions.duration_minutes 列が未適用のDBでも動くよう
+    // エラー時は duration_minutes を除外して再実行
+    if (error && String(error.message ?? '').includes('duration_minutes')) {
+      console.warn('[customer-subscriptions] duration_minutes column missing, retrying without it')
+      const { duration_minutes: _dm, ...insertDataNoDuration } = insertData
+      void _dm
+      const retry = await getSupabaseAdmin()
+        .from('customer_subscriptions')
+        .insert(insertDataNoDuration)
+        .select()
+        .single()
+      data = retry.data
+      error = retry.error
+    }
 
     if (error) {
       console.error('[customer-subscriptions] POST Supabase error:', error.message, error.details, error.hint)
@@ -99,11 +117,11 @@ export async function POST(req: NextRequest) {
 
     // 売上計上（record_sale が true の場合）
     if (record_sale !== false && Number(price) > 0) {
-      const saleType = PAYMENT_METHODS.includes(payment_method as (typeof PAYMENT_METHODS)[number]) ? payment_method : 'card'
+      const pm = PAYMENT_METHODS.includes(payment_method as (typeof PAYMENT_METHODS)[number]) ? payment_method : 'card'
       const saleNameRow = [{ customer_id, customer_name: customer_name || null }]
       await overwriteSaleCustomerNamesFromDb(getSupabaseAdmin(), salonId, saleNameRow)
       const resolvedCustomerName = (saleNameRow[0].customer_name as string | null) ?? customer_name ?? null
-      await getSupabaseAdmin()
+      const { error: saleErr } = await getSupabaseAdmin()
         .from('sales')
         .insert({
           salon_id: salonId,
@@ -111,10 +129,15 @@ export async function POST(req: NextRequest) {
           amount: Number(price),
           customer_id,
           customer_name: resolvedCustomerName,
+          menu: plan_name,
           memo: `${plan_name} 加入`,
-          sale_type: saleType,
+          payment_method: pm,
+          sale_type: pm, // payment_method と同じ(来店ベース売上として集計)
           status: 'active',
         })
+      if (saleErr) {
+        console.error('[customer-subscriptions] POST sales insert failed', saleErr)
+      }
     }
 
     return NextResponse.json({ subscription: toCustomerSubscription(data as Record<string, unknown>) })

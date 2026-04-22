@@ -16,6 +16,8 @@ export interface SubscriptionPlan {
   menuName: string
   billingDay: number
   category: string
+  /** サブスクメニューの施術時間(分)。予約枠計算に使用 */
+  durationMinutes: number
 }
 
 function mapRowToPlan(r: Record<string, unknown>): SubscriptionPlan {
@@ -27,6 +29,7 @@ function mapRowToPlan(r: Record<string, unknown>): SubscriptionPlan {
     menuName: String(r.menuName ?? r.menu_name ?? ''),
     billingDay: Number(r.billingDay ?? r.billing_day ?? 1),
     category: String(r.category ?? ''),
+    durationMinutes: Number(r.durationMinutes ?? r.duration_minutes ?? 60),
   }
 }
 
@@ -53,6 +56,7 @@ export async function createSubscriptionPlan(plan: {
   sessionsPerMonth: number
   billingDay?: number
   category?: string
+  durationMinutes?: number
 }): Promise<SubscriptionPlan> {
   const res = await fetch('/api/subscription-plans', {
     method: 'POST',
@@ -64,6 +68,7 @@ export async function createSubscriptionPlan(plan: {
       sessions_per_month: plan.sessionsPerMonth,
       billing_day: plan.billingDay ?? 1,
       category: plan.category ?? '',
+      duration_minutes: plan.durationMinutes ?? 60,
     }),
   })
   const json = await res.json()
@@ -91,11 +96,13 @@ export interface CustomerSubscription {
   nextBillingDate: string
   sessionsUsedInPeriod: number
   status: 'active' | 'paused' | 'cancelled'
+  /** サブスクメニューの施術時間(分)。予約枠計算に使用 */
+  durationMinutes: number
 }
 
 const DEFAULT_PLANS: SubscriptionPlan[] = [
-  { id: '1', name: '月額プレミアム', price: 8000, sessionsPerMonth: 2, menuName: 'フェイシャル', billingDay: 1, category: 'フェイシャル' },
-  { id: '2', name: '月額ベーシック', price: 5000, sessionsPerMonth: 1, menuName: 'フェイシャル', billingDay: 1, category: 'フェイシャル' },
+  { id: '1', name: '月額プレミアム', price: 8000, sessionsPerMonth: 2, menuName: 'フェイシャル', billingDay: 1, category: 'フェイシャル', durationMinutes: 60 },
+  { id: '2', name: '月額ベーシック', price: 5000, sessionsPerMonth: 1, menuName: 'フェイシャル', billingDay: 1, category: 'フェイシャル', durationMinutes: 60 },
 ]
 
 // ========== プラン定義（Supabase API・後方互換のためgetSubscriptionPlansは非推奨） ==========
@@ -119,6 +126,7 @@ function mapRowToSub(r: Record<string, unknown>): CustomerSubscription {
     nextBillingDate: String(r.nextBillingDate ?? r.next_billing_date ?? ''),
     sessionsUsedInPeriod: Number(r.sessionsUsedInPeriod ?? r.sessions_used_in_period ?? 0),
     status: (r.status as CustomerSubscription['status']) || 'active',
+    durationMinutes: Number(r.durationMinutes ?? r.duration_minutes ?? 60),
   }
 }
 
@@ -158,11 +166,19 @@ export async function addCustomerSubscription(
     campaignId?: string
   }
 ): Promise<CustomerSubscription> {
-  const startedAt = options?.startedAt ?? new Date().toISOString().slice(0, 10)
-  const d = new Date(startedAt)
-  d.setDate(plan.billingDay)
-  if (d < new Date(startedAt)) d.setMonth(d.getMonth() + 1)
-  const nextBillingDate = d.toISOString().slice(0, 10)
+  const startedAt = options?.startedAt ?? todayJstString()
+  // 次回課金日: startedAt の "YYYY-MM" の billingDay の日付。
+  // その日が既に過ぎていれば翌月。TZ に依存しない純文字列計算。
+  const [sy, sm, sd] = startedAt.split('-').map(Number)
+  const bd = Math.min(28, Math.max(1, plan.billingDay || 1))
+  let nbY = sy
+  let nbM = sm
+  if (bd <= sd) {
+    // 同月の billingDay は既に過ぎた -> 翌月
+    nbM += 1
+    if (nbM > 12) { nbM = 1; nbY += 1 }
+  }
+  const nextBillingDate = `${nbY}-${String(nbM).padStart(2, '0')}-${String(bd).padStart(2, '0')}`
 
   const planId = options?.campaignId ? `campaign:${options.campaignId}` : plan.id
   const body: Record<string, unknown> = {
@@ -173,6 +189,7 @@ export async function addCustomerSubscription(
     menu_name: plan.menuName,
     price: plan.price,
     sessions_per_month: plan.sessionsPerMonth,
+    duration_minutes: plan.durationMinutes ?? 60,
     started_at: startedAt,
     next_billing_date: nextBillingDate,
     payment_method: options?.paymentMethod ?? 'card',
