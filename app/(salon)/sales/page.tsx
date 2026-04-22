@@ -12,6 +12,7 @@ import { fetchStaffList } from '@/lib/staff-management'
 import { fetchTicketPlans, addCustomerTicket, type TicketPlan } from '@/lib/tickets'
 import { fetchSubscriptionPlans, addCustomerSubscription, type SubscriptionPlan } from '@/lib/subscriptions'
 import { fetchProducts, adjustStock, type Product } from '@/lib/products'
+import { todayJstString, currentJstMonthRange, shiftJstMonthRange } from '@/lib/jst-date'
 
 const PAYMENTS = [
   { value: 'cash', label: '現金' },
@@ -126,14 +127,9 @@ export default function SalesPage() {
   const [loading, setLoading] = useState(true)
   const [taxSettings, setTaxSettingsState] = useState(getTaxSettings())
   const [campaigns, setCampaignsState] = useState<Campaign[]>([])
-  const [dateRange, setDateRange] = useState(() => {
-    const d = new Date()
-    const start = new Date(d.getFullYear(), d.getMonth(), 1)
-    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0)
-    return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
-  })
+  const [dateRange, setDateRange] = useState(() => currentJstMonthRange())
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayJstString()
   const [cart, setCart] = useState<CartItem[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string | null; name: string; visit_count?: number; last_visit_date?: string } | null>(null)
   const [selectedStaff, setSelectedStaff] = useState<{ id: string; name: string } | null>(null)
@@ -581,14 +577,10 @@ export default function SalesPage() {
   }
 
   const prevMonth = () => {
-    const [y, m] = dateRange.start.split('-').map(Number)
-    const d = new Date(y, m - 2)
-    setDateRange({ start: new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10), end: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10) })
+    setDateRange(shiftJstMonthRange(dateRange.start, -1))
   }
   const nextMonth = () => {
-    const [y, m] = dateRange.start.split('-').map(Number)
-    const d = new Date(y, m)
-    setDateRange({ start: new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10), end: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10) })
+    setDateRange(shiftJstMonthRange(dateRange.start, +1))
   }
   const dayTotal = sales.filter(isActiveSale).reduce((sum, s) => sum + s.amount, 0)
 

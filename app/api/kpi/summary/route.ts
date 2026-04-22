@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 import { ACTIVE_SALE_STATUS } from '@/lib/sales-active-filter'
+import { jstMonthRange, jstLastDayOfMonth, jstNow } from '@/lib/jst-date'
 
 /**
  * KPIサマリー取得
@@ -31,8 +32,9 @@ export async function GET(req: NextRequest) {
       const y = parseInt(yearParam, 10)
       const m = parseInt(monthParam, 10)
       if (!isNaN(y) && !isNaN(m)) {
-        rangeStart = `${y}-${String(m).padStart(2, '0')}-01`
-        rangeEnd = new Date(y, m, 0).toISOString().slice(0, 10)
+        const range = jstMonthRange(y, m)
+        rangeStart = range.start
+        rangeEnd = range.end
       }
     }
 
@@ -152,10 +154,10 @@ export async function GET(req: NextRequest) {
         .lte('sale_date', rangeEnd)
       const avgUnitPrice = (visitCount ?? 0) > 0 ? Math.round(totalSales / (visitCount ?? 0)) : 0
 
-      const now = new Date()
-      const isCurrentMonth = now.getFullYear() === y && now.getMonth() + 1 === m
-      const lastDay = new Date(y, m, 0).getDate()
-      const daysRemaining = isCurrentMonth ? Math.max(0, lastDay - now.getDate()) : 0
+      const now = jstNow()
+      const isCurrentMonth = now.year === y && now.month === m
+      const lastDay = jstLastDayOfMonth(y, m)
+      const daysRemaining = isCurrentMonth ? Math.max(0, lastDay - now.day) : 0
       const gap = Math.max(0, monthlyTarget - totalSales)
       const dailyNeeded = daysRemaining > 0 ? Math.round(gap / daysRemaining) : 0
       const achievementRate = monthlyTarget > 0 ? Math.round((totalSales / monthlyTarget) * 100) : 0

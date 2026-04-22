@@ -23,6 +23,7 @@ import ReservationFormModal from '@/components/ReservationFormModal'
 import { useReservations } from '@/hooks/useReservations'
 import { fetchTasks, addTask, toggleTask, deleteTask, type ManualTask } from '@/lib/dashboard-tasks'
 import { getAchievementRate, getAchievementColor, getAchievementBgColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
+import { todayJstString, jstNow, jstMonthRange } from '@/lib/jst-date'
 import {
   fetchExpiringSoonTickets,
   fetchExpiredTickets,
@@ -63,18 +64,6 @@ function getDurationSlots(start: string, end: string): number {
   const s = timeToMinutes(start)
   const e = timeToMinutes(end)
   return Math.max(1, Math.floor((e - s) / 15))
-}
-
-function getTodayJst(): Date {
-  const now = new Date()
-  return new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-}
-
-function toDateStr(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
 }
 
 function TimelineSchedule({
@@ -211,7 +200,7 @@ function TimelineSchedule({
 type KpiItem = { label: string; value: string; sub: string; rate: number; diff: number; diffUp: boolean }
 
 export default function DashboardPage() {
-  const today = toDateStr(getTodayJst())
+  const today = todayJstString()
   const [todayStaff, setTodayStaff] = useState<{ id: string; name: string; color: string; start_time: string; end_time: string }[]>([])
 
   useEffect(() => {
@@ -355,10 +344,9 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    const now = getTodayJst()
-    const start = toDateStr(new Date(now.getFullYear(), now.getMonth(), 1))
-    const end = toDateStr(new Date(now.getFullYear(), now.getMonth() + 1, 0))
-    const todayStr = toDateStr(now)
+    const { year, month } = jstNow()
+    const { start, end } = jstMonthRange(year, month)
+    const todayStr = todayJstString()
     Promise.all([
       fetch(`/api/kpi/sales?start=${start}&end=${end}`),
       fetch(`/api/kpi/summary?start=${start}&end=${end}`),
@@ -419,9 +407,7 @@ export default function DashboardPage() {
     await deleteTask(id).catch(() => {})
   }
 
-  const nowJst = getTodayJst()
-  const year = nowJst.getFullYear()
-  const month = nowJst.getMonth() + 1
+  const { year, month } = jstNow()
   const workingDays = getWorkingDaysInMonth(year, month)
   const dailyTarget = getDailyTarget(salonTargets.sales, workingDays)
   const dailyRate = getAchievementRate(todaySales, dailyTarget)
@@ -1079,7 +1065,7 @@ export default function DashboardPage() {
 }
 
 function SalesDetailModal({ type, onClose }: { type: 'cash' | 'consume'; onClose: () => void }) {
-  const today = toDateStr(getTodayJst())
+  const today = todayJstString()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<{ sales: Array<Record<string, unknown>>; total: number } | null>(null)
 
