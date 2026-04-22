@@ -19,10 +19,21 @@ export const solaHostAdapter: HostAdapter = {
   async getUserContext(userId: string): Promise<UserContext> {
     const supabase = getSupabaseAdmin()
 
-    const [customer, reservations, visits, memories] = await Promise.all([
+    // JST基準の「今日」を使って今日の予約メニューを特定する
+    const { todayJstString } = await import('@/lib/jst-date')
+    const today = todayJstString()
+
+    const [customer, todayReservation, visits, memories] = await Promise.all([
       supabase.from('customers').select('*').eq('id', userId).single(),
-      supabase.from('reservations').select('*').eq('customer_id', userId)
-        .order('date', { ascending: false }).limit(5),
+      // 今日の予約（確定済み）のメニュー／スタッフを優先的に取得
+      supabase.from('reservations')
+        .select('menu, staff_name, start_time, reservation_date, status')
+        .eq('customer_id', userId)
+        .eq('reservation_date', today)
+        .in('status', ['confirmed', 'visited', 'completed'])
+        .order('start_time', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
       supabase.from('visits').select('*').eq('customer_id', userId)
         .order('visit_date', { ascending: false }).limit(10),
       supabase
@@ -46,8 +57,8 @@ export const solaHostAdapter: HostAdapter = {
       // サロン固有コンテキスト
       visitCount: customer.data?.visit_count ?? 0,
       lastVisitDate: customer.data?.last_visit_date,
-      todaysCourse: reservations.data?.[0]?.menu,
-      staffName: reservations.data?.[0]?.staff_name,
+      todaysCourse: todayReservation.data?.menu,
+      staffName: todayReservation.data?.staff_name,
 
       // 施術履歴
       treatmentHistory: visits.data ?? [],
