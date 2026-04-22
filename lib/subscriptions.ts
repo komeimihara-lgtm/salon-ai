@@ -5,6 +5,7 @@
  */
 
 import { getSalonId } from '@/lib/supabase'
+import { todayJstString } from '@/lib/jst-date'
 
 /** サブスクプラン定義 */
 export interface SubscriptionPlan {
@@ -222,7 +223,7 @@ export async function useSubscriptionSession(subId: string): Promise<boolean> {
 
   let nextBilling = sub.nextBillingDate
   let used = sub.sessionsUsedInPeriod
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayJstString()
 
   if (nextBilling <= today) {
     nextBilling = addMonths(nextBilling, 1)

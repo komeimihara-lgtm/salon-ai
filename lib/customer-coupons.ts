@@ -3,6 +3,8 @@
  * クーポン定義は lib/menus.ts の getCoupons
  */
 
+import { todayJstString } from '@/lib/jst-date'
+
 export interface CustomerCoupon {
   id: string
   customerId: string
@@ -46,7 +48,7 @@ export async function addCustomerCouponApi(
   customerId: string,
   coupon: { id: string; name: string; discountType: 'percent' | 'amount'; discountValue: number; targetMenu?: string; expiryDate?: string }
 ): Promise<CustomerCoupon> {
-  const obtainedAt = new Date().toISOString().slice(0, 10)
+  const obtainedAt = todayJstString()
   const res = await fetch('/api/customer-coupons', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -67,7 +69,7 @@ export async function addCustomerCouponApi(
 }
 
 export async function useCustomerCoupon(couponId: string): Promise<boolean> {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayJstString()
   const res = await fetch(`/api/customer-coupons/${couponId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

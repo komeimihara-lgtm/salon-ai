@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { TrendingUp, ChevronRight, ChevronLeft, Plus, Target, AlertTriangle, Check, X, Loader2, Zap, DollarSign, Users, Calendar } from 'lucide-react'
+import { todayJstString, jstNow } from '@/lib/jst-date'
 
 interface KPISummary {
   year: number; month: number; monthly_target: number; monthly_actual: number
@@ -37,7 +38,7 @@ function AchievementGauge({ rate }: { rate: number }) {
 }
 
 function NewSaleModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const today = new Date().toISOString().split('T')[0]
+  const today = todayJstString()
   const [form, setForm] = useState({ sale_date: today, amount: '', customer_name: '', menu: '', staff_name: '', payment_method: 'card' })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -142,9 +143,9 @@ function TargetModal({ year, month, onClose, onSaved }: { year: number; month: n
 }
 
 export default function KPIPage() {
-  const now = new Date()
-  const [year, setYear] = useState(now.getFullYear())
-  const [month, setMonth] = useState(now.getMonth() + 1)
+  const nowJst = jstNow()
+  const [year, setYear] = useState(nowJst.year)
+  const [month, setMonth] = useState(nowJst.month)
   const [kpi, setKpi] = useState<KPISummary | null>(null)
   const [sales, setSales] = useState<Sale[]>([])
   const [salesSummary, setSalesSummary] = useState<{ cashSales: number; consumeSales: number; serviceLiability: number } | null>(null)

@@ -6,6 +6,7 @@
  */
 
 import { getSalonId } from '@/lib/supabase'
+import { todayJstString } from '@/lib/jst-date'
 
 /** 回数券マスタ（商品定義） */
 export interface TicketPlan {
@@ -232,7 +233,7 @@ export async function fetchExpiringSoonTickets(days = 30): Promise<CustomerTicke
 
 export async function fetchExpiredTickets(): Promise<CustomerTicket[]> {
   const all = await fetchCustomerTickets()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayJstString()
   return all.filter(t => t.expiryDate != null && t.expiryDate < today && t.remainingSessions > 0)
 }
 
