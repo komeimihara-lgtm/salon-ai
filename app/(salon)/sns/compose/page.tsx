@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Sparkles, Loader2, Copy, Check, BookmarkPlus, ImagePlus, Upload } from 'lucide-react'
 
 type Platform = 'instagram' | 'x' | 'tiktok' | 'line'
@@ -66,6 +66,15 @@ export default function SnsComposePage() {
     setToast(msg)
     setTimeout(() => setToast(null), 3000)
   }
+
+  // ビフォーアフターは AI 生成不可（実写真が必要）。purpose に応じて image mode を自動同期
+  useEffect(() => {
+    if (purpose === 'before_after') {
+      setImageMode('upload')
+    } else {
+      setImageMode('generate')
+    }
+  }, [purpose])
 
   const handleGenerate = async () => {
     setLoading(true)
@@ -336,8 +345,12 @@ export default function SnsComposePage() {
             <div className="flex items-center justify-between">
               <p className="font-bold text-text-main text-sm">🖼️ 投稿画像</p>
               <div className="flex gap-2">
-                <button onClick={() => setImageMode('generate')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${imageMode === 'generate' ? 'bg-gradient-to-r from-rose to-lavender text-white' : 'bg-light-lav text-text-sub'}`}>
+                <button
+                  onClick={() => setImageMode('generate')}
+                  disabled={purpose === 'before_after'}
+                  title={purpose === 'before_after' ? 'ビフォーアフターは実写真のみ' : ''}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${imageMode === 'generate' ? 'bg-gradient-to-r from-rose to-lavender text-white' : 'bg-light-lav text-text-sub'} disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
                   AI生成
                 </button>
                 <button onClick={() => setImageMode('upload')}
@@ -398,7 +411,11 @@ export default function SnsComposePage() {
             {imageMode === 'generate' && !currentImage && !imageLoading && (
               <div className="py-8 text-center text-text-sub text-sm">
                 <ImagePlus className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                <p>投稿文を生成後、「この投稿用の画像を生成」をクリック</p>
+                {variations.length === 0 ? (
+                  <p>まず左側で「AIで投稿を生成」をクリック</p>
+                ) : (
+                  <p>左側の「この投稿用の画像を生成」をクリック</p>
+                )}
               </div>
             )}
           </div>
