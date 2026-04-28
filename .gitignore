@@ -27,3 +27,6 @@ yarn-error.log*
 # Build artifacts
 Users/
 .vercel
+
+# TypeScript incremental ビルドキャッシュ（マシン固有・追跡不要）
+tsconfig.tsbuildinfo
