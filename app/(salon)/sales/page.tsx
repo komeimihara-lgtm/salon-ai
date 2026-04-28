@@ -432,6 +432,7 @@ export default function SalesPage() {
             await addCustomerTicket(custId, selectedCustomer!.name, c.ticketPlan, {
               paymentMethod: paymentMethod as import('@/lib/payment-methods').PaymentMethod,
               campaignId: c.campaign?.id,
+              staffName: selectedStaff?.name || null,
             })
           }
         } else if (c.type === 'subscription' && c.subPlan) {
@@ -442,6 +443,7 @@ export default function SalesPage() {
             await addCustomerSubscription(custId, selectedCustomer!.name, c.subPlan, {
               paymentMethod: paymentMethod as import('@/lib/payment-methods').PaymentMethod,
               campaignId: c.campaign?.id,
+              staffName: selectedStaff?.name || null,
             })
           }
         } else {

@@ -195,6 +195,7 @@ export async function addCustomerSubscription(
     startedAt?: string
     paymentMethod?: import('@/lib/payment-methods').PaymentMethod
     campaignId?: string
+    staffName?: string | null
   }
 ): Promise<CustomerSubscription> {
   const startedAt = options?.startedAt ?? todayJstString()
@@ -224,6 +225,7 @@ export async function addCustomerSubscription(
     started_at: startedAt,
     next_billing_date: nextBillingDate,
     payment_method: options?.paymentMethod ?? 'card',
+    staff_name: options?.staffName ?? null,
     record_sale: true,
   }
   if (options?.campaignId) body.campaign_id = options.campaignId

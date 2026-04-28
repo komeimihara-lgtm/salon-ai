@@ -161,6 +161,8 @@ export async function POST(req: NextRequest) {
           customer_name: saleCustomerName,
           sale_type: 'ticket_consume',
           ticket_id: matchingTicket.id,
+          menu: menu || null,
+          staff_name: reservation.staff_name || null,
           memo: `予約来店: ${menu || '施術'}（残${newRemaining}回）`,
           status: 'active',
         })

@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
       started_at,
       next_billing_date,
       payment_method,
+      staff_name,
       record_sale,
       campaign_id,
     } = body
@@ -130,6 +131,7 @@ export async function POST(req: NextRequest) {
           customer_id,
           customer_name: resolvedCustomerName,
           menu: plan_name,
+          staff_name: staff_name ?? null,
           memo: `${plan_name} 加入`,
           payment_method: pm,
           sale_type: pm, // payment_method と同じ(来店ベース売上として集計)

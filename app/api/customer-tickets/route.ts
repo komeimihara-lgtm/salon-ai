@@ -92,6 +92,7 @@ export async function POST(req: NextRequest) {
       purchased_at,
       expiry_date,
       payment_method,
+      staff_name,
       record_sale,
       campaign_id,
       amount: bodyAmount,
@@ -175,7 +176,8 @@ export async function POST(req: NextRequest) {
         const saleNameRow = [{ customer_id, customer_name: customer_name || null }]
         await overwriteSaleCustomerNamesFromDb(getSupabaseAdmin(), salonId, saleNameRow)
         const resolvedCustomerName = (saleNameRow[0].customer_name as string | null) ?? customer_name ?? null
-        await getSupabaseAdmin()
+        const pmForSale = PAYMENT_METHODS.includes(payment_method as (typeof PAYMENT_METHODS)[number]) ? payment_method : 'card'
+        const { error: saleErr } = await getSupabaseAdmin()
           .from('sales')
           .insert({
             salon_id: salonId,
@@ -183,10 +185,16 @@ export async function POST(req: NextRequest) {
             amount: saleAmount,
             customer_id,
             customer_name: resolvedCustomerName,
+            menu: plan_name,
+            staff_name: staff_name ?? null,
+            payment_method: pmForSale,
             memo: `${plan_name} 購入`,
             sale_type: saleType,
             status: 'active',
           })
+        if (saleErr) {
+          console.error('[customer-tickets] POST sales insert failed', saleErr)
+        }
       }
     }
 

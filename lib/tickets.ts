@@ -163,6 +163,7 @@ export async function addCustomerTicket(
     purchasedAt?: string
     paymentMethod?: import('@/lib/payment-methods').PaymentMethod
     campaignId?: string
+    staffName?: string | null
   }
 ): Promise<CustomerTicket> {
   const purchasedAt = options?.purchasedAt ?? todayJstString()
@@ -187,6 +188,7 @@ export async function addCustomerTicket(
     purchased_at: purchasedAt,
     expiry_date: expiryDate,
     payment_method: options?.paymentMethod ?? 'card',
+    staff_name: options?.staffName ?? null,
     record_sale: true,
   }
   if (options?.campaignId) body.campaign_id = options.campaignId
