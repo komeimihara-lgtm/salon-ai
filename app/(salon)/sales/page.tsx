@@ -433,6 +433,7 @@ export default function SalesPage() {
               paymentMethod: paymentMethod as import('@/lib/payment-methods').PaymentMethod,
               campaignId: c.campaign?.id,
               staffName: selectedStaff?.name || null,
+              purchasedAt: saleDate, // 過去日付指定をサブスク・回数券にも適用
             })
           }
         } else if (c.type === 'subscription' && c.subPlan) {
@@ -444,6 +445,7 @@ export default function SalesPage() {
               paymentMethod: paymentMethod as import('@/lib/payment-methods').PaymentMethod,
               campaignId: c.campaign?.id,
               staffName: selectedStaff?.name || null,
+              startedAt: saleDate, // 過去日付指定をサブスク・回数券にも適用
             })
           }
         } else {
