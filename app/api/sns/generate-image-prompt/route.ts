@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     const { post_content, platform, style } = await req.json()
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5',
       max_tokens: 1024,
       system: `あなたはサロン向けSNS画像のディレクターです。
 投稿内容に合った画像生成AIプロンプトを作成してください。

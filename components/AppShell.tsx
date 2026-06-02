@@ -33,6 +33,7 @@ import {
   LogOut,
   Fingerprint,
   BarChart3,
+  Star,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
@@ -73,6 +74,7 @@ const NAV_ITEMS: NavItem[] = [
       { href: '/sns/analytics', label: '投稿分析' },
     ],
   },
+  { type: 'link', href: '/reviews', icon: Star, label: '口コミ管理' },
   { type: 'link', href: '/menu', icon: List, label: 'メニュー設定' },
   { type: 'link', href: '/products', icon: Package, label: '商品管理' },
   { type: 'link', href: '/courses', icon: Ticket, label: '回数券管理' },

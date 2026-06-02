@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     }
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5',
       max_tokens: 2048,
       system: `あなたはサロン専門のSNSマーケティングAIです。
 サロン名: ${salonName}
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     }
   ]
 }
-variationsは必ず3パターン生成してください。${archivedPosts && archivedPosts.length > 0 ? `
+variationsには必ず1パターンだけ生成してください（最も自信のある投稿1つに絞る）。${archivedPosts && archivedPosts.length > 0 ? `
 【過去に反響が良かった投稿（必ず参考にすること）】
 ${archivedPosts.map((p: { title: string; content?: string; platform: string; archive_memo?: string; archive_metrics?: { likes?: string; saves?: string; bookings?: string } }) => `
 ・${p.title}
@@ -93,7 +93,7 @@ ${archivedPosts.map((p: { title: string; content?: string; platform: string; arc
 これらの投稿の傾向・トーン・テーマを参考に、今回の投稿を生成してください。` : ''}`,
       messages: [{
         role: 'user',
-        content: `以下の条件でSNS投稿を3パターン生成してください。
+        content: `以下の条件でSNS投稿を1つだけ生成してください。
 
 投稿タイプ: ${purposeLabels[purpose] || purpose}
 プラットフォーム: ${platform}
