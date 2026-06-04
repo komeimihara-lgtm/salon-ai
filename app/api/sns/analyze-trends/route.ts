@@ -37,7 +37,7 @@ export async function POST() {
       .join('\n\n')
 
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       system: 'あなたはサロン専門のSNSマーケティング分析AIです。反響があった投稿の傾向を分析し、わかりやすい日本語で「どんな投稿が反響を得やすいか」をまとめてください。',
       messages: [

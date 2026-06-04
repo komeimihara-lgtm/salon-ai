@@ -179,7 +179,7 @@ ${JSON.stringify(summary, null, 2)}
 priority 5 が最重要です。`
 
   const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 3000,
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
