@@ -227,6 +227,35 @@ priority 5 が最重要です。`
       .lte('reservation_date', dayPlus2)
 
     await supabase.from('customer_delight_proposals').insert(records)
+
+    // === ダッシュボードのタスクにも自動投入 ===
+    // 未完了の customer_delight タスクを削除（古い提案の掃除）
+    // 完了済みは履歴として残す
+    await supabase
+      .from('tasks')
+      .delete()
+      .eq('salon_id', salonId)
+      .eq('source', 'customer_delight')
+      .eq('done', false)
+
+    const taskRecords = records.map((r) => {
+      const taskText = r.message_template
+        ? `${r.customer_name}様: ${r.initiative ?? ''} — 「${(r.message_template ?? '').slice(0, 50)}${(r.message_template ?? '').length > 50 ? '…' : ''}」`
+        : `${r.customer_name}様: ${r.initiative ?? ''}`
+      // priority 1〜5 → high/medium/low に変換
+      const taskPriority =
+        r.priority >= 4 ? 'high' : r.priority >= 2 ? 'medium' : 'low'
+      return {
+        salon_id: salonId,
+        text: taskText,
+        source: 'customer_delight' as const,
+        priority: taskPriority,
+        due_date: r.reservation_date,
+        done: false,
+      }
+    })
+
+    await supabase.from('tasks').insert(taskRecords)
   }
 
   return { proposals: records }
