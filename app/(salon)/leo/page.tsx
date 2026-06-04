@@ -26,7 +26,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       )}
       <div className={`max-w-[78%] ${isUser ? 'order-1' : ''}`}>
         {!isUser && (
-          <p className="text-xs font-bold text-[#0891B2] mb-1 ml-1">LEO GRANT</p>
+          <p className="text-xs font-bold text-[#0891B2] mb-1 ml-1">SOLA</p>
         )}
         <div className={`rounded-2xl px-4 py-3 ${
           isUser
@@ -61,7 +61,7 @@ function TypingIndicator() {
               }}
             />
           ))}
-          <span className="text-xs text-[#4A5568] ml-1">LEOが分析中...</span>
+          <span className="text-xs text-[#4A5568] ml-1">SOLAが分析中...</span>
         </div>
       </div>
     </div>
@@ -69,7 +69,7 @@ function TypingIndicator() {
 }
 
 export default function LeoPage() {
-  const salon = DEMO_SALON
+  const [salon, setSalon] = useState({ ...DEMO_SALON })
   const [kpiContext, setKpiContext] = useState<{ targets?: Record<string, number>; kpi?: Record<string, number> } | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
@@ -77,6 +77,22 @@ export default function LeoPage() {
   const [history, setHistory] = useState<LeoMessage[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // 実サロン情報（owner_name）を取得
+  useEffect(() => {
+    fetch('/api/settings/salon')
+      .then(r => r.json())
+      .then(j => {
+        if (j?.owner_name || j?.name) {
+          setSalon(prev => ({
+            ...prev,
+            name: j.name || prev.name,
+            owner_name: j.owner_name || prev.owner_name,
+          }))
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const fetchKpiContext = useCallback(async () => {
     const now = new Date()
@@ -103,18 +119,18 @@ export default function LeoPage() {
         kpi,
       })
       const rate = kpi.monthly_target > 0 ? Math.round((kpi.monthly_actual / kpi.monthly_target) * 100) : 0
-      const initialMsg = `${salon.owner_name}さん、こんにちは。LEO GRANTです。\n\n現在の状況を確認しました。今月の達成率は${rate}%、残り${kpi.days_remaining}日で¥${(kpi.gap / 10000).toFixed(0)}万円が必要です。\n\n特に気になるのは失客${kpi.lost_count}名です。今すぐ手を打てば今月中に取り戻せます。\n\n何から始めますか？`
+      const initialMsg = `${salon.owner_name}さん、こんにちは。SOLAです。\n\n現在の状況を確認しました。今月の達成率は${rate}%、残り${kpi.days_remaining}日で¥${(kpi.gap / 10000).toFixed(0)}万円が必要です。\n\n特に気になるのは失客${kpi.lost_count}名です。今すぐ手を打てば今月中に取り戻せます。\n\n何から始めますか？`
       setMessages([{ id: '0', role: 'assistant', content: initialMsg, timestamp: new Date() }])
     } catch {
       const rate = Math.round((salon.kpi.monthly_actual / salon.kpi.monthly_target) * 100)
       setMessages([{
         id: '0',
         role: 'assistant',
-        content: `${salon.owner_name}さん、こんにちは。LEO GRANTです。\n\n現在の状況を確認しました。今月の達成率は${rate}%、残り${salon.kpi.days_remaining}日で¥${((salon.kpi.monthly_target - salon.kpi.monthly_actual) / 10000).toFixed(0)}万円が必要です。\n\n特に気になるのは失客${salon.kpi.lost_customers}名です。今すぐ手を打てば今月中に取り戻せます。\n\n何から始めますか？`,
+        content: `${salon.owner_name}さん、こんにちは。SOLAです。\n\n現在の状況を確認しました。今月の達成率は${rate}%、残り${salon.kpi.days_remaining}日で¥${((salon.kpi.monthly_target - salon.kpi.monthly_actual) / 10000).toFixed(0)}万円が必要です。\n\n特に気になるのは失客${salon.kpi.lost_customers}名です。今すぐ手を打てば今月中に取り戻せます。\n\n何から始めますか？`,
         timestamp: new Date(),
       }])
     }
-  }, [])
+  }, [salon])
 
   useEffect(() => {
     fetchKpiContext()
@@ -169,7 +185,7 @@ export default function LeoPage() {
       setMessages(prev => [...prev, assistantMsg])
       setHistory(prev => [...prev, { role: 'assistant', content: data.message }])
 
-      // LEOの回答からタスクを自動抽出して保存
+      // SOLAの回答からタスクを自動抽出して保存
       try {
         const taskRes = await fetch('/api/leo/extract-tasks', {
           method: 'POST',
