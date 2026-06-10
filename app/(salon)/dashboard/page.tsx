@@ -1026,6 +1026,14 @@ export default function DashboardPage() {
               onEdit={(r) => { setEditTarget(r); setReservationDetailModal(null) }}
               onCancel={(id) => { handleStatusChange(id, 'cancelled'); setReservationDetailModal(null) }}
             />
+            <Link
+              href={`/sales?reservation_id=${reservationDetailModal.id}`}
+              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold text-sm hover:opacity-90 transition-opacity"
+              onClick={() => setReservationDetailModal(null)}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              会計へ進む
+            </Link>
           </div>
         </div>
       )}

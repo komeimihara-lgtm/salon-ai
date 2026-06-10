@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import {
   Calendar, ChevronLeft, ChevronRight, Plus, Clock, User, Scissors,
-  Loader2, X, CheckCircle2, RotateCcw, Ban, AlertCircle
+  Loader2, X, CheckCircle2, RotateCcw, Ban, AlertCircle, ShoppingCart
 } from 'lucide-react'
 import type { Reservation } from '@/types'
 import ReservationFormModal from '@/components/ReservationFormModal'
@@ -550,6 +551,16 @@ function ReservationDetailModal({
               </button>
             </div>
           )}
+
+          {/* 会計へ進む（来店確定 or 来店済どちらでも使える） */}
+          <Link
+            href={`/sales?reservation_id=${reservation.id}`}
+            onClick={onClose}
+            className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white text-sm font-bold hover:opacity-90"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            会計へ進む
+          </Link>
         </div>
       </div>
     </div>

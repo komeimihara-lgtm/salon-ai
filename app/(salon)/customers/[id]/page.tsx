@@ -180,6 +180,12 @@ export default function CustomerDetailPage() {
   const [visits, setVisits] = useState<VisitRecord[]>([])
   const [visitsLoading, setVisitsLoading] = useState(false)
   const [visitsExpanded, setVisitsExpanded] = useState(false)
+  const [customerSales, setCustomerSales] = useState<{
+    sale_date: string
+    amount: number
+    menu: string | null
+    sale_type: string | null
+  }[]>([])
   const [visitModalOpen, setVisitModalOpen] = useState(false)
   const [visitEditing, setVisitEditing] = useState<VisitRecord | null>(null)
   const [visitForm, setVisitForm] = useState({ visit_date: '', menu: '', staff_name: '', amount: '' })
@@ -245,6 +251,28 @@ export default function CustomerDetailPage() {
     }
   }
 
+  const fetchCustomerSales = useCallback(async () => {
+    if (!id) return
+    try {
+      // 直近12ヶ月分の sales を取得
+      const today = new Date()
+      const start = new Date(today)
+      start.setMonth(today.getMonth() - 12)
+      const startStr = start.toISOString().slice(0, 10)
+      const endStr = today.toISOString().slice(0, 10)
+      const res = await fetch(`/api/kpi/sales?customer_id=${id}&start=${startStr}&end=${endStr}`)
+      const data = await res.json()
+      setCustomerSales((data.sales || []).map((s: { sale_date: string; amount: number; menu?: string | null; sale_type?: string | null }) => ({
+        sale_date: s.sale_date,
+        amount: s.amount ?? 0,
+        menu: s.menu ?? null,
+        sale_type: s.sale_type ?? null,
+      })))
+    } catch {
+      setCustomerSales([])
+    }
+  }, [id])
+
   const fetchVisits = useCallback(async () => {
     if (!id) return
     setVisitsLoading(true)
@@ -252,6 +280,8 @@ export default function CustomerDetailPage() {
       const res = await fetch(`/api/customers/${id}/visits`)
       const data = await res.json()
       setVisits(data.visits || [])
+      // 売上もまとめて取得
+      fetchCustomerSales()
     } catch {
       setVisits([])
     } finally {
@@ -993,6 +1023,82 @@ export default function CustomerDetailPage() {
           </>
         )}
       </div>
+
+      {/* 購入分析（客単価推移＋物販ランキング） */}
+      {customerSales.length > 0 && (() => {
+        const now = new Date()
+        const monthsAgo = (m: number) => {
+          const d = new Date(now); d.setMonth(d.getMonth() - m); return d.toISOString().slice(0, 10)
+        }
+        const range = (start: string) => customerSales.filter(s => s.sale_date >= start)
+        const avg = (arr: typeof customerSales) =>
+          arr.length === 0 ? 0 : Math.round(arr.reduce((sum, s) => sum + s.amount, 0) / arr.length)
+        const r3 = range(monthsAgo(3))
+        const r6 = range(monthsAgo(6))
+        const r12 = range(monthsAgo(12))
+        const productSales = customerSales.filter(s => s.sale_type === 'product')
+        const productRanking = Object.entries(
+          productSales.reduce((acc: Record<string, { count: number; total: number }>, s) => {
+            const key = s.menu || '(不明)'
+            if (!acc[key]) acc[key] = { count: 0, total: 0 }
+            acc[key].count += 1
+            acc[key].total += s.amount
+            return acc
+          }, {})
+        ).sort((a, b) => b[1].total - a[1].total).slice(0, 5)
+
+        return (
+          <div className="bg-white rounded-2xl p-5 card-shadow mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Receipt className="w-4 h-4 text-rose" />
+              <h2 className="font-semibold text-text-main">購入分析</h2>
+            </div>
+
+            {/* 客単価推移 */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="bg-rose/5 rounded-xl p-3 text-center">
+                <p className="text-xs text-text-sub">直近3ヶ月 客単価</p>
+                <p className="text-lg font-bold text-rose mt-1">¥{avg(r3).toLocaleString()}</p>
+                <p className="text-[10px] text-text-sub mt-0.5">{r3.length}件</p>
+              </div>
+              <div className="bg-lavender/10 rounded-xl p-3 text-center">
+                <p className="text-xs text-text-sub">直近6ヶ月 客単価</p>
+                <p className="text-lg font-bold text-lavender mt-1">¥{avg(r6).toLocaleString()}</p>
+                <p className="text-[10px] text-text-sub mt-0.5">{r6.length}件</p>
+              </div>
+              <div className="bg-purple-50 rounded-xl p-3 text-center">
+                <p className="text-xs text-text-sub">直近12ヶ月 客単価</p>
+                <p className="text-lg font-bold text-purple-600 mt-1">¥{avg(r12).toLocaleString()}</p>
+                <p className="text-[10px] text-text-sub mt-0.5">{r12.length}件</p>
+              </div>
+            </div>
+
+            {/* 物販ランキング */}
+            {productRanking.length > 0 && (
+              <div>
+                <h3 className="text-xs font-semibold text-text-sub mb-2">よく購入する物販 Top {productRanking.length}</h3>
+                <div className="space-y-1.5">
+                  {productRanking.map(([name, stat], i) => (
+                    <div key={name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-amber-50/60 border border-amber-100">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-bold text-amber-700 w-5">#{i + 1}</span>
+                        <span className="text-sm text-text-main truncate">{name}</span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-2">
+                        <span className="text-xs text-text-sub">{stat.count}回</span>
+                        <span className="text-sm font-bold text-text-main">¥{stat.total.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {productRanking.length === 0 && (
+              <p className="text-xs text-text-sub py-2">物販の購入履歴はまだありません</p>
+            )}
+          </div>
+        )
+      })()}
 
       {/* カウンセリング記録（構造化カルテ） */}
       <div className="bg-white rounded-2xl p-5 card-shadow mb-6">
