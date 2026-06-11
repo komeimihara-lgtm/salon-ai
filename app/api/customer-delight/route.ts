@@ -90,6 +90,57 @@ async function cleanupOldProposals(salonId: string) {
     .lt('reservation_date', cutoff)
 }
 
+interface CustomerRow {
+  id: string
+  name: string | null
+  visit_count: number | null
+  last_visit_date: string | null
+  birthday: string | null
+  memo: string | null
+  concerns: string | null
+  status: string | null
+}
+
+function daysUntilBirthday(birthday: string | null | undefined): number | null {
+  if (!birthday) return null
+  const [, m, d] = birthday.split('-').map(Number)
+  const bday = new Date(new Date().getFullYear(), m - 1, d)
+  if (bday < new Date()) bday.setFullYear(bday.getFullYear() + 1)
+  return Math.ceil((bday.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function rankOfCustomer(customer: CustomerRow | undefined): string {
+  const status = customer?.status
+  if (status === 'vip') return 'vip'
+  if (status === 'at_risk') return 'at_risk'
+  if (status === 'dormant') return 'dormant'
+  const visitCount = customer?.visit_count || 0
+  if (visitCount === 0 || visitCount === 1) return 'new'
+  return 'active'
+}
+
+function summarizeCustomer(
+  customer: CustomerRow | undefined,
+  name: string,
+  reservationDate: string,
+  menu: string,
+  customerId: string | null,
+) {
+  const dtb = daysUntilBirthday(customer?.birthday)
+  return {
+    customer_id: customerId,
+    name,
+    reservation_date: reservationDate,
+    menu,
+    visit_count: customer?.visit_count || 0,
+    birthday_soon: dtb !== null && dtb >= 0 && dtb <= 14,
+    days_to_birthday: dtb,
+    concerns: customer?.concerns || '',
+    memo: (customer?.memo || '').slice(0, 100),
+    customer_rank: rankOfCustomer(customer),
+  }
+}
+
 async function generateAndSave(salonId: string) {
   const supabase = getSupabaseAdmin()
   const today = jstDateStr()
@@ -107,50 +158,54 @@ async function generateAndSave(salonId: string) {
     .order('start_time', { ascending: true })
     .limit(8)
 
-  if (!reservations || reservations.length === 0) {
-    return { proposals: [], message: '今日〜明後日の予約がありません' }
+  let summary: ReturnType<typeof summarizeCustomer>[]
+
+  if (reservations && reservations.length > 0) {
+    // 直近予約のある顧客から提案を生成
+    const customerIds = reservations.filter((r) => r.customer_id).map((r) => r.customer_id) as string[]
+    const { data: customers } = customerIds.length > 0
+      ? await supabase
+          .from('customers')
+          .select('id, name, visit_count, last_visit_date, birthday, memo, concerns, status')
+          .in('id', customerIds)
+      : { data: [] }
+
+    summary = reservations.map((r) =>
+      summarizeCustomer(
+        (customers as CustomerRow[] | null)?.find((c) => c.id === r.customer_id),
+        r.customer_name,
+        r.reservation_date,
+        r.menu || '',
+        r.customer_id,
+      ),
+    )
+  } else {
+    // フォールバック: 直近予約が無くても、感動体験の対象になりやすい顧客を選んで提案する
+    //（失客予備軍・休眠客・VIP・誕生日が近い顧客を優先）
+    const { data: cands } = await supabase
+      .from('customers')
+      .select('id, name, visit_count, last_visit_date, birthday, memo, concerns, status')
+      .eq('salon_id', salonId)
+      .limit(80)
+
+    if (!cands || cands.length === 0) {
+      return { proposals: [], message: '提案対象の顧客がいません' }
+    }
+
+    const scored = (cands as CustomerRow[])
+      .map((c) => {
+        const rank = rankOfCustomer(c)
+        const dtb = daysUntilBirthday(c.birthday)
+        let score =
+          rank === 'at_risk' ? 50 : rank === 'dormant' ? 45 : rank === 'vip' ? 40 : rank === 'new' ? 25 : 15
+        if (dtb !== null && dtb >= 0 && dtb <= 14) score += 30
+        return { c, score }
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+
+    summary = scored.map(({ c }) => summarizeCustomer(c, c.name || '', today, '', c.id))
   }
-
-  // 顧客情報
-  const customerIds = reservations.filter((r) => r.customer_id).map((r) => r.customer_id) as string[]
-  const { data: customers } = customerIds.length > 0
-    ? await supabase
-        .from('customers')
-        .select('id, name, visit_count, last_visit_date, birthday, memo, concerns, status')
-        .in('id', customerIds)
-    : { data: [] }
-
-  const summary = reservations.map((r) => {
-    const customer = customers?.find((c) => c.id === r.customer_id)
-    const birthday = customer?.birthday
-    let daysToBirthday: number | null = null
-    if (birthday) {
-      const [, m, d] = birthday.split('-').map(Number)
-      const bday = new Date(new Date().getFullYear(), m - 1, d)
-      if (bday < new Date()) bday.setFullYear(bday.getFullYear() + 1)
-      daysToBirthday = Math.ceil((bday.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-    }
-    return {
-      customer_id: r.customer_id,
-      name: r.customer_name,
-      reservation_date: r.reservation_date,
-      menu: r.menu || '',
-      visit_count: customer?.visit_count || 0,
-      birthday_soon: daysToBirthday !== null && daysToBirthday >= 0 && daysToBirthday <= 14,
-      days_to_birthday: daysToBirthday,
-      concerns: customer?.concerns || '',
-      memo: (customer?.memo || '').slice(0, 100),
-      customer_rank: (() => {
-        const status = customer?.status
-        if (status === 'vip') return 'vip'
-        if (status === 'at_risk') return 'at_risk'
-        if (status === 'dormant') return 'dormant'
-        const visitCount = customer?.visit_count || 0
-        if (visitCount === 0 || visitCount === 1) return 'new'
-        return 'active'
-      })(),
-    }
-  })
 
   const systemPrompt = `あなたは美容室・ヘアサロンの「感動体験」を設計するプロのコンサルタントです。
 お客様一人ひとりに合わせた特別な体験を提案します。
@@ -175,7 +230,7 @@ async function generateAndSave(salonId: string) {
   }
 ]}`
 
-  const userPrompt = `以下、本日から明後日までのご予約一覧:
+  const userPrompt = `以下、感動体験を届けたいお客様の一覧です（reservation_date は来店予定日。予約が無いお客様は本日付）:
 ${JSON.stringify(summary, null, 2)}
 
 各お客様への感動体験を 1人1件、合計 ${Math.min(summary.length, 8)} 件以内で提案してください。
