@@ -57,51 +57,23 @@ export interface DelightProposal {
   message_template?: string
 }
 
-// 感動体験提案をタスク文言に変換（customer-delight ページと dashboard で共通利用）
+// 感動体験提案をタスク文言に変換（customer-delight ページで「追加済み」判定に利用）。
+// サーバー側 generateAndSave のタスク文言生成と同じフォーマットに揃えること。
 export function buildDelightTaskText(p: DelightProposal): string {
   return p.message_template
     ? `${p.customer_name}様: ${p.initiative} — 「${p.message_template.slice(0, 50)}${p.message_template.length > 50 ? '…' : ''}」`
     : `${p.customer_name}様: ${p.initiative}`
 }
 
-// 感動体験の提案を取得し、まだタスク化されていないものを自動でタスクに追加する。
-// 当日の提案はサーバー側でキャッシュされるため、同じ内容を再登録しないよう
-// 既存の customer_delight タスクの文言と照合して重複を防ぐ。
-export async function syncCustomerDelightTasks(): Promise<ManualTask[]> {
-  let proposals: DelightProposal[]
+// 感動体験の提案生成をトリガーする。
+// GET はキャッシュがあれば返し、未生成/期限切れなら生成し、その際サーバー側で
+// tasks テーブルへ customer_delight タスクを自動投入する（route.ts の generateAndSave）。
+// クライアントでは insert せず、呼び出し後にタスク一覧を再取得するだけにする。
+// （クライアントで再 insert するとユーザーが削除したタスクが復活してしまうため）
+export async function ensureCustomerDelightTasks(): Promise<void> {
   try {
-    // GET はキャッシュ済みの提案を返し、未生成/期限切れのときだけ生成する（軽い）。
-    // POST は毎回強制再生成のため、自動同期では使わない。
-    const res = await fetch('/api/customer-delight', { method: 'GET' })
-    if (!res.ok) return []
-    const data = await res.json()
-    proposals = data.proposals || []
+    await fetch('/api/customer-delight', { method: 'GET' })
   } catch {
-    return []
+    // 失敗してもUIは既存タスクのまま。次回の読込で反映される。
   }
-  if (proposals.length === 0) return []
-
-  const existing = await fetchTasks()
-  const existingDelightTexts = new Set(
-    existing.filter(t => t.source === 'customer_delight').map(t => t.text)
-  )
-
-  const created: ManualTask[] = []
-  for (const p of proposals) {
-    const text = buildDelightTaskText(p)
-    if (existingDelightTexts.has(text)) continue
-    try {
-      const task = await addTask({
-        text,
-        source: 'customer_delight',
-        priority: 'high',
-        due_date: null,
-        done: false,
-      })
-      created.push(task)
-    } catch {
-      // 1件失敗しても他の提案の登録は続行
-    }
-  }
-  return created
 }
