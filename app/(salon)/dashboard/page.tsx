@@ -413,24 +413,24 @@ export default function DashboardPage() {
   return (
     <div className="max-w-[1440px] mx-auto space-y-6">
       {/* レジバナー + お知らせパネル（lg以上で横2列、スマホは縦積み） */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         <Link
           href="/sales"
           className="block rounded-2xl overflow-hidden card-shadow hover:opacity-95 transition-opacity"
         >
-          <div className="bg-gradient-to-r from-rose to-lavender p-4 sm:p-5 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+          <div className="h-full bg-gradient-to-r from-rose to-lavender p-5 sm:p-6 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                <ShoppingCart className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
               </div>
               <div className="min-w-0">
-                <p className="text-white text-base sm:text-lg font-bold font-dm-sans leading-tight">レジ・売上登録</p>
-                <p className="text-white/90 text-xs sm:text-sm mt-0.5">メニュー選択・決済・売上管理</p>
+                <p className="text-white text-lg sm:text-xl font-bold font-dm-sans leading-tight">レジ・売上登録</p>
+                <p className="text-white/90 text-sm mt-1">メニュー選択・決済・売上管理</p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 text-white shrink-0">
-              <Receipt className="w-5 h-5" />
-              <ArrowRight className="w-4 h-4" />
+            <div className="flex items-center gap-2 text-white shrink-0">
+              <Receipt className="w-6 h-6" />
+              <ArrowRight className="w-5 h-5" />
             </div>
           </div>
         </Link>
