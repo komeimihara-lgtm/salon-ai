@@ -20,7 +20,7 @@ import ReservationActionCard from '@/components/ReservationActionCard'
 import { RescheduleModal, EditReservationModal } from '@/components/ReservationModals'
 import ReservationFormModal from '@/components/ReservationFormModal'
 import { useReservations } from '@/hooks/useReservations'
-import { fetchTasks, addTask, toggleTask, deleteTask, syncCustomerDelightTasks, type ManualTask } from '@/lib/dashboard-tasks'
+import { fetchTasks, addTask, toggleTask, deleteTask, ensureCustomerDelightTasks, type ManualTask } from '@/lib/dashboard-tasks'
 import { getAchievementRate, getAchievementColor, getAchievementBgColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
 import { todayJstString, jstNow, jstMonthRange } from '@/lib/jst-date'
 import {
@@ -295,12 +295,10 @@ export default function DashboardPage() {
   useEffect(() => {
     const reloadTasks = () => fetchTasks().then(setManualTasksState).catch(() => {})
     reloadTasks()
-    // 感動体験の提案をバックグラウンドで同期。当日分が未登録なら自動でタスク化し、登録後に再読込する。
-    syncCustomerDelightTasks()
-      .then((created) => {
-        if (created.length > 0) reloadTasks()
-      })
-      .catch(() => {})
+    // 感動体験の提案生成をトリガー（サーバー側で tasks に自動投入される）。
+    // 生成完了後は必ず一覧を再取得して反映する。初回生成はAI実行で数秒かかるため、
+    // 既存タスクは即時表示しつつ完了を待ってから再読込する。
+    ensureCustomerDelightTasks().then(reloadTasks)
     window.addEventListener('focus', reloadTasks)
     return () => window.removeEventListener('focus', reloadTasks)
   }, [])
