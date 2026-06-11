@@ -13,7 +13,7 @@ import {
   Gift,
   Zap,
 } from 'lucide-react'
-import { addTask } from '@/lib/dashboard-tasks'
+import { addTask, fetchTasks, buildDelightTaskText } from '@/lib/dashboard-tasks'
 
 interface Proposal {
   customer_name: string
@@ -68,10 +68,28 @@ export default function CustomerDelightPage() {
     fetchProposals()
   }, [])
 
+  // すでにタスク化済み（ダッシュボードの自動同期や手動追加で登録済み）の提案を
+  // 「追加済み」表示にして、重複登録を防ぐ。
+  useEffect(() => {
+    if (proposals.length === 0) return
+    fetchTasks()
+      .then((tasks) => {
+        const delightTexts = new Set(
+          tasks.filter((t) => t.source === 'customer_delight').map((t) => t.text)
+        )
+        const already = new Set<string>()
+        for (const p of proposals) {
+          if (delightTexts.has(buildDelightTaskText(p))) {
+            already.add(`${p.customer_name}-${p.initiative}`)
+          }
+        }
+        if (already.size > 0) setExecuted((prev) => new Set([...prev, ...already]))
+      })
+      .catch(() => {})
+  }, [proposals])
+
   const handleExecute = async (p: Proposal) => {
-    const taskText = p.message_template
-      ? `${p.customer_name}様: ${p.initiative} — 「${p.message_template.slice(0, 50)}${p.message_template.length > 50 ? '…' : ''}」`
-      : `${p.customer_name}様: ${p.initiative}`
+    const taskText = buildDelightTaskText(p)
     try {
       await addTask({
         text: taskText,

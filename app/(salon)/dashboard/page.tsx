@@ -20,7 +20,7 @@ import ReservationActionCard from '@/components/ReservationActionCard'
 import { RescheduleModal, EditReservationModal } from '@/components/ReservationModals'
 import ReservationFormModal from '@/components/ReservationFormModal'
 import { useReservations } from '@/hooks/useReservations'
-import { fetchTasks, addTask, toggleTask, deleteTask, type ManualTask } from '@/lib/dashboard-tasks'
+import { fetchTasks, addTask, toggleTask, deleteTask, syncCustomerDelightTasks, type ManualTask } from '@/lib/dashboard-tasks'
 import { getAchievementRate, getAchievementColor, getAchievementBgColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
 import { todayJstString, jstNow, jstMonthRange } from '@/lib/jst-date'
 import {
@@ -295,6 +295,12 @@ export default function DashboardPage() {
   useEffect(() => {
     const reloadTasks = () => fetchTasks().then(setManualTasksState).catch(() => {})
     reloadTasks()
+    // 感動体験の提案をバックグラウンドで同期。当日分が未登録なら自動でタスク化し、登録後に再読込する。
+    syncCustomerDelightTasks()
+      .then((created) => {
+        if (created.length > 0) reloadTasks()
+      })
+      .catch(() => {})
     window.addEventListener('focus', reloadTasks)
     return () => window.removeEventListener('focus', reloadTasks)
   }, [])
@@ -430,7 +436,7 @@ export default function DashboardPage() {
   return (
     <div className="max-w-[1440px] mx-auto space-y-6">
       {/* レジバナー + お知らせパネル（lg以上で横2列、スマホは縦積み） */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Link
           href="/sales"
           className="block rounded-2xl overflow-hidden card-shadow hover:opacity-95 transition-opacity"
