@@ -14,14 +14,13 @@ import {
   Heart,
   Loader2,
   Bell,
-  AlertTriangle,
 } from 'lucide-react'
 import type { Reservation } from '@/types'
 import ReservationActionCard from '@/components/ReservationActionCard'
 import { RescheduleModal, EditReservationModal } from '@/components/ReservationModals'
 import ReservationFormModal from '@/components/ReservationFormModal'
 import { useReservations } from '@/hooks/useReservations'
-import { fetchTasks, addTask, toggleTask, deleteTask, type ManualTask } from '@/lib/dashboard-tasks'
+import { fetchTasks, addTask, toggleTask, deleteTask, syncCustomerDelightTasks, type ManualTask } from '@/lib/dashboard-tasks'
 import { getAchievementRate, getAchievementColor, getAchievementBgColor, getDailyTarget, getWorkingDaysInMonth } from '@/lib/goals'
 import { todayJstString, jstNow, jstMonthRange } from '@/lib/jst-date'
 import {
@@ -254,21 +253,6 @@ export default function DashboardPage() {
   const [businessHours, setBusinessHours] = useState({ openTime: '10:00', closeTime: '21:00' })
   const [panelAnnouncements, setPanelAnnouncements] = useState<{ id: string; title: string; type: string; body: string; is_read: boolean }[]>([])
   const [announcementsUnreadCount, setAnnouncementsUnreadCount] = useState(0)
-  const [productExpiryAlerts, setProductExpiryAlerts] = useState<
-    {
-      id: string
-      customer_name: string
-      product_name: string
-      sold_at: string
-      expires_at: string
-      days_left: number
-      line_user_id: string | null
-      is_notified: boolean
-    }[]
-  >([])
-  const [productExpiryLoading, setProductExpiryLoading] = useState(true)
-  const [expiryNotifySending, setExpiryNotifySending] = useState<string | null>(null)
-
   useEffect(() => {
     fetch('/api/settings/salon')
       .then(r => r.json())
@@ -306,21 +290,15 @@ export default function DashboardPage() {
       .catch(() => {})
   }, [])
 
-  const loadProductExpiryAlerts = () => {
-    setProductExpiryLoading(true)
-    fetch('/api/products/expiry-alerts?include_notified=1')
-      .then(r => r.json())
-      .then((d) => setProductExpiryAlerts(Array.isArray(d.alerts) ? d.alerts : []))
-      .catch(() => setProductExpiryAlerts([]))
-      .finally(() => setProductExpiryLoading(false))
-  }
-
   useEffect(() => {
-    loadProductExpiryAlerts()
-  }, [])
-
-  useEffect(() => {
+    // まず既存タスクを即時表示し、感動体験の提案をバックグラウンドで同期する。
+    // 当日分の提案が未登録なら自動でタスク化し、登録後に一覧を再取得する。
     fetchTasks().then(setManualTasksState).catch(() => {})
+    syncCustomerDelightTasks()
+      .then((created) => {
+        if (created.length > 0) fetchTasks().then(setManualTasksState).catch(() => {})
+      })
+      .catch(() => {})
     Promise.all([fetchExpiringSoonTickets(14), fetchExpiredTickets()]).then(([expiring, expired]) => {
       const alerts: { id: string; type: string; text: string; action: string }[] = []
       if (expired.length > 0) {
@@ -442,29 +420,29 @@ export default function DashboardPage() {
   return (
     <div className="max-w-[1440px] mx-auto space-y-6">
       {/* レジバナー + お知らせパネル（lg以上で横2列、スマホは縦積み） */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <Link
           href="/sales"
-          className="block rounded-2xl overflow-hidden card-shadow hover:opacity-95 transition-opacity h-full min-h-[160px] flex flex-col"
+          className="block rounded-2xl overflow-hidden card-shadow hover:opacity-95 transition-opacity"
         >
-          <div className="bg-gradient-to-r from-rose to-lavender p-6 sm:p-8 flex items-center justify-between gap-4 flex-1">
-            <div className="flex items-center gap-4 min-w-0">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
-                <ShoppingCart className="w-8 h-8 sm:w-10 sm:h-10 text-white" />
+          <div className="bg-gradient-to-r from-rose to-lavender p-4 sm:p-5 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
-              <div>
-                <p className="text-white text-xl sm:text-2xl font-bold font-dm-sans">レジ・売上登録</p>
-                <p className="text-white/90 text-sm sm:text-base mt-0.5">メニュー選択・決済・売上管理</p>
+              <div className="min-w-0">
+                <p className="text-white text-base sm:text-lg font-bold font-dm-sans leading-tight">レジ・売上登録</p>
+                <p className="text-white/90 text-xs sm:text-sm mt-0.5">メニュー選択・決済・売上管理</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 text-white shrink-0">
-              <Receipt className="w-6 h-6 sm:w-7 sm:h-7" />
-              <ArrowRight className="w-5 h-5 sm:w-6 sm:h-6" />
+            <div className="flex items-center gap-1.5 text-white shrink-0">
+              <Receipt className="w-5 h-5" />
+              <ArrowRight className="w-4 h-4" />
             </div>
           </div>
         </Link>
 
-        <div className="bg-white rounded-2xl card-shadow border border-gray-100 overflow-hidden flex flex-col h-full min-h-[160px]">
+        <div className="bg-white rounded-2xl card-shadow border border-gray-100 overflow-hidden flex flex-col">
           <div className="h-[3px] w-full bg-gradient-to-r from-rose to-lavender shrink-0" />
           <div className="p-5 sm:p-6 flex flex-col flex-1 min-h-0">
             <div className="flex items-center justify-between gap-2 mb-4">
@@ -516,69 +494,6 @@ export default function DashboardPage() {
                 })}
               </ul>
             )}
-
-            <div className="mt-5 pt-4 border-t border-gray-100">
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                <h3 className="font-dm-sans font-bold text-sm text-text-main">⚠️ 消費期限アラート</h3>
-              </div>
-              {productExpiryLoading ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 className="w-6 h-6 text-rose animate-spin" />
-                </div>
-              ) : productExpiryAlerts.length === 0 ? (
-                <p className="text-xs text-text-sub py-2">該当する物販の期限アラートはありません</p>
-              ) : (
-                <ul className="space-y-2 max-h-56 overflow-y-auto">
-                  {productExpiryAlerts.map((a) => (
-                    <li
-                      key={a.id}
-                      className="rounded-xl border border-amber-100 bg-amber-50/80 px-3 py-2.5 text-xs"
-                    >
-                      <p className="font-semibold text-text-main">
-                        {a.customer_name} ／ {a.product_name}
-                      </p>
-                      <p className="text-text-sub mt-0.5">
-                        販売 {a.sold_at} · 期限 {a.expires_at}
-                        <span className={`ml-2 font-bold ${a.days_left <= 3 ? 'text-red-600' : 'text-amber-800'}`}>
-                          残り{a.days_left}日
-                        </span>
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        {a.is_notified ? (
-                          <span className="text-emerald-700 font-medium">送信済み✅</span>
-                        ) : a.line_user_id ? (
-                          <button
-                            type="button"
-                            disabled={expiryNotifySending === a.id}
-                            onClick={async () => {
-                              setExpiryNotifySending(a.id)
-                              try {
-                                const res = await fetch(`/api/products/expiry-notify/${a.id}`, {
-                                  method: 'POST',
-                                })
-                                const j = await res.json().catch(() => ({}))
-                                if (!res.ok) throw new Error(j.error || '送信に失敗しました')
-                                loadProductExpiryAlerts()
-                              } catch (e) {
-                                alert(e instanceof Error ? e.message : '送信に失敗しました')
-                              } finally {
-                                setExpiryNotifySending(null)
-                              }
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-[#06C755] text-white text-xs font-bold disabled:opacity-50"
-                          >
-                            {expiryNotifySending === a.id ? '送信中…' : 'LINEを送る'}
-                          </button>
-                        ) : (
-                          <span className="text-text-sub">LINE未連携</span>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
 
             <Link
               href="/announcements"
