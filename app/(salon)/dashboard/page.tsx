@@ -327,8 +327,12 @@ export default function DashboardPage() {
     ])
       .then(([salesRes, summaryRes, todayRes]) => Promise.all([salesRes.json(), summaryRes.json(), todayRes.json()]))
       .then(([salesJson, summaryJson, todayJson]) => {
-        const sales = salesJson.sales || []
-        const todaySalesList = todayJson.sales || []
+        // 今月売上(月商)・来店数・客単価は「着金売上のみ」で集計する。
+        // 消化売上(ticket_consume / subscription_consume)は前受金の役務消化なので
+        // 月商に二重計上しない（別カードで表示）。
+        const isConsume = (t?: string) => t === 'ticket_consume' || t === 'subscription_consume'
+        const sales = (salesJson.sales || []).filter((s: { sale_type?: string }) => !isConsume(s.sale_type))
+        const todaySalesList = (todayJson.sales || []).filter((s: { sale_type?: string }) => !isConsume(s.sale_type))
         setTodaySales(todaySalesList.reduce((sum: number, s: { amount: number }) => sum + s.amount, 0))
         const totalSales = sales.reduce((sum: number, sale: { amount: number }) => sum + sale.amount, 0)
         const visits = sales.length
