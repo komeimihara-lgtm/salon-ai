@@ -13,6 +13,9 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
 
+// AI生成に時間がかかるため関数タイムアウトを延長（Vercel Pro: 最大60s）
+export const maxDuration = 60
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 function jstDateStr(d = new Date()): string {
@@ -102,7 +105,7 @@ async function generateAndSave(salonId: string) {
     .lte('reservation_date', dayPlus2)
     .order('reservation_date', { ascending: true })
     .order('start_time', { ascending: true })
-    .limit(20)
+    .limit(8)
 
   if (!reservations || reservations.length === 0) {
     return { proposals: [], message: '今日〜明後日の予約がありません' }
@@ -175,12 +178,12 @@ async function generateAndSave(salonId: string) {
   const userPrompt = `以下、本日から明後日までのご予約一覧:
 ${JSON.stringify(summary, null, 2)}
 
-各お客様への感動体験を 1人1件、合計 ${Math.min(summary.length, 12)} 件以内で提案してください。
+各お客様への感動体験を 1人1件、合計 ${Math.min(summary.length, 8)} 件以内で提案してください。
 priority 5 が最重要です。`
 
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 3000,
+    max_tokens: 8000,
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
   })
@@ -193,7 +196,15 @@ priority 5 が最重要です。`
     const text = content.text.replace(/```json\n?|\n?```/g, '').trim()
     const m = text.match(/\{[\s\S]*\}/)
     parsed = JSON.parse(m ? m[0] : text)
-  } catch {
+  } catch (parseErr) {
+    // JSON parse 失敗時は原因をログに残す（max_tokens切れ等の調査用）
+    console.error('customer-delight JSON parse failed', {
+      stop_reason: response.stop_reason,
+      output_tokens: response.usage?.output_tokens,
+      text_head: content.text.slice(0, 200),
+      text_tail: content.text.slice(-200),
+      err: String(parseErr),
+    })
     parsed = { proposals: [] }
   }
 
