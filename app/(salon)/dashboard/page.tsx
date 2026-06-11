@@ -293,7 +293,13 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    fetchTasks().then(setManualTasksState).catch(() => {})
+    const reloadTasks = () => fetchTasks().then(setManualTasksState).catch(() => {})
+    reloadTasks()
+    window.addEventListener('focus', reloadTasks)
+    return () => window.removeEventListener('focus', reloadTasks)
+  }, [])
+
+  useEffect(() => {
     Promise.all([fetchExpiringSoonTickets(14), fetchExpiredTickets()]).then(([expiring, expired]) => {
       const alerts: { id: string; type: string; text: string; action: string }[] = []
       if (expired.length > 0) {
@@ -389,15 +395,20 @@ export default function DashboardPage() {
   const dailyTarget = getDailyTarget(salonTargets.sales, workingDays)
   const dailyRate = getAchievementRate(todaySales, dailyTarget)
 
-  const staffShifts = todayStaff.map(s => ({
-    name: s.name,
-    initial: s.name[0] || '',
-    color: s.color,
-    start: s.start_time,
-    end: s.end_time,
-    bookings: 0,
-    free: '-',
-  }))
+  const staffShifts = todayStaff.map(s => {
+    const bookings = todayReservations.filter(
+      r => r.staff_name === s.name && r.status !== 'cancelled' && r.status !== 'no_show'
+    ).length
+    return {
+      name: s.name,
+      initial: s.name[0] || '',
+      color: s.color,
+      start: s.start_time,
+      end: s.end_time,
+      bookings,
+      free: '-',
+    }
+  })
 
   // 顧客管理に存在する予約のみ（customer_id あり）、開始時刻でソート
   const visitorsFromReservations = todayReservations
