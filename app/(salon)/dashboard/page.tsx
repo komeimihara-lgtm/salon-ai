@@ -250,6 +250,7 @@ export default function DashboardPage() {
   const [showReservationModal, setShowReservationModal] = useState(false)
   const [beds, setBeds] = useState<string[]>(['A', 'B'])
   const [salonTargets, setSalonTargets] = useState({ sales: 0, visits: 0, avgPrice: 0 })
+  const [repeatRate, setRepeatRate] = useState<number | null>(null)
   const [businessHours, setBusinessHours] = useState({ openTime: '10:00', closeTime: '21:00' })
   const [panelAnnouncements, setPanelAnnouncements] = useState<{ id: string; title: string; type: string; body: string; is_read: boolean }[]>([])
   const [announcementsUnreadCount, setAnnouncementsUnreadCount] = useState(0)
@@ -258,6 +259,7 @@ export default function DashboardPage() {
       .then(r => r.json())
       .then(j => {
         setBeds(j.beds || ['A', 'B'])
+        if (typeof j.repeat_rate === 'number') setRepeatRate(j.repeat_rate)
         if (j.targets) {
           setSalonTargets({
             sales: j.targets.sales || 0,
@@ -291,14 +293,19 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    // まず既存タスクを即時表示し、感動体験の提案をバックグラウンドで同期する。
-    // 当日分の提案が未登録なら自動でタスク化し、登録後に一覧を再取得する。
-    fetchTasks().then(setManualTasksState).catch(() => {})
+    const reloadTasks = () => fetchTasks().then(setManualTasksState).catch(() => {})
+    reloadTasks()
+    // 感動体験の提案をバックグラウンドで同期。当日分が未登録なら自動でタスク化し、登録後に再読込する。
     syncCustomerDelightTasks()
       .then((created) => {
-        if (created.length > 0) fetchTasks().then(setManualTasksState).catch(() => {})
+        if (created.length > 0) reloadTasks()
       })
       .catch(() => {})
+    window.addEventListener('focus', reloadTasks)
+    return () => window.removeEventListener('focus', reloadTasks)
+  }, [])
+
+  useEffect(() => {
     Promise.all([fetchExpiringSoonTickets(14), fetchExpiredTickets()]).then(([expiring, expired]) => {
       const alerts: { id: string; type: string; text: string; action: string }[] = []
       if (expired.length > 0) {
@@ -332,8 +339,12 @@ export default function DashboardPage() {
     ])
       .then(([salesRes, summaryRes, todayRes]) => Promise.all([salesRes.json(), summaryRes.json(), todayRes.json()]))
       .then(([salesJson, summaryJson, todayJson]) => {
-        const sales = salesJson.sales || []
-        const todaySalesList = todayJson.sales || []
+        // 今月売上(月商)・来店数・客単価は「着金売上のみ」で集計する。
+        // 消化売上(ticket_consume / subscription_consume)は前受金の役務消化なので
+        // 月商に二重計上しない（別カードで表示）。
+        const isConsume = (t?: string) => t === 'ticket_consume' || t === 'subscription_consume'
+        const sales = (salesJson.sales || []).filter((s: { sale_type?: string }) => !isConsume(s.sale_type))
+        const todaySalesList = (todayJson.sales || []).filter((s: { sale_type?: string }) => !isConsume(s.sale_type))
         setTodaySales(todaySalesList.reduce((sum: number, s: { amount: number }) => sum + s.amount, 0))
         const totalSales = sales.reduce((sum: number, sale: { amount: number }) => sum + sale.amount, 0)
         const visits = sales.length
@@ -345,7 +356,7 @@ export default function DashboardPage() {
           { label: '今月売上', value: `¥${totalSales.toLocaleString()}`, sub: `目標 ¥${salonTargets.sales.toLocaleString()}`, rate: salesRate, diff: 0, diffUp: true },
           { label: '来店数', value: `${visits}名`, sub: `目標 ${salonTargets.visits}名`, rate: visitsRate, diff: 0, diffUp: true },
           { label: '客単価', value: `¥${avgPrice.toLocaleString()}`, sub: `目標 ¥${salonTargets.avgPrice.toLocaleString()}`, rate: avgRate, diff: 0, diffUp: true },
-          { label: '再来店率', value: '-%', sub: '目標 75%', rate: 0, diff: 0, diffUp: true },
+          { label: '再来店率', value: repeatRate != null ? `${repeatRate}%` : '-%', sub: '目標 75%', rate: repeatRate != null ? getAchievementRate(repeatRate, 75) : 0, diff: 0, diffUp: true },
         ])
         setSalesSummary(summaryJson.cashSales != null ? {
           cashSales: summaryJson.cashSales ?? 0,
@@ -354,7 +365,7 @@ export default function DashboardPage() {
         } : null)
       })
       .catch(() => {})
-  }, [salonTargets])
+  }, [salonTargets, repeatRate])
 
   const toggleTaskDone = async (id: string, currentDone: boolean) => {
     const next = manualTasks.map(t => (t.id === id ? { ...t, done: !t.done } : t))
@@ -390,15 +401,20 @@ export default function DashboardPage() {
   const dailyTarget = getDailyTarget(salonTargets.sales, workingDays)
   const dailyRate = getAchievementRate(todaySales, dailyTarget)
 
-  const staffShifts = todayStaff.map(s => ({
-    name: s.name,
-    initial: s.name[0] || '',
-    color: s.color,
-    start: s.start_time,
-    end: s.end_time,
-    bookings: 0,
-    free: '-',
-  }))
+  const staffShifts = todayStaff.map(s => {
+    const bookings = todayReservations.filter(
+      r => r.staff_name === s.name && r.status !== 'cancelled' && r.status !== 'no_show'
+    ).length
+    return {
+      name: s.name,
+      initial: s.name[0] || '',
+      color: s.color,
+      start: s.start_time,
+      end: s.end_time,
+      bookings,
+      free: '-',
+    }
+  })
 
   // 顧客管理に存在する予約のみ（customer_id あり）、開始時刻でソート
   const visitorsFromReservations = todayReservations
@@ -425,19 +441,19 @@ export default function DashboardPage() {
           href="/sales"
           className="block rounded-2xl overflow-hidden card-shadow hover:opacity-95 transition-opacity"
         >
-          <div className="bg-gradient-to-r from-rose to-lavender p-4 sm:p-5 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+          <div className="h-full bg-gradient-to-r from-rose to-lavender p-5 sm:p-6 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+                <ShoppingCart className="w-7 h-7 sm:w-8 sm:h-8 text-white" />
               </div>
               <div className="min-w-0">
-                <p className="text-white text-base sm:text-lg font-bold font-dm-sans leading-tight">レジ・売上登録</p>
-                <p className="text-white/90 text-xs sm:text-sm mt-0.5">メニュー選択・決済・売上管理</p>
+                <p className="text-white text-lg sm:text-xl font-bold font-dm-sans leading-tight">レジ・売上登録</p>
+                <p className="text-white/90 text-sm mt-1">メニュー選択・決済・売上管理</p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 text-white shrink-0">
-              <Receipt className="w-5 h-5" />
-              <ArrowRight className="w-4 h-4" />
+            <div className="flex items-center gap-2 text-white shrink-0">
+              <Receipt className="w-6 h-6" />
+              <ArrowRight className="w-5 h-5" />
             </div>
           </div>
         </Link>
@@ -941,6 +957,14 @@ export default function DashboardPage() {
               onEdit={(r) => { setEditTarget(r); setReservationDetailModal(null) }}
               onCancel={(id) => { handleStatusChange(id, 'cancelled'); setReservationDetailModal(null) }}
             />
+            <Link
+              href={`/sales?reservation_id=${reservationDetailModal.id}`}
+              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold text-sm hover:opacity-90 transition-opacity"
+              onClick={() => setReservationDetailModal(null)}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              会計へ進む
+            </Link>
           </div>
         </div>
       )}

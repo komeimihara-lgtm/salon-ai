@@ -33,9 +33,13 @@ import {
   LogOut,
   Fingerprint,
   BarChart3,
+  Star,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { createSupabaseBrowser } from '@/lib/supabase-browser'
+import { getMobileSupport, MOBILE_BREAKPOINT } from '@/lib/mobile-policy'
+import MobileNotSupported from '@/components/MobileNotSupported'
+import MobileReadOnlyBanner from '@/components/MobileReadOnlyBanner'
 
 type NavLink = { type: 'link'; href: string; icon: React.ComponentType<{ className?: string }>; label: string }
 type NavGroup = {
@@ -73,6 +77,7 @@ const NAV_ITEMS: NavItem[] = [
       { href: '/sns/analytics', label: '投稿分析' },
     ],
   },
+  { type: 'link', href: '/reviews', icon: Star, label: '口コミ管理' },
   { type: 'link', href: '/menu', icon: List, label: 'メニュー設定' },
   { type: 'link', href: '/products', icon: Package, label: '商品管理' },
   { type: 'link', href: '/courses', icon: Ticket, label: '回数券管理' },
@@ -130,6 +135,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       .then(d => setUnreadCount(d.unread_count || 0))
       .catch(() => {})
   }, [pathname])
+
+  // モバイル幅判定
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  const mobileSupport = getMobileSupport(pathname)
 
   useEffect(() => {
     fetch('/api/settings/salon')
@@ -422,9 +438,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        {/* B群バナー: モバイル + 閲覧のみ画面 */}
+        {isMobile && mobileSupport === 'read' && <MobileReadOnlyBanner />}
+
         {/* メインコンテンツ */}
         <main className="flex-1 p-4 lg:p-8 overflow-auto">
-          {children}
+          {isMobile && mobileSupport === 'pc_only' ? (
+            <MobileNotSupported currentPath={pathname} />
+          ) : (
+            children
+          )}
         </main>
       </div>
     </div>

@@ -245,6 +245,84 @@ export default function SalesPage() {
     }
   }, [selectedCategory, products.length])
 
+  // === 予約からの会計フロー ===
+  // URL に ?reservation_id=xxx があれば、予約情報を取得して
+  // 顧客・スタッフ・メニュー・金額を自動セット
+  // （useSearchParams は Suspense 必須なので window から直接読む）
+  const [reservationId, setReservationId] = useState<string | null>(null)
+  const [reservationBanner, setReservationBanner] = useState<{
+    customerName: string
+    menu: string
+    date: string
+  } | null>(null)
+
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    setReservationId(sp.get('reservation_id'))
+  }, [])
+
+  useEffect(() => {
+    if (!reservationId || menus.length === 0) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/reservations/list`)
+        const json = await res.json()
+        const r = (json.reservations || []).find((x: { id: string }) => x.id === reservationId)
+        if (!r || cancelled) return
+
+        // 顧客セット
+        if (r.customer_id) {
+          setSelectedCustomer({
+            id: r.customer_id,
+            name: r.customer_name || '',
+          })
+        } else if (r.customer_name) {
+          setSelectedCustomer({ id: null, name: r.customer_name })
+        }
+
+        // スタッフセット
+        if (r.staff_name) {
+          const staff = staffList.find(s => s.name === r.staff_name)
+          if (staff) setSelectedStaff({ id: staff.id, name: staff.name })
+        }
+
+        // メニュー名で一致するものをカートに自動追加
+        if (r.menu) {
+          const matched = menus.find(m => m.name === r.menu)
+          if (matched) {
+            setCart(prev => {
+              if (prev.some(c => c.type === 'menu' && c.menuId === matched.id)) return prev
+              return [
+                ...prev,
+                {
+                  type: 'menu' as const,
+                  menuId: matched.id,
+                  name: matched.name,
+                  price: matched.price,
+                  qty: 1,
+                  category: matched.category,
+                },
+              ]
+            })
+          }
+        }
+
+        setReservationBanner({
+          customerName: r.customer_name || '',
+          menu: r.menu || '',
+          date: r.reservation_date || '',
+        })
+      } catch (e) {
+        console.error('予約取込エラー', e)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservationId, menus.length, staffList.length])
+
   useEffect(() => { setLoading(true); fetchSales() }, [fetchSales])
 
   useEffect(() => {
@@ -656,6 +734,16 @@ export default function SalesPage() {
           </div>
         )}
       </div>
+
+      {tab === 'register' && reservationBanner && (
+        <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-200 flex items-center gap-2 text-xs text-emerald-900">
+          <Receipt className="w-4 h-4 shrink-0 text-emerald-600" />
+          <p className="leading-relaxed">
+            <strong>予約からの会計</strong>: {reservationBanner.customerName}様 / {reservationBanner.menu} / {reservationBanner.date}
+            <span className="ml-2 text-emerald-700">— 顧客・スタッフ・メニューを自動セットしました</span>
+          </p>
+        </div>
+      )}
 
       {tab === 'register' ? (
         <div className="flex-1 flex min-h-0">

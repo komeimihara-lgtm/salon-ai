@@ -70,7 +70,9 @@ export function buildDelightTaskText(p: DelightProposal): string {
 export async function syncCustomerDelightTasks(): Promise<ManualTask[]> {
   let proposals: DelightProposal[]
   try {
-    const res = await fetch('/api/customer-delight', { method: 'POST' })
+    // GET はキャッシュ済みの提案を返し、未生成/期限切れのときだけ生成する（軽い）。
+    // POST は毎回強制再生成のため、自動同期では使わない。
+    const res = await fetch('/api/customer-delight', { method: 'GET' })
     if (!res.ok) return []
     const data = await res.json()
     proposals = data.proposals || []

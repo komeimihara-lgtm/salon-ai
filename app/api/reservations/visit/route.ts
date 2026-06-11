@@ -178,6 +178,32 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (updateErr) throw updateErr
+
+    // === 来店確定で施術履歴(visits)を自動生成 ===
+    // 同一顧客・同一日・同一メニューの既存レコードがあれば重複作成しない
+    if (customerId && reservationDate) {
+      const { data: existingVisit } = await supabase
+        .from('visits')
+        .select('id')
+        .eq('salon_id', salonId)
+        .eq('customer_id', customerId)
+        .eq('visit_date', reservationDate)
+        .eq('menu', menu || '')
+        .maybeSingle()
+
+      if (!existingVisit) {
+        await supabase.from('visits').insert({
+          salon_id: salonId,
+          customer_id: customerId,
+          visit_date: reservationDate,
+          menu: menu || null,
+          staff_name: reservation.staff_name || null,
+          amount: typeof reservation.price === 'number' ? reservation.price : 0,
+          treatment_note: reservation.memo || null,
+        })
+      }
+    }
+
     return NextResponse.json({ reservation: updated })
   } catch (e) {
     console.error('来店処理エラー:', e)

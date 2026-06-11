@@ -52,7 +52,7 @@ export default function CustomerDelightPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch('/api/customer-delight', { method: 'POST' })
+      const res = await fetch('/api/customer-delight', { method: 'GET' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || '取得に失敗しました')
       setProposals(data.proposals || [])
