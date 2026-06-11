@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
 import {
   ShoppingCart, Receipt, Plus, X,
   ChevronLeft, ChevronRight, Loader2, Tag, AlertCircle, ArrowLeft,
@@ -249,13 +248,18 @@ export default function SalesPage() {
   // === 予約からの会計フロー ===
   // URL に ?reservation_id=xxx があれば、予約情報を取得して
   // 顧客・スタッフ・メニュー・金額を自動セット
-  const searchParams = useSearchParams()
-  const reservationId = searchParams.get('reservation_id')
+  // （useSearchParams は Suspense 必須なので window から直接読む）
+  const [reservationId, setReservationId] = useState<string | null>(null)
   const [reservationBanner, setReservationBanner] = useState<{
     customerName: string
     menu: string
     date: string
   } | null>(null)
+
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    setReservationId(sp.get('reservation_id'))
+  }, [])
 
   useEffect(() => {
     if (!reservationId || menus.length === 0) return
