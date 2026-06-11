@@ -250,6 +250,7 @@ export default function DashboardPage() {
   const [showReservationModal, setShowReservationModal] = useState(false)
   const [beds, setBeds] = useState<string[]>(['A', 'B'])
   const [salonTargets, setSalonTargets] = useState({ sales: 0, visits: 0, avgPrice: 0 })
+  const [repeatRate, setRepeatRate] = useState<number | null>(null)
   const [businessHours, setBusinessHours] = useState({ openTime: '10:00', closeTime: '21:00' })
   const [panelAnnouncements, setPanelAnnouncements] = useState<{ id: string; title: string; type: string; body: string; is_read: boolean }[]>([])
   const [announcementsUnreadCount, setAnnouncementsUnreadCount] = useState(0)
@@ -258,6 +259,7 @@ export default function DashboardPage() {
       .then(r => r.json())
       .then(j => {
         setBeds(j.beds || ['A', 'B'])
+        if (typeof j.repeat_rate === 'number') setRepeatRate(j.repeat_rate)
         if (j.targets) {
           setSalonTargets({
             sales: j.targets.sales || 0,
@@ -338,7 +340,7 @@ export default function DashboardPage() {
           { label: '今月売上', value: `¥${totalSales.toLocaleString()}`, sub: `目標 ¥${salonTargets.sales.toLocaleString()}`, rate: salesRate, diff: 0, diffUp: true },
           { label: '来店数', value: `${visits}名`, sub: `目標 ${salonTargets.visits}名`, rate: visitsRate, diff: 0, diffUp: true },
           { label: '客単価', value: `¥${avgPrice.toLocaleString()}`, sub: `目標 ¥${salonTargets.avgPrice.toLocaleString()}`, rate: avgRate, diff: 0, diffUp: true },
-          { label: '再来店率', value: '-%', sub: '目標 75%', rate: 0, diff: 0, diffUp: true },
+          { label: '再来店率', value: repeatRate != null ? `${repeatRate}%` : '-%', sub: '目標 75%', rate: repeatRate != null ? getAchievementRate(repeatRate, 75) : 0, diff: 0, diffUp: true },
         ])
         setSalesSummary(summaryJson.cashSales != null ? {
           cashSales: summaryJson.cashSales ?? 0,
@@ -347,7 +349,7 @@ export default function DashboardPage() {
         } : null)
       })
       .catch(() => {})
-  }, [salonTargets])
+  }, [salonTargets, repeatRate])
 
   const toggleTaskDone = async (id: string, currentDone: boolean) => {
     const next = manualTasks.map(t => (t.id === id ? { ...t, done: !t.done } : t))

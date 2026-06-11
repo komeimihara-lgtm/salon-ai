@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const { data: salon, error } = await supabase
     .from('salons')
     .select(
-      'id, name, owner_name, plan, phone, address, postal_code, email, beds, closed_days, business_hours, targets, external_urls',
+      'id, name, owner_name, plan, phone, address, postal_code, email, beds, closed_days, business_hours, targets, external_urls, repeat_rate',
     )
     .eq('id', salonId)
     .maybeSingle()
@@ -60,6 +60,7 @@ export async function GET(req: NextRequest) {
     closed_days,
     business_hours: salon?.business_hours || null,
     targets: salon?.targets || null,
+    repeat_rate: salon?.repeat_rate ?? null,
     external_urls: salon?.external_urls || {},
   })
 }
