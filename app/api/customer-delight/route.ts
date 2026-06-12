@@ -292,39 +292,60 @@ priority 5 が最重要です。`
       .gte('reservation_date', today)
       .lte('reservation_date', dayPlus2)
 
-    await supabase.from('customer_delight_proposals').insert(records)
-
-    // === ダッシュボードのタスクにも自動投入 ===
-    // 未完了の customer_delight タスクを削除（古い提案の掃除）
-    // 完了済みは履歴として残す
-    await supabase
-      .from('tasks')
-      .delete()
-      .eq('salon_id', salonId)
-      .eq('source', 'customer_delight')
-      .eq('done', false)
-
-    const taskRecords = records.map((r) => {
-      const taskText = r.message_template
-        ? `${r.customer_name}様: ${r.initiative ?? ''} — 「${(r.message_template ?? '').slice(0, 50)}${(r.message_template ?? '').length > 50 ? '…' : ''}」`
-        : `${r.customer_name}様: ${r.initiative ?? ''}`
-      // priority 1〜5 → high/medium/low に変換
-      const taskPriority =
-        r.priority >= 4 ? 'high' : r.priority >= 2 ? 'medium' : 'low'
-      return {
-        salon_id: salonId,
-        text: taskText,
-        source: 'customer_delight' as const,
-        priority: taskPriority,
-        due_date: r.reservation_date,
-        done: false,
-      }
-    })
-
-    await supabase.from('tasks').insert(taskRecords)
+    const { error: insertErr } = await supabase.from('customer_delight_proposals').insert(records)
+    if (insertErr) console.error('customer_delight_proposals insert failed:', insertErr.message)
   }
 
   return { proposals: records }
+}
+
+// 感動体験のタスク文言（クライアントの buildDelightTaskText と同じフォーマットに揃える）
+function proposalTaskText(r: Pick<ProposalRow, 'customer_name' | 'initiative' | 'message_template'>): string {
+  const mt = r.message_template
+  return mt
+    ? `${r.customer_name}様: ${r.initiative ?? ''} — 「${mt.slice(0, 50)}${mt.length > 50 ? '…' : ''}」`
+    : `${r.customer_name}様: ${r.initiative ?? ''}`
+}
+
+// 現在の提案をダッシュボードのタスクへ同期する。
+// GET/POST のたびに呼ぶことで、キャッシュヒット時（generateAndSave を通らない時）でも
+// タスクが確実に入る。既存タスクの文言と照合して重複は作らず、削除もしない
+// （ユーザーが消したタスクを毎回復活させない）。
+async function syncProposalsToTasks(salonId: string, rows: ProposalRow[]) {
+  if (!rows || rows.length === 0) return
+  const supabase = getSupabaseAdmin()
+
+  const { data: existing } = await supabase
+    .from('tasks')
+    .select('text')
+    .eq('salon_id', salonId)
+    .eq('source', 'customer_delight')
+
+  const existingTexts = new Set((existing || []).map((t: { text: string }) => t.text))
+
+  const toInsert = rows
+    .map((r) => ({
+      text: proposalTaskText(r),
+      priority: (r.priority >= 4 ? 'high' : r.priority >= 2 ? 'medium' : 'low') as
+        | 'high'
+        | 'medium'
+        | 'low',
+      due_date: r.reservation_date,
+    }))
+    .filter((t) => !existingTexts.has(t.text))
+    .map((t) => ({
+      salon_id: salonId,
+      text: t.text,
+      source: 'customer_delight' as const,
+      priority: t.priority,
+      due_date: t.due_date,
+      done: false,
+    }))
+
+  if (toInsert.length > 0) {
+    const { error } = await supabase.from('tasks').insert(toInsert)
+    if (error) console.error('customer-delight task sync insert failed:', error.message)
+  }
 }
 
 export async function GET() {
@@ -338,12 +359,15 @@ export async function GET() {
     // キャッシュ取得
     const cached = await fetchCachedProposals(salonId)
     if (cached.length > 0) {
+      // キャッシュヒット時でも、現在の提案を毎回タスクへ同期する
+      await syncProposalsToTasks(salonId, cached)
       return NextResponse.json({ proposals: cached.map(rowToProposal), cached: true })
     }
 
     // 初回 / 期限切れ → 生成
     const result = await generateAndSave(salonId)
     const fresh = await fetchCachedProposals(salonId)
+    await syncProposalsToTasks(salonId, fresh)
     return NextResponse.json({
       proposals: fresh.map(rowToProposal),
       cached: false,
@@ -365,6 +389,7 @@ export async function POST(_req: NextRequest) {
     // 強制再生成
     await generateAndSave(salonId)
     const fresh = await fetchCachedProposals(salonId)
+    await syncProposalsToTasks(salonId, fresh)
     return NextResponse.json({ proposals: fresh.map(rowToProposal), cached: false })
   } catch (e) {
     console.error('customer-delight POST error', e)
