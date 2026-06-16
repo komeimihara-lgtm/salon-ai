@@ -65,15 +65,3 @@ export function buildDelightTaskText(p: DelightProposal): string {
     : `${p.customer_name}様: ${p.initiative}`
 }
 
-// 感動体験の提案生成をトリガーする。
-// GET はキャッシュがあれば返し、未生成/期限切れなら生成し、その際サーバー側で
-// tasks テーブルへ customer_delight タスクを自動投入する（route.ts の generateAndSave）。
-// クライアントでは insert せず、呼び出し後にタスク一覧を再取得するだけにする。
-// （クライアントで再 insert するとユーザーが削除したタスクが復活してしまうため）
-export async function ensureCustomerDelightTasks(): Promise<void> {
-  try {
-    await fetch('/api/customer-delight', { method: 'GET' })
-  } catch {
-    // 失敗してもUIは既存タスクのまま。次回の読込で反映される。
-  }
-}

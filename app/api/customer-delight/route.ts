@@ -30,6 +30,88 @@ function addDays(s: string, days: number): string {
   return dt.toISOString().slice(0, 10)
 }
 
+// ── ダッシュボード「今日のタスク」への感動体験タスク同期 ──────────────
+type DelightTaskInput = {
+  customer_name: string
+  initiative: string | null
+  message_template: string | null
+  priority: number
+  reservation_date: string
+}
+
+function buildDelightTaskRecord(salonId: string, r: DelightTaskInput) {
+  const mt = r.message_template ?? ''
+  const taskText = mt
+    ? `${r.customer_name}様: ${r.initiative ?? ''} — 「${mt.slice(0, 50)}${mt.length > 50 ? '…' : ''}」`
+    : `${r.customer_name}様: ${r.initiative ?? ''}`
+  // priority 1〜5 → high/medium/low
+  const taskPriority: 'high' | 'medium' | 'low' =
+    r.priority >= 4 ? 'high' : r.priority >= 2 ? 'medium' : 'low'
+  return {
+    salon_id: salonId,
+    text: taskText,
+    source: 'customer_delight' as const,
+    priority: taskPriority,
+    due_date: r.reservation_date,
+    done: false,
+  }
+}
+
+/** 生成・再分析時：未完了の感動タスクを総入れ替え（完了済みは履歴として残す） */
+async function replaceDelightTasks(salonId: string, items: DelightTaskInput[]) {
+  const supabase = getSupabaseAdmin()
+  await supabase
+    .from('tasks')
+    .delete()
+    .eq('salon_id', salonId)
+    .eq('source', 'customer_delight')
+    .eq('done', false)
+  if (items.length === 0) return
+  const recs = items.map((r) => buildDelightTaskRecord(salonId, r))
+  const { error } = await supabase.from('tasks').insert(recs)
+  if (error) console.error('replaceDelightTasks insert error', error)
+}
+
+/**
+ * 閲覧時（キャッシュ命中）：不足分だけ追加し、過去日の未完了は掃除。
+ * 重複（同一テキスト）は作らず、完了済みタスクも復活させない。
+ */
+async function syncDelightTasksFromCache(salonId: string, rows: ProposalRow[]) {
+  const supabase = getSupabaseAdmin()
+  const today = jstDateStr()
+  // 過去日の未完了感動タスクを掃除
+  await supabase
+    .from('tasks')
+    .delete()
+    .eq('salon_id', salonId)
+    .eq('source', 'customer_delight')
+    .eq('done', false)
+    .lt('due_date', today)
+  if (rows.length === 0) return
+  // 既存（完了/未完了問わず）と重複しないものだけ追加
+  const { data: existing } = await supabase
+    .from('tasks')
+    .select('text')
+    .eq('salon_id', salonId)
+    .eq('source', 'customer_delight')
+  const seen = new Set((existing ?? []).map((t: { text: string }) => t.text))
+  const recs = rows
+    .map((r) =>
+      buildDelightTaskRecord(salonId, {
+        customer_name: r.customer_name,
+        initiative: r.initiative,
+        message_template: r.message_template,
+        priority: r.priority,
+        reservation_date: r.reservation_date,
+      })
+    )
+    .filter((t) => !seen.has(t.text))
+  if (recs.length > 0) {
+    const { error } = await supabase.from('tasks').insert(recs)
+    if (error) console.error('syncDelightTasksFromCache insert error', error)
+  }
+}
+
 interface ProposalRow {
   id: string
   customer_id: string | null
@@ -90,57 +172,6 @@ async function cleanupOldProposals(salonId: string) {
     .lt('reservation_date', cutoff)
 }
 
-interface CustomerRow {
-  id: string
-  name: string | null
-  visit_count: number | null
-  last_visit_date: string | null
-  birthday: string | null
-  memo: string | null
-  concerns: string | null
-  status: string | null
-}
-
-function daysUntilBirthday(birthday: string | null | undefined): number | null {
-  if (!birthday) return null
-  const [, m, d] = birthday.split('-').map(Number)
-  const bday = new Date(new Date().getFullYear(), m - 1, d)
-  if (bday < new Date()) bday.setFullYear(bday.getFullYear() + 1)
-  return Math.ceil((bday.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
-}
-
-function rankOfCustomer(customer: CustomerRow | undefined): string {
-  const status = customer?.status
-  if (status === 'vip') return 'vip'
-  if (status === 'at_risk') return 'at_risk'
-  if (status === 'dormant') return 'dormant'
-  const visitCount = customer?.visit_count || 0
-  if (visitCount === 0 || visitCount === 1) return 'new'
-  return 'active'
-}
-
-function summarizeCustomer(
-  customer: CustomerRow | undefined,
-  name: string,
-  reservationDate: string,
-  menu: string,
-  customerId: string | null,
-) {
-  const dtb = daysUntilBirthday(customer?.birthday)
-  return {
-    customer_id: customerId,
-    name,
-    reservation_date: reservationDate,
-    menu,
-    visit_count: customer?.visit_count || 0,
-    birthday_soon: dtb !== null && dtb >= 0 && dtb <= 14,
-    days_to_birthday: dtb,
-    concerns: customer?.concerns || '',
-    memo: (customer?.memo || '').slice(0, 100),
-    customer_rank: rankOfCustomer(customer),
-  }
-}
-
 async function generateAndSave(salonId: string) {
   const supabase = getSupabaseAdmin()
   const today = jstDateStr()
@@ -158,54 +189,50 @@ async function generateAndSave(salonId: string) {
     .order('start_time', { ascending: true })
     .limit(8)
 
-  let summary: ReturnType<typeof summarizeCustomer>[]
-
-  if (reservations && reservations.length > 0) {
-    // 直近予約のある顧客から提案を生成
-    const customerIds = reservations.filter((r) => r.customer_id).map((r) => r.customer_id) as string[]
-    const { data: customers } = customerIds.length > 0
-      ? await supabase
-          .from('customers')
-          .select('id, name, visit_count, last_visit_date, birthday, memo, concerns, status')
-          .in('id', customerIds)
-      : { data: [] }
-
-    summary = reservations.map((r) =>
-      summarizeCustomer(
-        (customers as CustomerRow[] | null)?.find((c) => c.id === r.customer_id),
-        r.customer_name,
-        r.reservation_date,
-        r.menu || '',
-        r.customer_id,
-      ),
-    )
-  } else {
-    // フォールバック: 直近予約が無くても、感動体験の対象になりやすい顧客を選んで提案する
-    //（失客予備軍・休眠客・VIP・誕生日が近い顧客を優先）
-    const { data: cands } = await supabase
-      .from('customers')
-      .select('id, name, visit_count, last_visit_date, birthday, memo, concerns, status')
-      .eq('salon_id', salonId)
-      .limit(80)
-
-    if (!cands || cands.length === 0) {
-      return { proposals: [], message: '提案対象の顧客がいません' }
-    }
-
-    const scored = (cands as CustomerRow[])
-      .map((c) => {
-        const rank = rankOfCustomer(c)
-        const dtb = daysUntilBirthday(c.birthday)
-        let score =
-          rank === 'at_risk' ? 50 : rank === 'dormant' ? 45 : rank === 'vip' ? 40 : rank === 'new' ? 25 : 15
-        if (dtb !== null && dtb >= 0 && dtb <= 14) score += 30
-        return { c, score }
-      })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 8)
-
-    summary = scored.map(({ c }) => summarizeCustomer(c, c.name || '', today, '', c.id))
+  if (!reservations || reservations.length === 0) {
+    return { proposals: [], message: '今日〜明後日の予約がありません' }
   }
+
+  // 顧客情報
+  const customerIds = reservations.filter((r) => r.customer_id).map((r) => r.customer_id) as string[]
+  const { data: customers } = customerIds.length > 0
+    ? await supabase
+        .from('customers')
+        .select('id, name, visit_count, last_visit_date, birthday, memo, concerns, status')
+        .in('id', customerIds)
+    : { data: [] }
+
+  const summary = reservations.map((r) => {
+    const customer = customers?.find((c) => c.id === r.customer_id)
+    const birthday = customer?.birthday
+    let daysToBirthday: number | null = null
+    if (birthday) {
+      const [, m, d] = birthday.split('-').map(Number)
+      const bday = new Date(new Date().getFullYear(), m - 1, d)
+      if (bday < new Date()) bday.setFullYear(bday.getFullYear() + 1)
+      daysToBirthday = Math.ceil((bday.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+    }
+    return {
+      customer_id: r.customer_id,
+      name: r.customer_name,
+      reservation_date: r.reservation_date,
+      menu: r.menu || '',
+      visit_count: customer?.visit_count || 0,
+      birthday_soon: daysToBirthday !== null && daysToBirthday >= 0 && daysToBirthday <= 14,
+      days_to_birthday: daysToBirthday,
+      concerns: customer?.concerns || '',
+      memo: (customer?.memo || '').slice(0, 100),
+      customer_rank: (() => {
+        const status = customer?.status
+        if (status === 'vip') return 'vip'
+        if (status === 'at_risk') return 'at_risk'
+        if (status === 'dormant') return 'dormant'
+        const visitCount = customer?.visit_count || 0
+        if (visitCount === 0 || visitCount === 1) return 'new'
+        return 'active'
+      })(),
+    }
+  })
 
   const systemPrompt = `あなたは美容室・ヘアサロンの「感動体験」を設計するプロのコンサルタントです。
 お客様一人ひとりに合わせた特別な体験を提案します。
@@ -230,7 +257,7 @@ async function generateAndSave(salonId: string) {
   }
 ]}`
 
-  const userPrompt = `以下、感動体験を届けたいお客様の一覧です（reservation_date は来店予定日。予約が無いお客様は本日付）:
+  const userPrompt = `以下、本日から明後日までのご予約一覧:
 ${JSON.stringify(summary, null, 2)}
 
 各お客様への感動体験を 1人1件、合計 ${Math.min(summary.length, 8)} 件以内で提案してください。
@@ -292,66 +319,41 @@ priority 5 が最重要です。`
       .gte('reservation_date', today)
       .lte('reservation_date', dayPlus2)
 
-    const { error: insertErr } = await supabase.from('customer_delight_proposals').insert(records)
-    if (insertErr) console.error('customer_delight_proposals insert failed:', insertErr.message)
+    await supabase.from('customer_delight_proposals').insert(records)
+
+    // === ダッシュボードのタスクにも自動投入（未完了は総入れ替え）===
+    await replaceDelightTasks(salonId, records)
   }
 
   return { proposals: records }
 }
 
-// 感動体験のタスク文言（クライアントの buildDelightTaskText と同じフォーマットに揃える）
-function proposalTaskText(r: Pick<ProposalRow, 'customer_name' | 'initiative' | 'message_template'>): string {
-  const mt = r.message_template
-  return mt
-    ? `${r.customer_name}様: ${r.initiative ?? ''} — 「${mt.slice(0, 50)}${mt.length > 50 ? '…' : ''}」`
-    : `${r.customer_name}様: ${r.initiative ?? ''}`
-}
-
-// 現在の提案をダッシュボードのタスクへ同期する。
-// GET/POST のたびに呼ぶことで、キャッシュヒット時（generateAndSave を通らない時）でも
-// タスクが確実に入る。既存タスクの文言と照合して重複は作らず、削除もしない
-// （ユーザーが消したタスクを毎回復活させない）。
-async function syncProposalsToTasks(salonId: string, rows: ProposalRow[]) {
-  if (!rows || rows.length === 0) return
+/**
+ * 同期直後のタスク一覧をサーバ側（service role）で取得。
+ * クライアントの anon + document.cookie 経由だと salon_id が空・RLSで読めない等の
+ * 障害が起きうるため、ダッシュボードの「今日のタスク」用にここで返してしまう。
+ */
+async function fetchTasksForSalon(salonId: string) {
   const supabase = getSupabaseAdmin()
-
-  const { data: existing } = await supabase
+  const { data, error } = await supabase
     .from('tasks')
-    .select('text')
+    .select('*')
     .eq('salon_id', salonId)
-    .eq('source', 'customer_delight')
-
-  const existingTexts = new Set((existing || []).map((t: { text: string }) => t.text))
-
-  const toInsert = rows
-    .map((r) => ({
-      text: proposalTaskText(r),
-      priority: (r.priority >= 4 ? 'high' : r.priority >= 2 ? 'medium' : 'low') as
-        | 'high'
-        | 'medium'
-        | 'low',
-      due_date: r.reservation_date,
-    }))
-    .filter((t) => !existingTexts.has(t.text))
-    .map((t) => ({
-      salon_id: salonId,
-      text: t.text,
-      source: 'customer_delight' as const,
-      priority: t.priority,
-      due_date: t.due_date,
-      done: false,
-    }))
-
-  if (toInsert.length > 0) {
-    const { error } = await supabase.from('tasks').insert(toInsert)
-    if (error) console.error('customer-delight task sync insert failed:', error.message)
+    .order('created_at', { ascending: false })
+  if (error) {
+    console.error('fetchTasksForSalon error', error)
+    return []
   }
+  return data ?? []
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const salonId = getSalonIdFromCookie()
     if (!salonId) return NextResponse.json({ error: 'salon_id が必要です' }, { status: 401 })
+
+    // ダッシュボード等からの呼び出し用：キャッシュのみ返し、AI生成は誘発しない
+    const cacheOnly = req.nextUrl.searchParams.get('cache_only') === '1'
 
     // 古い提案を掃除
     await cleanupOldProposals(salonId)
@@ -359,19 +361,31 @@ export async function GET() {
     // キャッシュ取得
     const cached = await fetchCachedProposals(salonId)
     if (cached.length > 0) {
-      // キャッシュヒット時でも、現在の提案を毎回タスクへ同期する
-      await syncProposalsToTasks(salonId, cached)
-      return NextResponse.json({ proposals: cached.map(rowToProposal), cached: true })
+      // キャッシュ命中時もダッシュボードのタスクに同期（不足分のみ追加）
+      await syncDelightTasksFromCache(salonId, cached)
+      const tasks = await fetchTasksForSalon(salonId)
+      return NextResponse.json({
+        proposals: cached.map(rowToProposal),
+        cached: true,
+        tasks,
+      })
+    }
+
+    // キャッシュ無し＆生成しないモード → 空提案＋既存タスクを返す
+    if (cacheOnly) {
+      const tasks = await fetchTasksForSalon(salonId)
+      return NextResponse.json({ proposals: [], cached: true, tasks })
     }
 
     // 初回 / 期限切れ → 生成
     const result = await generateAndSave(salonId)
     const fresh = await fetchCachedProposals(salonId)
-    await syncProposalsToTasks(salonId, fresh)
+    const tasks = await fetchTasksForSalon(salonId)
     return NextResponse.json({
       proposals: fresh.map(rowToProposal),
       cached: false,
       message: result.message,
+      tasks,
     })
   } catch (e) {
     console.error('customer-delight GET error', e)
@@ -389,7 +403,6 @@ export async function POST(_req: NextRequest) {
     // 強制再生成
     await generateAndSave(salonId)
     const fresh = await fetchCachedProposals(salonId)
-    await syncProposalsToTasks(salonId, fresh)
     return NextResponse.json({ proposals: fresh.map(rowToProposal), cached: false })
   } catch (e) {
     console.error('customer-delight POST error', e)
