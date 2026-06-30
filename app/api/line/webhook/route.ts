@@ -281,7 +281,7 @@ export async function POST(req: NextRequest) {
 
           // AIで次の質問を生成（スタッフとして）
           const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-6',
             max_tokens: 500,
             system: `あなたは${salon.name}のスタッフです。
 お客様のご来店前にLINEでプレカウンセリングを行っています。

@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     const userContent = `以下の${type === 'monthly' ? '月間' : '年間'}経営データを分析し、アドバイスを生成してください。目標値・実績・達成率・ギャップを踏まえ、目標未達項目には具体的な改善策を必ず含めてください。\n\n${JSON.stringify(data, null, 2)}`
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
