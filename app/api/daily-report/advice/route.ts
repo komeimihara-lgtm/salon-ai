@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
     const userContent = `以下の${date}の経営データを分析し、日報用のアドバイスを生成してください。目標対比・達成率を評価コメントに反映してください。\n\n${JSON.stringify(kpiData, null, 2)}`
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],

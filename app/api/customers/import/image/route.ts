@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-const MODEL = 'claude-sonnet-4-20250514'
+const MODEL = 'claude-sonnet-4-6'
 
 const PROMPT = `この画像から顧客情報を読み取り、以下のJSON形式で返してください：
 {

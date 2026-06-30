@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     const systemPrompt = buildLeoSystemPrompt(salon, context)
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: systemPrompt,
       messages: messages.map(m => ({
