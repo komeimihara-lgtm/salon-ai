@@ -1,3 +1,4 @@
+import { CLAUDE_MODELS } from '@/lib/ai-models'
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
     )
 
     const response = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+      model: CLAUDE_MODELS.opus,
       max_tokens: 2000,
       messages: [{
         role: 'user',

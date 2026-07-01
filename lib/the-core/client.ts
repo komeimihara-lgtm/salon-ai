@@ -1,5 +1,6 @@
 /** The Core — クライアント */
 
+import { CLAUDE_MODELS } from '@/lib/ai-models'
 import Anthropic from '@anthropic-ai/sdk'
 import { buildCounselingSolaFlowInstructions } from '@/lib/counseling-sola-flow-prompt'
 import { SOLA_HUMAN_SPEECH_BLOCK } from '@/lib/counseling-sola-human-speech'
@@ -169,7 +170,7 @@ export const theCore = {
     ]
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: CLAUDE_MODELS.sonnet,
       max_tokens: 1024,
       system: systemPrompt,
       messages,

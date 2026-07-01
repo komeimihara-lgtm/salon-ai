@@ -5,6 +5,7 @@
  * (Japanese text) and returns a structured reservation payload.
  */
 
+import { CLAUDE_MODELS } from '@/lib/ai-models'
 import Anthropic from '@anthropic-ai/sdk'
 
 export interface ParsedReservation {
@@ -72,7 +73,7 @@ export async function parseReservationEmail(body: string): Promise<ParsedReserva
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: CLAUDE_MODELS.sonnet,
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [

@@ -1,3 +1,4 @@
+import { CLAUDE_MODELS } from '@/lib/ai-models'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
@@ -8,7 +9,7 @@ export async function POST(req: NextRequest) {
     const { post_content, platform, style } = await req.json()
 
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: CLAUDE_MODELS.haiku,
       max_tokens: 1024,
       system: `あなたはサロン向けSNS画像のディレクターです。
 投稿内容に合った画像生成AIプロンプトを作成してください。

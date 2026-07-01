@@ -1,3 +1,4 @@
+import { CLAUDE_MODELS } from '@/lib/ai-models'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase'
@@ -124,7 +125,7 @@ export async function POST(req: NextRequest) {
     const userContent = `以下の${date}の経営データを分析し、日報用のアドバイスを生成してください。目標対比・達成率を評価コメントに反映してください。\n\n${JSON.stringify(kpiData, null, 2)}`
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: CLAUDE_MODELS.sonnet,
       max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: 'user', content: userContent }],
