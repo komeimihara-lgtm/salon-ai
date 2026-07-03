@@ -26,3 +26,12 @@ export const CLAUDE_MODELS = {
 } as const
 
 export type ClaudeModel = (typeof CLAUDE_MODELS)[keyof typeof CLAUDE_MODELS]
+
+/**
+ * 画像生成モデル（Claude以外）。
+ * SNS画像生成は OpenAI の gpt-image2 を使用（OPENAI_API_KEY が必要）。
+ */
+export const IMAGE_MODELS = {
+  /** SNS投稿用の画像生成（OpenAI Images API） */
+  sns: 'gpt-image2',
+} as const
