@@ -1,3 +1,4 @@
+import { CLAUDE_MODELS } from '@/lib/ai-models'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { DEMO_SALON, buildLeoSystemPrompt } from '@/lib/leo'
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     const systemPrompt = buildLeoSystemPrompt(salon, context)
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: CLAUDE_MODELS.sonnet,
       max_tokens: 2048,
       system: systemPrompt,
       messages: messages.map(m => ({

@@ -1,3 +1,4 @@
+import { CLAUDE_MODELS } from '@/lib/ai-models'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { buildCounselingSolaFlowInstructions } from '@/lib/counseling-sola-flow-prompt'
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
       // customer_id がない場合は従来通り直接AIを呼ぶ（後方互換）
       const { course_name, staff_name, counseling_history, booking_data } = body
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: CLAUDE_MODELS.sonnetCounseling,
         max_tokens: 1024,
         system: buildLegacySolaSystem({
           customer_name,
@@ -124,7 +125,7 @@ export async function POST(req: NextRequest) {
 JSON形式で返してください。形式:
 {"menus":[{"name":"メニュー名","reason":"おすすめ理由","duration":"所要時間"}]}`
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: CLAUDE_MODELS.sonnetCounseling,
         max_tokens: 1024,
         messages: [{ role: 'user', content: prompt }],
       })
@@ -138,7 +139,7 @@ JSON形式で返してください。形式:
     if (mode === 'comment') {
       const prompt = `以下のカウンセリング結果を踏まえ、スタッフ向けの簡潔なコメント（2〜3文）を生成してください。\n\n${summary || ''}`
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: CLAUDE_MODELS.sonnetCounseling,
         max_tokens: 256,
         messages: [{ role: 'user', content: prompt }],
       })

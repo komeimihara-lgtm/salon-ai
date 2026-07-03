@@ -2,10 +2,11 @@
  * 画像AI読み取りAPI
  * Claude APIで画像から顧客情報を抽出
  */
+import { CLAUDE_MODELS } from '@/lib/ai-models'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-const MODEL = 'claude-sonnet-4-6'
+const MODEL = CLAUDE_MODELS.sonnet
 
 const PROMPT = `この画像から顧客情報を読み取り、以下のJSON形式で返してください：
 {

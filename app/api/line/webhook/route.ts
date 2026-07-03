@@ -1,3 +1,4 @@
+import { CLAUDE_MODELS } from '@/lib/ai-models'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { resolveSalonByLineSignature } from '@/lib/line-webhook-salon'
@@ -281,7 +282,7 @@ export async function POST(req: NextRequest) {
 
           // AIで次の質問を生成（スタッフとして）
           const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
+            model: CLAUDE_MODELS.sonnet,
             max_tokens: 500,
             system: `あなたは${salon.name}のスタッフです。
 お客様のご来店前にLINEでプレカウンセリングを行っています。

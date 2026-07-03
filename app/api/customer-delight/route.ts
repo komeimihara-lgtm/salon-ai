@@ -8,6 +8,7 @@
  *  - 同一 (salon_id, customer_id, reservation_date) 単位でユニーク扱い
  *  - 来店日 < 今日−3日 の古い提案は自動クリーンアップ
  */
+import { CLAUDE_MODELS } from '@/lib/ai-models'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase'
@@ -264,7 +265,7 @@ ${JSON.stringify(summary, null, 2)}
 priority 5 が最重要です。`
 
   const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: CLAUDE_MODELS.haiku,
     max_tokens: 8000,
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],

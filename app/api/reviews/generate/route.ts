@@ -8,6 +8,7 @@
  *
  * NG ワードがサロン設定にあれば回避を指示。
  */
+import { CLAUDE_MODELS } from '@/lib/ai-models'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getSupabaseAdmin } from '@/lib/supabase'
@@ -75,7 +76,7 @@ ${ngWords.length > 0 ? `- 以下の語句は使わない: ${ngWords.join(', ')}`
 口コミ文だけを出力（前置き・解説・引用符・項目名は付けない）。`
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: CLAUDE_MODELS.sonnet,
       max_tokens: 512,
       messages: [{ role: 'user', content: prompt }],
     })
@@ -85,7 +86,7 @@ ${ngWords.length > 0 ? `- 以下の語句は使わない: ${ngWords.join(', ')}`
     // NG ワードが混じっていたら一度だけ再生成
     if (ngWords.length > 0 && ngWords.some((w: string) => generated.includes(w))) {
       const retry = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: CLAUDE_MODELS.sonnet,
         max_tokens: 512,
         messages: [
           { role: 'user', content: prompt },
