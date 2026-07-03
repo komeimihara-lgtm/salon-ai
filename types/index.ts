@@ -52,6 +52,7 @@ export interface Customer {
   allergies?: string
   memo?: string
   line_user_id?: string
+  custom_fields?: Record<string, string>
   status: 'active' | 'lost' | 'vip' | 'temporary' | 'at_risk' | 'dormant'
   imported_from?: string
   created_at: string

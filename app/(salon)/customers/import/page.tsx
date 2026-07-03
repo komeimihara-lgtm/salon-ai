@@ -284,16 +284,16 @@ function CustomerImportContent() {
       {(unmappedHeaders.length > 0 || mappedHeaders.length > 0) && !result && (
         <div className="space-y-3 mb-4">
           {unmappedHeaders.length > 0 && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
-              <p className="text-sm font-semibold text-amber-900 mb-2">
-                ⚠️ 認識できなかった列が {unmappedHeaders.length} 件あります
+            <div className="rounded-xl border border-sky-300 bg-sky-50 p-4">
+              <p className="text-sm font-semibold text-sky-900 mb-2">
+                ℹ️ 独自の列が {unmappedHeaders.length} 件あります
               </p>
-              <p className="text-xs text-amber-800 mb-2">
-                下記の列は取り込まれません。列名を認識可能な表記（例: フリガナ / 生年月日 / 電話番号 等）に変更してから再アップロードすると、その列も取り込めるようになります。
+              <p className="text-xs text-sky-800 mb-2">
+                下記の列はカルテの「その他のカルテ項目」としてそのまま取り込まれます。列名を標準表記（例: フリガナ / 生年月日 / 電話番号 等）に変更して再アップロードすると、専用の欄に整理して取り込めます。
               </p>
               <div className="flex flex-wrap gap-2">
                 {unmappedHeaders.map((h, i) => (
-                  <span key={i} className="inline-block px-2 py-1 text-xs bg-white border border-amber-400 rounded text-amber-900 font-mono">
+                  <span key={i} className="inline-block px-2 py-1 text-xs bg-white border border-sky-400 rounded text-sky-900 font-mono">
                     {h || '(空欄)'}
                   </span>
                 ))}

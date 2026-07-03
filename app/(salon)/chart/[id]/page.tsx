@@ -40,6 +40,7 @@ interface Customer {
   assigned_staff?: string
   photo_url?: string
   line_user_id?: string
+  custom_fields?: Record<string, string>
   status: string
   updated_at?: string
 }
@@ -486,6 +487,22 @@ function CustomerInfoForm({ customer, onSave }: { customer: Customer; onSave: (u
           rows={2}
         />
       </div>
+      {customer.custom_fields && Object.keys(customer.custom_fields).length > 0 && (
+        <div>
+          <label className="text-xs text-text-sub block mb-2">
+            その他のカルテ項目
+            <span className="ml-1 text-[10px] text-text-sub/70">（インポート元の独自項目）</span>
+          </label>
+          <div className="rounded-lg border border-gray-200 bg-[#FBFAFF] divide-y divide-gray-100">
+            {Object.entries(customer.custom_fields).map(([key, value]) => (
+              <div key={key} className="flex gap-3 px-3 py-2 text-sm">
+                <span className="shrink-0 min-w-[6rem] max-w-[40%] text-text-sub font-medium break-all">{key}</span>
+                <span className="flex-1 break-all whitespace-pre-wrap">{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -32,6 +32,7 @@ type ImportCustomer = {
   visit_count?: number
   total_spent?: number
   avg_unit_price?: number
+  custom_fields?: Record<string, string>
 }
 
 export async function POST(req: NextRequest) {
@@ -57,16 +58,18 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin()
     const result = { imported: 0, skipped: 0, errors: [] as string[] }
 
-    // 既存顧客を電話・メールで検索
-    const existingByPhone = new Map<string, { id: string }>()
-    const existingByEmail = new Map<string, { id: string }>()
+    // 既存顧客を電話・メールで検索（上書き時に独自カルテ項目をマージするため custom_fields も取得）
+    type ExistingRow = { id: string; custom_fields?: Record<string, string> | null }
+    const existingByPhone = new Map<string, ExistingRow>()
+    const existingByEmail = new Map<string, ExistingRow>()
     const { data: existing } = await supabase
       .from('customers')
-      .select('id, phone, email')
+      .select('id, phone, email, custom_fields')
       .eq('salon_id', salonId)
     for (const c of existing || []) {
-      if (c.phone) existingByPhone.set(normalizePhone(c.phone), { id: c.id })
-      if (c.email) existingByEmail.set((c.email || '').trim().toLowerCase(), { id: c.id })
+      const rec: ExistingRow = { id: c.id, custom_fields: c.custom_fields }
+      if (c.phone) existingByPhone.set(normalizePhone(c.phone), rec)
+      if (c.email) existingByEmail.set((c.email || '').trim().toLowerCase(), rec)
     }
 
     for (const row of customers) {
@@ -79,12 +82,19 @@ export async function POST(req: NextRequest) {
 
       const phoneNorm = row.phone ? normalizePhone(row.phone) : null
       const emailNorm = row.email ? row.email.trim().toLowerCase() : null
-      const existingId = (phoneNorm && existingByPhone.get(phoneNorm)?.id) ||
-        (emailNorm && existingByEmail.get(emailNorm)?.id)
+      const existingRec = (phoneNorm && existingByPhone.get(phoneNorm)) ||
+        (emailNorm && existingByEmail.get(emailNorm)) || null
+      const existingId = existingRec?.id
 
       if (existingId && duplicateAction === 'skip') {
         result.skipped++
         continue
+      }
+
+      // 独自カルテ項目は既存に追記マージ（上書きでも既存の箱を消さない）
+      const mergedCustomFields = {
+        ...(existingRec?.custom_fields || {}),
+        ...(row.custom_fields || {}),
       }
 
       const customerPayload = {
@@ -107,6 +117,7 @@ export async function POST(req: NextRequest) {
         concerns: row.concerns?.trim() || null,
         allergies: row.allergies?.trim() || null,
         line_user_id: row.line_user_id?.trim() || null,
+        custom_fields: mergedCustomFields,
         status: 'active' as const,
         imported_from: 'csv' as const,
       }
@@ -197,10 +208,11 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 新規の場合は検索マップに追加
+      // 新規の場合は検索マップに追加（同一ファイル内の重複行でも独自項目をマージできるように）
       if (!existingId) {
-        if (phoneNorm) existingByPhone.set(phoneNorm, { id: customerId })
-        if (emailNorm) existingByEmail.set(emailNorm, { id: customerId })
+        const rec = { id: customerId, custom_fields: mergedCustomFields }
+        if (phoneNorm) existingByPhone.set(phoneNorm, rec)
+        if (emailNorm) existingByEmail.set(emailNorm, rec)
       }
      } catch (rowErr) {
       // 1行の想定外エラーで全体を落とさない。件数だけ計上して次へ。
