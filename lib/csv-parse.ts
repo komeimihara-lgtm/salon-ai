@@ -360,13 +360,21 @@ export function parseCSV(csvText: string): ParseResult {
 
   const mappedHeaders: { original: string; mapped: string }[] = []
   const unmappedHeaders: string[] = []
-  for (const h of headerInfo) {
+  // 辞書に一致しなかった列は捨てずに custom_fields へ格納する（列番号と表示名を控える）
+  const customCols: { idx: number; label: string }[] = []
+  headerInfo.forEach((h, idx) => {
     if (KNOWN_FIELD_KEYS.has(h.key)) {
       mappedHeaders.push({ original: h.original, mapped: h.key })
     } else {
       unmappedHeaders.push(h.original)
+      const label = h.original
+        .replace(/^﻿/, '')
+        .replace(/^["'`]|["'`]$/g, '')
+        .replace(/　/g, ' ')
+        .trim()
+      if (label) customCols.push({ idx, label })
     }
-  }
+  })
 
   const rows: ImportCustomerRow[] = []
   for (let i = 1; i < lines.length; i++) {
@@ -398,6 +406,13 @@ export function parseCSV(csvText: string): ParseResult {
     if (row.postal_code?.trim()) memoParts.push(`〒${row.postal_code.trim()}`)
     const memo = memoParts.length > 0 ? memoParts.join(' / ') : undefined
 
+    // 辞書に無いサロン独自項目 → そのままカルテの「その他項目」として保存（エラーにしない）
+    const customFields: Record<string, string> = {}
+    for (const c of customCols) {
+      const v = (values[c.idx] ?? '').trim()
+      if (v) customFields[c.label] = v
+    }
+
     rows.push({
       name: name.trim(),
       name_kana: row.name_kana?.trim() || undefined,
@@ -420,6 +435,7 @@ export function parseCSV(csvText: string): ParseResult {
       visit_count: visitCount,
       total_spent: totalSpent,
       avg_unit_price: visitCount > 0 ? Math.round(totalSpent / visitCount) : 0,
+      custom_fields: Object.keys(customFields).length > 0 ? customFields : undefined,
     })
   }
 
@@ -473,4 +489,6 @@ export type ImportCustomerRow = {
   visit_count?: number
   total_spent?: number
   avg_unit_price?: number
+  /** 辞書に一致しなかったサロン独自のカルテ項目（ヘッダー名: 値） */
+  custom_fields?: Record<string, string>
 }
