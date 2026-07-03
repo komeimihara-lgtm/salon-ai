@@ -5,7 +5,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import iconv from 'iconv-lite'
-import { parseCSVToCustomers } from '@/lib/csv-parse'
+import { parseCSV } from '@/lib/csv-parse'
 
 /** Shift-JISかどうかを推定（UTF-8として無効なバイト列があればSJISと判定） */
 function detectEncoding(buf: Buffer): 'utf8' | 'sjis' {
@@ -64,15 +64,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const customers = parseCSVToCustomers(csvRaw)
+    const { customers, unmappedHeaders, mappedHeaders } = parseCSV(csvRaw)
 
     if (customers.length === 0) {
       return NextResponse.json({
         error: '有効な顧客データが見つかりませんでした。CSVのヘッダー行に「氏名」「名前」等のカラムが含まれているか確認してください。',
+        unmappedHeaders,
+        mappedHeaders,
       }, { status: 400 })
     }
 
-    return NextResponse.json({ customers })
+    return NextResponse.json({ customers, unmappedHeaders, mappedHeaders })
   } catch (error) {
     console.error('CSVパースエラー:', error)
     return NextResponse.json({ error: 'CSVのパースに失敗しました' }, { status: 500 })

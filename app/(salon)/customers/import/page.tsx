@@ -52,6 +52,8 @@ function CustomerImportContent() {
   const [duplicateAction, setDuplicateAction] = useState<'skip' | 'overwrite'>('skip')
   const [executing, setExecuting] = useState(false)
   const [result, setResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null)
+  const [unmappedHeaders, setUnmappedHeaders] = useState<string[]>([])
+  const [mappedHeaders, setMappedHeaders] = useState<{ original: string; mapped: string }[]>([])
   const [toast, setToast] = useState<Toast | null>(null)
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
 
@@ -76,6 +78,8 @@ function CustomerImportContent() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'パースに失敗しました')
       setCustomers(data.customers || [])
+      setUnmappedHeaders(data.unmappedHeaders || [])
+      setMappedHeaders(data.mappedHeaders || [])
       if (!data.customers?.length) setError('有効な顧客データが見つかりませんでした')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'CSVの読み込みに失敗しました')
@@ -273,6 +277,43 @@ function CustomerImportContent() {
         <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm text-red-700">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           {error}
+        </div>
+      )}
+
+      {/* ヘッダー認識状況 警告 */}
+      {(unmappedHeaders.length > 0 || mappedHeaders.length > 0) && !result && (
+        <div className="space-y-3 mb-4">
+          {unmappedHeaders.length > 0 && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900 mb-2">
+                ⚠️ 認識できなかった列が {unmappedHeaders.length} 件あります
+              </p>
+              <p className="text-xs text-amber-800 mb-2">
+                下記の列は取り込まれません。列名を認識可能な表記（例: フリガナ / 生年月日 / 電話番号 等）に変更してから再アップロードすると、その列も取り込めるようになります。
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {unmappedHeaders.map((h, i) => (
+                  <span key={i} className="inline-block px-2 py-1 text-xs bg-white border border-amber-400 rounded text-amber-900 font-mono">
+                    {h || '(空欄)'}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {mappedHeaders.length > 0 && (
+            <details className="rounded-xl border border-emerald-300 bg-emerald-50 p-3">
+              <summary className="text-sm font-semibold text-emerald-900 cursor-pointer">
+                ✅ 認識できた列 {mappedHeaders.length} 件（クリックで詳細）
+              </summary>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {mappedHeaders.map((h, i) => (
+                  <span key={i} className="inline-block px-2 py-1 text-xs bg-white border border-emerald-400 rounded text-emerald-900 font-mono">
+                    {h.original} → {h.mapped}
+                  </span>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
       )}
 

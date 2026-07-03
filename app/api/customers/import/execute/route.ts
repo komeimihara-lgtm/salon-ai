@@ -1,10 +1,15 @@
 /**
  * インポート実行API
  * 重複チェック・購入履歴・回数券の自動登録
+ * 大量件数（〜1000件）でも落ちない設計
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '@/lib/supabase'
 import { getSalonIdFromCookie } from '@/lib/get-salon-id'
+
+// 大量インポート時のタイムアウト保護（Vercel Pro: 最大60s）
+export const maxDuration = 60
+export const dynamic = 'force-dynamic'
 
 type ImportCustomer = {
   name: string
@@ -15,7 +20,11 @@ type ImportCustomer = {
   birthday?: string
   gender?: string
   first_visit_date?: string
+  last_visit_date?: string
   memo?: string
+  concerns?: string
+  allergies?: string
+  line_user_id?: string
   purchase_history?: { date: string; menu: string; amount: number }[]
   ticket_plan_name?: string
   remaining_sessions?: number
@@ -37,8 +46,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '顧客データが空です' }, { status: 400 })
     }
 
-    const supabase = getSupabaseAdmin()
     const salonId = getSalonIdFromCookie()
+    if (!salonId) {
+      return NextResponse.json(
+        { error: 'ログイン情報が確認できません。もう一度ログインしてお試しください。' },
+        { status: 401 }
+      )
+    }
+
+    const supabase = getSupabaseAdmin()
     const result = { imported: 0, skipped: 0, errors: [] as string[] }
 
     // 既存顧客を電話・メールで検索
@@ -54,6 +70,7 @@ export async function POST(req: NextRequest) {
     }
 
     for (const row of customers) {
+     try {
       if (!row.name?.trim()) {
         result.skipped++
         result.errors.push(`${row.name || '(名前なし)'}: 名前が空のためスキップ`)
@@ -80,13 +97,16 @@ export async function POST(req: NextRequest) {
         birthday: row.birthday || null,
         gender: row.gender || 'unknown',
         first_visit_date: row.first_visit_date || null,
-        last_visit_date: row.purchase_history?.length
+        last_visit_date: row.last_visit_date || (row.purchase_history?.length
           ? row.purchase_history.reduce((a: string, p) => (p.date > a ? p.date : a), '')
-          : null,
+          : null),
         visit_count: row.visit_count ?? 0,
         total_spent: row.total_spent ?? 0,
         avg_unit_price: row.avg_unit_price ?? 0,
         memo: row.memo?.trim() || null,
+        concerns: row.concerns?.trim() || null,
+        allergies: row.allergies?.trim() || null,
+        line_user_id: row.line_user_id?.trim() || null,
         status: 'active' as const,
         imported_from: 'csv' as const,
       }
@@ -182,6 +202,12 @@ export async function POST(req: NextRequest) {
         if (phoneNorm) existingByPhone.set(phoneNorm, { id: customerId })
         if (emailNorm) existingByEmail.set(emailNorm, { id: customerId })
       }
+     } catch (rowErr) {
+      // 1行の想定外エラーで全体を落とさない。件数だけ計上して次へ。
+      const msg = rowErr instanceof Error ? rowErr.message : String(rowErr)
+      result.errors.push(`${row?.name || '(不明)'}: ${msg}`)
+      result.skipped++
+     }
     }
 
     return NextResponse.json({
@@ -192,8 +218,12 @@ export async function POST(req: NextRequest) {
       message: `${result.imported}件インポート、${result.skipped}件スキップ`,
     })
   } catch (error) {
-    console.error('インポート実行エラー:', error)
-    return NextResponse.json({ error: 'インポートに失敗しました' }, { status: 500 })
+    const msg = error instanceof Error ? error.message : String(error)
+    console.error('インポート実行エラー:', msg, error)
+    return NextResponse.json(
+      { error: `インポートに失敗しました: ${msg}` },
+      { status: 500 }
+    )
   }
 }
 
