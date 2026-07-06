@@ -42,7 +42,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
         <div className="p-4 border-t border-white/10">
-          <p className="text-xs text-[#C9A84C] truncate">LENARD Inc.</p>
+          <p className="text-xs text-[#C9A84C] truncate">SOLA</p>
           <p className="text-xs text-white/60 truncate">運営管理者</p>
         </div>
       </aside>

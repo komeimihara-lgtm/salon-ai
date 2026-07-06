@@ -126,7 +126,7 @@ function LoginForm() {
           </div>
         </div>
 
-        <p className="text-center text-white/50 text-xs mt-6">&copy; LENARD Corporation</p>
+        <p className="text-center text-white/50 text-xs mt-6">&copy; SOLA</p>
       </div>
     </div>
   )
