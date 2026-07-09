@@ -56,6 +56,8 @@ const MENU_EXTRACT_PROMPT = `
 - 「初回限定」「○○OFF」「キャンペーン」→ campaigns
 - それ以外の通常施術メニュー → menus
 
+【最重要】施術内容と価格（割引後）が特定できるものは、クーポン/キャンペーン/コースであっても必ず menus に含めてください（name=施術名, price=割引後の金額, duration=所要時間, category=施術カテゴリ）。取り込み対象は menus です。
+
 以下のJSON形式のみで返してください。他のテキストは一切含めないでください：
 {
   "menus": [
@@ -81,6 +83,41 @@ const MENU_EXTRACT_PROMPT = `
 - 空の配列でも必ずキーを含めること
 `
 
+type MenuLike = { name?: string; menuName?: string; duration?: number; price?: number; category?: string; needsReview?: boolean }
+type Extracted = { menus?: MenuLike[]; courses?: MenuLike[]; campaigns?: MenuLike[]; coupons?: MenuLike[]; subscriptions?: MenuLike[]; categories?: string[] }
+
+const DEFAULT_CATEGORIES = ['フェイシャル', 'ボディ', '脱毛', 'オプション', '物販', 'キャンペーン', 'クーポン']
+
+/** 途中で切れたJSONから完全なオブジェクトだけ救出（max_tokens超過対策） */
+function salvageMenus(s: string): Extracted | null {
+  const idx = s.indexOf('"menus"')
+  if (idx < 0) return null
+  const items: MenuLike[] = []
+  const re = /\{[^{}]*\}/g
+  let m: RegExpExecArray | null
+  const region = s.slice(idx)
+  while ((m = re.exec(region))) { try { items.push(JSON.parse(m[0])) } catch { /* 不完全要素は無視 */ } }
+  return items.length ? { menus: items } : null
+}
+
+function normalizeMediaType(t: string): 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf' {
+  if (t === 'application/pdf') return 'application/pdf'
+  if (t === 'image/jpeg' || t === 'image/webp' || t === 'image/png') return t
+  return 'image/png'
+}
+
+/** 1コンテンツをVisionで解析してJSON化（壊れていたら救出） */
+async function extractFromContent(content: Anthropic.MessageParam['content']): Promise<Extracted | null> {
+  const response = await client.messages.create({
+    model: CLAUDE_MODELS.sonnet,
+    max_tokens: 8000,
+    messages: [{ role: 'user', content }],
+  })
+  const raw = response.content[0].type === 'text' ? response.content[0].text : ''
+  const clean = raw.replace(/```json|```/g, '').trim()
+  try { return JSON.parse(clean) as Extracted } catch { return salvageMenus(clean) }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
@@ -90,17 +127,18 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File | null
     const fileList = files.length > 0 ? files : (file ? [file] : [])
 
-    let content: Anthropic.MessageParam['content'] = []
+    const results: Extracted[] = []
 
     if (type === 'url') {
       if (!url?.trim()) {
         return NextResponse.json({ error: 'URLを入力してください' }, { status: 400 })
       }
       const pageText = await fetchAndParseUrl(url)
-      content = [{
+      const p = await extractFromContent([{
         type: 'text' as const,
         text: `【以下のWebページのテキストを解析してメニューを抽出してください】\n\n${pageText}\n\n${MENU_EXTRACT_PROMPT}`,
-      }]
+      }])
+      if (p) results.push(p)
     } else {
       if (fileList.length === 0) {
         return NextResponse.json({ error: 'ファイルを選択してください' }, { status: 400 })
@@ -108,41 +146,47 @@ export async function POST(req: NextRequest) {
       if (fileList.length > 20) {
         return NextResponse.json({ error: '画像は最大20枚までアップロードできます' }, { status: 400 })
       }
-      const blocks: Array<{ type: 'image' | 'document'; source: { type: 'base64'; media_type: string; data: string } } | { type: 'text'; text: string }> = []
+      // 1枚ずつ解析（複数まとめると出力JSONが max_tokens 超過で途中で切れるため）
       for (const f of fileList) {
-        const bytes = await f.arrayBuffer()
-        const base64 = Buffer.from(bytes).toString('base64')
-        const mediaType = (f.type || 'image/png') as 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'
-        blocks.push({
-          type: mediaType === 'application/pdf' ? 'document' : 'image',
-          source: { type: 'base64', media_type: mediaType, data: base64 },
-        })
+        const base64 = Buffer.from(await f.arrayBuffer()).toString('base64')
+        const mediaType = normalizeMediaType(f.type || 'image/png')
+        const p = await extractFromContent([
+          { type: mediaType === 'application/pdf' ? 'document' : 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+          { type: 'text', text: MENU_EXTRACT_PROMPT },
+        ] as Anthropic.MessageParam['content'])
+        if (p) results.push(p)
       }
-      blocks.push({ type: 'text', text: MENU_EXTRACT_PROMPT })
-      content = blocks as Anthropic.MessageParam['content']
     }
 
-    const response = await client.messages.create({
-      model: CLAUDE_MODELS.sonnet,
-      max_tokens: 4000,
-      messages: [{ role: 'user', content }],
+    // 全結果を menus に集約（クーポン/キャンペーン/コース/サブスクも取りこぼさない）
+    const toMenu = (x: MenuLike, cat: string) => ({
+      name: (x?.name || x?.menuName || '要確認'),
+      duration: typeof x?.duration === 'number' ? x.duration : 60,
+      price: typeof x?.price === 'number' ? x.price : 0,
+      category: x?.category || cat,
+      needsReview: x?.needsReview ?? (!x?.name || x?.name === '要確認'),
+    })
+    const collected: ReturnType<typeof toMenu>[] = []
+    let categories = DEFAULT_CATEGORIES
+    for (const r of results) {
+      for (const m of r.menus || []) collected.push(toMenu(m, 'フェイシャル'))
+      for (const c of r.campaigns || []) collected.push(toMenu(c, 'キャンペーン'))
+      for (const c of r.coupons || []) collected.push(toMenu(c, 'クーポン'))
+      for (const c of r.courses || []) collected.push(toMenu(c, 'オプション'))
+      for (const s of r.subscriptions || []) collected.push(toMenu(s, 'オプション'))
+      if (r.categories && r.categories.length) categories = r.categories
+    }
+    // 名前+価格+時間で重複除去
+    const seen = new Set<string>()
+    const menus = collected.filter(m => {
+      const k = `${m.name}|${m.price}|${m.duration}`
+      if (seen.has(k)) return false
+      seen.add(k); return true
     })
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : ''
-    const clean = text.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
-
-    // needsReviewのデフォルト設定（nameが要確認の場合）
-    if (parsed.menus) {
-      parsed.menus = parsed.menus.map((m: { name?: string; needsReview?: boolean }) => ({
-        ...m,
-        needsReview: m.needsReview ?? (m.name === '要確認' || !m.name?.trim()),
-      }))
-    }
-
-    return NextResponse.json(parsed)
+    return NextResponse.json({ menus, categories })
   } catch (e) {
     console.error('メニューインポートエラー:', e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: `読み取りに失敗しました（${String(e).slice(0, 120)}）` }, { status: 500 })
   }
 }
