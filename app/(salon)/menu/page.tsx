@@ -107,20 +107,45 @@ function ImportModal({ onClose, onImport }: {
 
   const CATEGORIES = ['フェイシャル', 'ボディ', '脱毛', 'オプション', '物販', 'キャンペーン', 'クーポン']
 
-  // 画像をJPEGに圧縮・リサイズ（容量オーバー(413)を防ぐ＋HEIC以外の形式を統一）
-  // HEIC等でデコードできない場合は __UNSUPPORTED__ を投げる（呼び出し側で案内）
-  const compressImage = async (file: File): Promise<File> => {
+  // 画像をJPEGに圧縮（容量オーバー防止）。縮小は「幅」基準にし、縦長スクショ
+  // （スクロールキャプチャ）は文字が潰れないよう重なり付きで分割して複数枚にする。
+  // 境界で切れたメニューの重複はサーバー側の重複除去が吸収する。
+  // HEIC等デコード不可は __UNSUPPORTED__ を投げる（呼び出し側で案内）
+  const prepareImageFiles = async (file: File): Promise<File[]> => {
     const bitmap = await createImageBitmap(file).catch(() => null)
     if (!bitmap) throw new Error(`__UNSUPPORTED__:${file.name}`)
-    const maxDim = 1600
-    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height))
-    const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale)
-    const canvas = document.createElement('canvas')
-    canvas.width = w; canvas.height = h
-    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h)
-    const blob: Blob | null = await new Promise(r => canvas.toBlob(b => r(b), 'image/jpeg', 0.82))
-    if (!blob) throw new Error(`__UNSUPPORTED__:${file.name}`)
-    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' })
+    const MAX_W = 1400
+    const SLICE_H = 1800
+    const OVERLAP = 150
+    const scale = Math.min(1, MAX_W / bitmap.width)
+    const w = Math.round(bitmap.width * scale)
+    const h = Math.round(bitmap.height * scale)
+    const base = file.name.replace(/\.[^.]+$/, '')
+    const toJpeg = async (canvas: HTMLCanvasElement): Promise<Blob | null> =>
+      new Promise(r => canvas.toBlob(b => r(b), 'image/jpeg', 0.82))
+    const out: File[] = []
+    if (h <= SLICE_H + OVERLAP) {
+      const canvas = document.createElement('canvas')
+      canvas.width = w; canvas.height = h
+      canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h)
+      const blob = await toJpeg(canvas)
+      if (!blob) throw new Error(`__UNSUPPORTED__:${file.name}`)
+      out.push(new File([blob], `${base}.jpg`, { type: 'image/jpeg' }))
+    } else {
+      let y = 0, idx = 0
+      while (y < h) {
+        const sh = Math.min(SLICE_H, h - y)
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = sh
+        canvas.getContext('2d')!.drawImage(bitmap, 0, y / scale, bitmap.width, sh / scale, 0, 0, w, sh)
+        const blob = await toJpeg(canvas)
+        if (blob) out.push(new File([blob], `${base}-${++idx}.jpg`, { type: 'image/jpeg' }))
+        if (y + sh >= h) break
+        y += SLICE_H - OVERLAP
+      }
+      if (out.length === 0) throw new Error(`__UNSUPPORTED__:${file.name}`)
+    }
+    return out
   }
 
   // 1リクエストずつ送って結果を集約（Vercelのリクエスト上限超過による413を回避）
@@ -155,12 +180,12 @@ function ImportModal({ onClose, onImport }: {
         const json = await postBatch(fd)
         rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories
       } else {
-        // 画像：圧縮 → 数枚ずつ分割送信
+        // 画像：圧縮（縦長は自動分割）→ 数枚ずつ分割送信
         const toSend = files.slice(0, 20)
         if (toSend.length === 0) throw new Error('ファイルを選択してください')
         const compressed: File[] = []; const unsupported: string[] = []
         for (const f of toSend) {
-          try { compressed.push(await compressImage(f)) }
+          try { compressed.push(...await prepareImageFiles(f)) }
           catch (e) {
             const msg = e instanceof Error ? e.message : ''
             if (msg.startsWith('__UNSUPPORTED__')) unsupported.push(f.name); else throw e
@@ -168,7 +193,7 @@ function ImportModal({ onClose, onImport }: {
         }
         if (compressed.length === 0) {
           throw new Error(unsupported.length
-            ? 'HEIC（iPhoneの写真形式）は読み取れません。メニュー表のスクショ（PNG/JPEG）でお試しください。'
+            ? '画像を読み取れませんでした（HEIC形式や破損ファイルは非対応です）。メニュー表のスクショ（PNG/JPEG）でお試しください。'
             : 'ファイルを選択してください')
         }
         const CHUNK = 4
@@ -179,17 +204,21 @@ function ImportModal({ onClose, onImport }: {
           rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories
         }
         if (unsupported.length) {
-          setError(`一部の画像（HEIC形式）は読み取れずスキップしました：${unsupported.join(', ')}`)
+          setError(`一部の画像は読み取れずスキップしました（HEIC/破損の可能性）：${unsupported.join(', ')}`)
         }
       }
 
-      const menus: ImportMenuItem[] = rawMenus.map((m: ImportMenuItem) => ({
+const menus: ImportMenuItem[] = rawMenus.map((m: ImportMenuItem) => ({
         ...m,
         id: `imp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         category: m.category || 'フェイシャル',
         duration: m.duration ?? 60,
         price: m.price ?? 0,
       }))
+      if (menus.length === 0) {
+        setError('画像からメニュー（施術名と価格）を見つけられませんでした。メニュー表やクーポンが写ったスクショかご確認のうえ、もう一度お試しください。')
+        return
+      }
       setPreview({ menus, categories })
       setSelectedIds(new Set(menus.map(m => m.id)))
     } catch (e) {

@@ -147,15 +147,25 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: '画像は最大20枚までアップロードできます' }, { status: 400 })
       }
       // 1枚ずつ解析（複数まとめると出力JSONが max_tokens 超過で途中で切れるため）
+      // 1ファイルの失敗（破損画像・API一時エラー等）は警告扱いにして他のファイルは処理を続ける
       for (const f of fileList) {
-        const base64 = Buffer.from(await f.arrayBuffer()).toString('base64')
-        const mediaType = normalizeMediaType(f.type || 'image/png')
-        const p = await extractFromContent([
-          { type: mediaType === 'application/pdf' ? 'document' : 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-          { type: 'text', text: MENU_EXTRACT_PROMPT },
-        ] as Anthropic.MessageParam['content'])
-        if (p) results.push(p)
+        try {
+          const base64 = Buffer.from(await f.arrayBuffer()).toString('base64')
+          const mediaType = normalizeMediaType(f.type || 'image/png')
+          const content = [
+            { type: mediaType === 'application/pdf' ? 'document' : 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+            { type: 'text', text: MENU_EXTRACT_PROMPT },
+          ] as Anthropic.MessageParam['content']
+          let p = await extractFromContent(content)
+          // 稀に空で返るため1回だけ再試行
+          const isEmpty = (x: Extracted | null) => !x || !((x.menus?.length) || (x.campaigns?.length) || (x.coupons?.length) || (x.courses?.length))
+          if (isEmpty(p)) p = await extractFromContent(content)
+          if (p) results.push(p)
+        } catch (fileErr) {
+          console.error(`メニューインポート: ファイル ${f.name} の解析に失敗`, fileErr)
+        }
       }
+    }
     }
 
     // 全結果を menus に集約（クーポン/キャンペーン/コース/サブスクも取りこぼさない）
@@ -176,13 +186,21 @@ export async function POST(req: NextRequest) {
       for (const s of r.subscriptions || []) collected.push(toMenu(s, 'オプション'))
       if (r.categories && r.categories.length) categories = r.categories
     }
-    // 名前+価格+時間で重複除去
-    const seen = new Set<string>()
-    const menus = collected.filter(m => {
-      const k = `${m.name}|${m.price}|${m.duration}`
-      if (seen.has(k)) return false
-      seen.add(k); return true
-    })
+    // ¥0（割引ラベルのみ等のノイズ）を除去し、名前で重複除去（最高価格を残す）
+    // 【7月限定】等の飾りを外して正規化 →「【2ヶ月以内3回】○○コース」と「○○コース」を同一視
+    const nameKey = (s: string) => s
+      .replace(/【[^】]*】/g, '')
+      .replace(/[★☆◎♪！!？?　\s]/g, '')
+      .toLowerCase()
+    const byName = new Map<string, ReturnType<typeof toMenu>>()
+    for (const m of collected) {
+      if (!(m.price > 0) || !m.name || m.name === '要確認') continue
+      const key = nameKey(m.name)
+      if (!key) continue
+      const ex = byName.get(key)
+      if (!ex || m.price > ex.price) byName.set(key, m)
+    }
+    const menus = [...byName.values()]
 
     return NextResponse.json({ menus, categories })
   } catch (e) {
