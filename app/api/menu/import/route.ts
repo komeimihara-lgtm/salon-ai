@@ -166,7 +166,6 @@ export async function POST(req: NextRequest) {
         }
       }
     }
-    }
 
     // 全結果を menus に集約（クーポン/キャンペーン/コース/サブスクも取りこぼさない）
     const toMenu = (x: MenuLike, cat: string) => ({
