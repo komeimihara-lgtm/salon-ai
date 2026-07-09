@@ -196,19 +196,32 @@ function ImportModal({ onClose, onImport }: {
             ? '画像を読み取れませんでした（HEIC形式や破損ファイルは非対応です）。メニュー表のスクショ（PNG/JPEG）でお試しください。'
             : 'ファイルを選択してください')
         }
-        const CHUNK = 4
-        for (let i = 0; i < compressed.length; i += CHUNK) {
+        // 縦長分割で枚数が膨らみすぎた場合の上限（処理時間の暴走防止）
+        const MAX_SLICES = 40
+        const overflow = compressed.length > MAX_SLICES
+        const sendList = compressed.slice(0, MAX_SLICES)
+        // 3枚ずつ送信（サーバーの実行時間上限に余裕を持たせる）。
+        // 1バッチ失敗しても中断せず、読めた分は必ず活かす（部分成功）。
+        const CHUNK = 3
+        let failedBatches = 0
+        for (let i = 0; i < sendList.length; i += CHUNK) {
           const fd = new FormData(); fd.append('type', 'image')
-          compressed.slice(i, i + CHUNK).forEach(f => fd.append('files', f))
-          const json = await postBatch(fd)
-          rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories
+          sendList.slice(i, i + CHUNK).forEach(f => fd.append('files', f))
+          try {
+            const json = await postBatch(fd)
+            rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories
+          } catch {
+            failedBatches++
+          }
         }
-        if (unsupported.length) {
-          setError(`一部の画像は読み取れずスキップしました（HEIC/破損の可能性）：${unsupported.join(', ')}`)
-        }
+        const warns: string[] = []
+        if (unsupported.length) warns.push(`読み取れない形式の画像をスキップ（HEIC/破損の可能性）：${unsupported.join(', ')}`)
+        if (failedBatches > 0) warns.push(`一部（${failedBatches * CHUNK}枚分ほど）の読み取りでエラーが発生しました。読み取れた分は下に表示しています。残りは枚数を減らして再度お試しください。`)
+        if (overflow) warns.push(`画像が多いため先頭${MAX_SLICES}枚分まで処理しました。残りは分けてアップロードしてください。`)
+        if (warns.length) setError(warns.join(' / '))
       }
 
-const menus: ImportMenuItem[] = rawMenus.map((m: ImportMenuItem) => ({
+            const menus: ImportMenuItem[] = rawMenus.map((m: ImportMenuItem) => ({
         ...m,
         id: `imp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         category: m.category || 'フェイシャル',
