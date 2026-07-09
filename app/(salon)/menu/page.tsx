@@ -107,29 +107,90 @@ function ImportModal({ onClose, onImport }: {
 
   const CATEGORIES = ['フェイシャル', 'ボディ', '脱毛', 'オプション', '物販', 'キャンペーン', 'クーポン']
 
+  // 画像をJPEGに圧縮・リサイズ（容量オーバー(413)を防ぐ＋HEIC以外の形式を統一）
+  // HEIC等でデコードできない場合は __UNSUPPORTED__ を投げる（呼び出し側で案内）
+  const compressImage = async (file: File): Promise<File> => {
+    const bitmap = await createImageBitmap(file).catch(() => null)
+    if (!bitmap) throw new Error(`__UNSUPPORTED__:${file.name}`)
+    const maxDim = 1600
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height))
+    const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale)
+    const canvas = document.createElement('canvas')
+    canvas.width = w; canvas.height = h
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, w, h)
+    const blob: Blob | null = await new Promise(r => canvas.toBlob(b => r(b), 'image/jpeg', 0.82))
+    if (!blob) throw new Error(`__UNSUPPORTED__:${file.name}`)
+    return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' })
+  }
+
+  // 1リクエストずつ送って結果を集約（Vercelのリクエスト上限超過による413を回避）
+  const postBatch = async (fd: FormData): Promise<{ menus?: ImportMenuItem[]; categories?: string[] }> => {
+    const res = await fetch('/api/menu/import', { method: 'POST', body: fd })
+    const text = await res.text()
+    let json: { menus?: ImportMenuItem[]; categories?: string[]; error?: string }
+    try { json = JSON.parse(text) } catch {
+      throw new Error(res.status === 413
+        ? '画像の容量が大きすぎます。枚数を減らすか、メニュー表のスクショ(PNG)でお試しください。'
+        : `サーバーエラー(${res.status})が発生しました。少し時間をおいてお試しください。`)
+    }
+    if (json.error) throw new Error(json.error)
+    return json
+  }
+
   const handleExtract = async () => {
     setLoading(true); setError(''); setPreview(null)
     try {
-      const formData = new FormData()
-      formData.append('type', mode)
+      const rawMenus: ImportMenuItem[] = []
+      let categories: string[] = CATEGORIES
+
       if (mode === 'url') {
-        formData.append('url', url)
-      } else {
-        const toSend = files.length > 0 ? files.slice(0, 20) : []
-        toSend.forEach(f => formData.append('files', f))
+        const fd = new FormData(); fd.append('type', 'url'); fd.append('url', url)
+        const json = await postBatch(fd)
+        rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories
+      } else if (mode === 'pdf') {
+        const toSend = files.slice(0, 20)
         if (toSend.length === 0) throw new Error('ファイルを選択してください')
+        const fd = new FormData(); fd.append('type', 'pdf')
+        toSend.forEach(f => fd.append('files', f))
+        const json = await postBatch(fd)
+        rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories
+      } else {
+        // 画像：圧縮 → 数枚ずつ分割送信
+        const toSend = files.slice(0, 20)
+        if (toSend.length === 0) throw new Error('ファイルを選択してください')
+        const compressed: File[] = []; const unsupported: string[] = []
+        for (const f of toSend) {
+          try { compressed.push(await compressImage(f)) }
+          catch (e) {
+            const msg = e instanceof Error ? e.message : ''
+            if (msg.startsWith('__UNSUPPORTED__')) unsupported.push(f.name); else throw e
+          }
+        }
+        if (compressed.length === 0) {
+          throw new Error(unsupported.length
+            ? 'HEIC（iPhoneの写真形式）は読み取れません。メニュー表のスクショ（PNG/JPEG）でお試しください。'
+            : 'ファイルを選択してください')
+        }
+        const CHUNK = 4
+        for (let i = 0; i < compressed.length; i += CHUNK) {
+          const fd = new FormData(); fd.append('type', 'image')
+          compressed.slice(i, i + CHUNK).forEach(f => fd.append('files', f))
+          const json = await postBatch(fd)
+          rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories
+        }
+        if (unsupported.length) {
+          setError(`一部の画像（HEIC形式）は読み取れずスキップしました：${unsupported.join(', ')}`)
+        }
       }
-      const res = await fetch('/api/menu/import', { method: 'POST', body: formData })
-      const json = await res.json()
-      if (json.error) throw new Error(json.error)
-      const menus: ImportMenuItem[] = (json.menus || []).map((m: ImportMenuItem) => ({
+
+      const menus: ImportMenuItem[] = rawMenus.map((m: ImportMenuItem) => ({
         ...m,
         id: `imp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         category: m.category || 'フェイシャル',
         duration: m.duration ?? 60,
         price: m.price ?? 0,
       }))
-      setPreview({ menus, categories: json.categories || CATEGORIES })
+      setPreview({ menus, categories })
       setSelectedIds(new Set(menus.map(m => m.id)))
     } catch (e) {
       setError(e instanceof Error ? e.message : '読み取りに失敗しました。別の画像やURLをお試しください。')
