@@ -797,6 +797,13 @@ export default function MenuSettingsPage() {
               )}
             </div>
             <div className="flex flex-wrap gap-2 mb-3">
+              {/* 「すべて」＝カテゴリ絞り込みを解除して全メニューを一覧表示（迷子防止の入口）*/}
+              <button
+                onClick={() => setSelectedCategory('')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold ${selectedCategory === '' ? 'bg-rose text-white' : 'bg-light-lav text-text-main'}`}
+              >
+                すべて
+              </button>
               {categoriesForFilter.map(cat => (
                 <div key={cat} className="flex items-center gap-1 px-3 py-1.5 bg-light-lav rounded-lg">
                   <button
