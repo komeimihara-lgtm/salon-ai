@@ -105,7 +105,7 @@ function ImportModal({ onClose, onImport }: {
   const [editRow, setEditRow] = useState<Partial<ImportMenuItem>>({})
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const MAX_FILES = 10
+  const MAX_FILES = 20
 
   const CATEGORIES = ['フェイシャル', 'ボディ', '脱毛', 'オプション', '物販', 'キャンペーン', 'クーポン']
 
@@ -203,8 +203,8 @@ function ImportModal({ onClose, onImport }: {
           catch { unsupported.push(f.name) } // HEIC/破損など読めない画像はスキップ（例外は握りつぶす）
         }
         // 縦長分割で枚数が膨らんでも処理時間が暴走しないよう上限
-        const sendList = compressed.slice(0, 20)
-        const CHUNK = 2 // 2枚ずつ＝サーバー実行時間に十分な余裕
+        const sendList = compressed.slice(0, 30)
+        const CHUNK = 4 // 4枚ずつ
         let failedBatches = 0
         for (let i = 0; i < sendList.length; i += CHUNK) {
           const fd = new FormData(); fd.append('type', 'image')
@@ -308,7 +308,7 @@ function ImportModal({ onClose, onImport }: {
                     onChange={e => {
                       const selected = Array.from(e.target.files || [])
                       if (selected.length > 20) {
-                        setFiles(selected.slice(0, 10))
+                        setFiles(selected.slice(0, 20))
                         setFilesOverflowWarning(true)
                       } else {
                         setFiles(selected)
@@ -316,11 +316,11 @@ function ImportModal({ onClose, onImport }: {
                       }
                     }} />
                   {files.length > 0 ? (
-                    <p className="text-sm text-text-main font-medium">{files.length}件のファイルを選択（最大10枚まで）</p>
+                    <p className="text-sm text-text-main font-medium">{files.length}件のファイルを選択（最大20枚まで）</p>
                   ) : (
                     <>
                       <p className="text-2xl mb-2">{mode === 'pdf' ? '📄' : '📷'}</p>
-                      <p className="text-sm text-text-sub">{mode === 'pdf' ? 'PDFファイルをアップロード（最大10枚まで）' : 'メニュー表の画像をアップロード（最大10枚まで）'}</p>
+                      <p className="text-sm text-text-sub">{mode === 'pdf' ? 'PDFファイルをアップロード（最大20枚まで）' : 'メニュー表の画像をアップロード（最大20枚まで）'}</p>
                     </>
                   )}
                 </label>

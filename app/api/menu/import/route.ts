@@ -5,7 +5,7 @@ import Anthropic from '@anthropic-ai/sdk'
 const client = new Anthropic()
 
 // 画像/PDFのVision解析は時間がかかるためタイムアウトを延長
-export const maxDuration = 60
+export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
 /** URLのHTMLを取得し、テキストを抽出 */
