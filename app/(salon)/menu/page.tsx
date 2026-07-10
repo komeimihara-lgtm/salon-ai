@@ -105,6 +105,7 @@ function ImportModal({ onClose, onImport }: {
   const [editRow, setEditRow] = useState<Partial<ImportMenuItem>>({})
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [progress, setProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
   const MAX_FILES = 20
 
   const CATEGORIES = ['フェイシャル', 'ボディ', '脱毛', 'オプション', '物販', 'キャンペーン', 'クーポン']
@@ -173,11 +174,10 @@ function ImportModal({ onClose, onImport }: {
   }
 
   const handleExtract = async () => {
-    setLoading(true); setError(''); setNotice(''); setPreview(null)
+    setLoading(true); setError(''); setNotice(''); setPreview(null); setProgress({ done: 0, total: 0 })
     try {
       const rawMenus: ImportMenuItem[] = []
       let categories: string[] = CATEGORIES
-      const notes: string[] = []
 
       if (mode === 'url') {
         if (!url.trim()) { setError('URLを入力してください'); return }
@@ -187,16 +187,14 @@ function ImportModal({ onClose, onImport }: {
       } else if (mode === 'pdf') {
         const toSend = files.slice(0, MAX_FILES)
         if (toSend.length === 0) { setError('ファイルを選択してください'); return }
-        if (files.length > MAX_FILES) notes.push(`一度に読み取れるのは${MAX_FILES}件までです。先頭${MAX_FILES}件を読み取りました。`)
         const fd = new FormData(); fd.append('type', 'pdf')
         toSend.forEach(f => fd.append('files', f))
         const json = await postBatch(fd)
         if (json) { rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories }
       } else {
-        // 画像：圧縮（縦長は自動分割）→ 2枚ずつ分割送信。どの段階で失敗しても例外は投げない。
+        // 画像：圧縮（縦長は自動分割）→ 4枚ずつ分割送信。どの段階で失敗しても例外は投げない。
         const toSend = files.slice(0, MAX_FILES)
         if (toSend.length === 0) { setError('ファイルを選択してください'); return }
-        if (files.length > MAX_FILES) notes.push(`一度に読み取れるのは${MAX_FILES}枚までです。先頭${MAX_FILES}枚を読み取りました。残りは分けてお試しください。`)
         const compressed: File[] = []; const unsupported: string[] = []
         for (const f of toSend) {
           try { compressed.push(...await prepareImageFiles(f)) }
@@ -205,16 +203,17 @@ function ImportModal({ onClose, onImport }: {
         // 縦長分割で枚数が膨らんでも処理時間が暴走しないよう上限
         const sendList = compressed.slice(0, 30)
         const CHUNK = 4 // 4枚ずつ
-        let failedBatches = 0
+        const totalBatches = Math.ceil(sendList.length / CHUNK)
+        setProgress({ done: 0, total: totalBatches })
         for (let i = 0; i < sendList.length; i += CHUNK) {
           const fd = new FormData(); fd.append('type', 'image')
           sendList.slice(i, i + CHUNK).forEach(f => fd.append('files', f))
           const json = await postBatch(fd)
+          // 失敗しても無言でスキップ（読めた分だけ活かす）。案内は出さない。
           if (json) { rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories }
-          else failedBatches++
+          setProgress(p => ({ ...p, done: p.done + 1 }))
         }
-        if (unsupported.length) notes.push('iPhoneのHEIC写真や破損した画像は読めないためスキップしました。メニュー表のスクショ（PNG）だと確実です。')
-        if (failedBatches > 0) notes.push('混み合っていて一部は読み取れませんでした。読み取れた分は下に表示しています。')
+        void unsupported // HEIC等のスキップも案内せず、読めた分の表示に徹する
       }
 
       const menus: ImportMenuItem[] = rawMenus.map((m: ImportMenuItem) => ({
@@ -224,17 +223,16 @@ function ImportModal({ onClose, onImport }: {
         duration: m.duration ?? 60,
         price: m.price ?? 0,
       }))
+      // 部分失敗・HEIC・上限などは一切案内を出さず、読めた分をそのまま表示する
       if (menus.length === 0) {
-        // 「失敗」ではなく、やさしい再試行の案内として青色で表示（赤いエラーにしない）
-        setNotice('メニューを読み取れませんでした。メニュー表やクーポンがはっきり写ったスクショで、もう一度お試しください。' + (notes.length ? ' ' + notes.join(' ') : ''))
+        // ここだけは何か出さないと空白になるため、落ち着いた再試行案内（赤でも青でもない）
+        setNotice('メニューを読み取れませんでした。メニュー表がはっきり写ったスクショで、もう一度お試しください。')
         return
       }
       setPreview({ menus, categories })
       setSelectedIds(new Set(menus.map(m => m.id)))
-      if (notes.length) setNotice(notes.join(' ')) // プレビューは出た上での補足案内（青）
     } catch {
-      // 想定外でも技術的エラーは見せず、やさしく再試行を促す
-      setNotice('うまく読み取れませんでした。お手数ですが、枚数を減らすかスクショで、もう一度お試しください。')
+      setNotice('メニューを読み取れませんでした。もう一度、メニュー表のスクショでお試しください。')
     } finally {
       setLoading(false)
     }
@@ -329,15 +327,23 @@ function ImportModal({ onClose, onImport }: {
                     20枚を超えたため、先頭20枚のみ処理します
                   </p>
                 )}
+                {/* 事前アナウンス：待つのが普通と分かるように（枚数が多いほど時間がかかる旨）*/}
+                {files.length > 0 && !loading && (
+                  <p className="mt-2 text-sm text-text-sub bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                    ⏳ AIが1枚ずつ丁寧に読み取ります。{files.length}枚だと目安 <span className="font-medium">{Math.max(1, Math.ceil(files.length * 8 / 60))}分ほど</span>かかります。画面はそのままお待ちください。
+                  </p>
+                )}
               </div>
             )}
 
             {error && <p className="text-sm text-red-400 mb-3 shrink-0">{error}</p>}
-            {notice && <p className="text-sm text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 mb-3 shrink-0">{notice}</p>}
+            {notice && <p className="text-sm text-text-sub bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 mb-3 shrink-0">{notice}</p>}
 
             <button onClick={handleExtract} disabled={loading || (mode === 'url' ? !url.trim() : files.length === 0)}
               className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50 shrink-0">
-              {loading ? <><Loader2 className="w-5 h-5 animate-spin" />読み取り中...</> : '✨ AIで読み取る'}
+              {loading
+                ? <><Loader2 className="w-5 h-5 animate-spin" />読み取り中{progress.total > 0 ? `…（${progress.done}/${progress.total}）` : '…'}</>
+                : '✨ AIで読み取る'}
             </button>
           </>
         ) : (
