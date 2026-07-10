@@ -1,10 +1,10 @@
-import { CLAUDE_MODELS } from '@/lib/ai-models'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { AI_MODELS } from '@/lib/ai/models'
 
 const client = new Anthropic()
 
-// 画像/PDFのVision解析は時間がかかるためタイムアウトを延長
+// 画像/PDFのVision解析は時間がかかるためタイムアウトを延長（Pro最大300s）
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
@@ -118,6 +118,27 @@ async function extractFromContent(content: Anthropic.MessageParam['content']): P
   try { return JSON.parse(clean) as Extracted } catch { return salvageMenus(clean) }
 }
 
+// メニュー重複除去の正準ロジック（サーバー各バッチ内で使用。クライアント側も同じキーで全バッチ横断除去する）
+// キー = 飾りを外した名前 ＋ 価格 ＋ 所要時間。完全同一だけ統合し、別メニューは残す。
+function menuDedupeKey(name: string, price: number, duration: number): string {
+  const n = String(name || '')
+    .replace(/【[^】]*】/g, '')      // 【7月限定】等の飾りを無視
+    .replace(/[★☆◎♪！!？?（）()　\s]/g, '')
+    .toLowerCase()
+  return `${n}|${price}|${duration}`
+}
+function dedupeMenus<T extends { name?: string; price?: number; duration?: number }>(list: T[]): T[] {
+  const seen = new Set<string>()
+  const out: T[] = []
+  for (const m of list) {
+    if (!(typeof m.price === 'number' && m.price > 0) || !m.name || m.name === '要確認') continue
+    const key = menuDedupeKey(m.name, m.price, m.duration ?? 60)
+    if (seen.has(key)) continue
+    seen.add(key); out.push(m)
+  }
+  return out
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
@@ -185,21 +206,10 @@ export async function POST(req: NextRequest) {
       for (const s of r.subscriptions || []) collected.push(toMenu(s, 'オプション'))
       if (r.categories && r.categories.length) categories = r.categories
     }
-    // ¥0（割引ラベルのみ等のノイズ）を除去し、名前で重複除去（最高価格を残す）
-    // 【7月限定】等の飾りを外して正規化 →「【2ヶ月以内3回】○○コース」と「○○コース」を同一視
-    const nameKey = (s: string) => s
-      .replace(/【[^】]*】/g, '')
-      .replace(/[★☆◎♪！!？?　\s]/g, '')
-      .toLowerCase()
-    const byName = new Map<string, ReturnType<typeof toMenu>>()
-    for (const m of collected) {
-      if (!(m.price > 0) || !m.name || m.name === '要確認') continue
-      const key = nameKey(m.name)
-      if (!key) continue
-      const ex = byName.get(key)
-      if (!ex || m.price > ex.price) byName.set(key, m)
-    }
-    const menus = [...byName.values()]
+    // ¥0（割引ラベルのみ等のノイズ）を除去し、重複除去する。
+    // キーは「名前＋価格＋所要時間」。完全に同一のものだけ統合し、
+    // 同名でも価格や時間が違うもの（別メニュー）は必ず残す（＝取りこぼしを防ぐ）。
+    const menus = dedupeMenus(collected)
 
     return NextResponse.json({ menus, categories })
   } catch (e) {

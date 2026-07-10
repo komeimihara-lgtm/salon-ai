@@ -224,7 +224,17 @@ function ImportModal({ onClose, onImport }: {
         void unsupported // HEIC等のスキップも案内せず、読めた分の表示に徹する
       }
 
-      const menus: ImportMenuItem[] = rawMenus.map((m: ImportMenuItem) => ({
+      // 全バッチの結果を横断して重複除去（縦長分割の重なり・バッチ間の重複が"同じメニュー2件"にならないよう）。
+      // キー=飾りを外した名前＋価格＋時間。完全同一だけ統合し、価格/時間が違う別メニューは残す。
+      const dedupeKey = (name: string, price: number, duration: number) =>
+        `${String(name || '').replace(/【[^】]*】/g, '').replace(/[★☆◎♪！!？?（）()　\s]/g, '').toLowerCase()}|${price}|${duration}`
+      const seenKeys = new Set<string>()
+      const uniqueRaw = rawMenus.filter(m => {
+        const k = dedupeKey(m.name || '', m.price ?? 0, m.duration ?? 60)
+        if (seenKeys.has(k)) return false
+        seenKeys.add(k); return true
+      })
+      const menus: ImportMenuItem[] = uniqueRaw.map((m: ImportMenuItem) => ({
         ...m,
         id: `imp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         category: m.category || 'フェイシャル',
