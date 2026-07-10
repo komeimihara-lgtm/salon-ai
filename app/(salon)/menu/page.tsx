@@ -152,25 +152,29 @@ function ImportModal({ onClose, onImport }: {
   }
 
   // 送信は「絶対に例外を投げない」設計。失敗時は null を返し、画面に赤いエラーを出さない。
-  // 90秒タイムアウト＋失敗時は1回だけ自動リトライ。
+  // タイムアウトは180sと長め＝コールドスタートで遅い初回も"待って完走"させる（中断→やり直しで倍時間になるのを防ぐ）。
+  // リトライは「空で返った時だけ」1回（遅いだけ・タイムアウトの時はやり直さない）。
   const postBatch = async (fd: FormData): Promise<{ menus?: ImportMenuItem[]; categories?: string[] } | null> => {
-    const attempt = async (): Promise<{ menus?: ImportMenuItem[]; categories?: string[] } | null> => {
+    // status: 'ok'=結果あり / 'empty'=正常だが0件 / 'fail'=タイムアウト・通信/サーバーエラー
+    const attempt = async (): Promise<{ status: 'ok' | 'empty' | 'fail'; json?: { menus?: ImportMenuItem[]; categories?: string[] } }> => {
       const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), 90000)
+      const timer = setTimeout(() => controller.abort(), 180000)
       try {
         const res = await fetch('/api/menu/import', { method: 'POST', body: fd, signal: controller.signal })
         const text = await res.text()
         let json: { menus?: ImportMenuItem[]; categories?: string[]; error?: string }
-        try { json = JSON.parse(text) } catch { return null }
-        if (json.error) return null
-        return json
+        try { json = JSON.parse(text) } catch { return { status: 'fail' } }
+        if (json.error) return { status: 'fail' }
+        return { status: (json.menus && json.menus.length) ? 'ok' : 'empty', json }
       } catch {
-        return null
+        return { status: 'fail' } // abort（タイムアウト）や通信断。やり直さず読めた分を活かす
       } finally {
         clearTimeout(timer)
       }
     }
-    return (await attempt()) ?? (await attempt())
+    let r = await attempt()
+    if (r.status === 'empty') r = await attempt() // 稀に空で返る時だけ1回やり直す
+    return r.status === 'fail' ? null : (r.json ?? null)
   }
 
   const handleExtract = async () => {
@@ -202,12 +206,16 @@ function ImportModal({ onClose, onImport }: {
         }
         // 縦長分割で枚数が膨らんでも処理時間が暴走しないよう上限
         const sendList = compressed.slice(0, 30)
-        const CHUNK = 4 // 4枚ずつ
-        const totalBatches = Math.ceil(sendList.length / CHUNK)
-        setProgress({ done: 0, total: totalBatches })
-        for (let i = 0; i < sendList.length; i += CHUNK) {
+        // バッチ分割：1回目は2枚だけ（素早く進捗を出す＆サーバーを温める）、以降は4枚ずつ
+        const batches: File[][] = []
+        if (sendList.length > 0) {
+          batches.push(sendList.slice(0, 2))
+          for (let i = 2; i < sendList.length; i += 4) batches.push(sendList.slice(i, i + 4))
+        }
+        setProgress({ done: 0, total: batches.length })
+        for (const bt of batches) {
           const fd = new FormData(); fd.append('type', 'image')
-          sendList.slice(i, i + CHUNK).forEach(f => fd.append('files', f))
+          bt.forEach(f => fd.append('files', f))
           const json = await postBatch(fd)
           // 失敗しても無言でスキップ（読めた分だけ活かす）。案内は出さない。
           if (json) { rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories }
@@ -327,10 +335,14 @@ function ImportModal({ onClose, onImport }: {
                     20枚を超えたため、先頭20枚のみ処理します
                   </p>
                 )}
-                {/* 事前アナウンス：待つのが普通と分かるように（枚数が多いほど時間がかかる旨）*/}
-                {files.length > 0 && !loading && (
+                {/* アナウンス：最初が遅い（コールドスタート）ことを、待機中こそ伝え続ける */}
+                {files.length > 0 && (
                   <p className="mt-2 text-sm text-text-sub bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                    ⏳ AIが1枚ずつ丁寧に読み取ります。{files.length}枚だと目安 <span className="font-medium">{Math.max(1, Math.ceil(files.length * 8 / 60))}分ほど</span>かかります。画面はそのままお待ちください。
+                    {loading
+                      ? (progress.done === 0
+                          ? '⏳ AIを起動しています…最初の1回だけ数分かかることがあります。画面は閉じずにそのままお待ちください🙏'
+                          : `📖 読み取り中…（${progress.done}/${progress.total}）ここからは早く進みます✨`)
+                      : '⏳ 最初の読み取りだけ数分かかることがあります（AIの起動のため）。動き出せば、あとはどんどん進みます。画面は閉じずにお待ちください🙏'}
                   </p>
                 )}
               </div>
