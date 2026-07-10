@@ -104,6 +104,8 @@ function ImportModal({ onClose, onImport }: {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editRow, setEditRow] = useState<Partial<ImportMenuItem>>({})
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const MAX_FILES = 10
 
   const CATEGORIES = ['フェイシャル', 'ボディ', '脱毛', 'オプション', '物販', 'キャンペーン', 'クーポン']
 
@@ -148,80 +150,74 @@ function ImportModal({ onClose, onImport }: {
     return out
   }
 
-  // 1リクエストずつ送って結果を集約（Vercelのリクエスト上限超過による413を回避）
-  const postBatch = async (fd: FormData): Promise<{ menus?: ImportMenuItem[]; categories?: string[] }> => {
-    const res = await fetch('/api/menu/import', { method: 'POST', body: fd })
-    const text = await res.text()
-    let json: { menus?: ImportMenuItem[]; categories?: string[]; error?: string }
-    try { json = JSON.parse(text) } catch {
-      throw new Error(res.status === 413
-        ? '画像の容量が大きすぎます。枚数を減らすか、メニュー表のスクショ(PNG)でお試しください。'
-        : `サーバーエラー(${res.status})が発生しました。少し時間をおいてお試しください。`)
+  // 送信は「絶対に例外を投げない」設計。失敗時は null を返し、画面に赤いエラーを出さない。
+  // 90秒タイムアウト＋失敗時は1回だけ自動リトライ。
+  const postBatch = async (fd: FormData): Promise<{ menus?: ImportMenuItem[]; categories?: string[] } | null> => {
+    const attempt = async (): Promise<{ menus?: ImportMenuItem[]; categories?: string[] } | null> => {
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 90000)
+      try {
+        const res = await fetch('/api/menu/import', { method: 'POST', body: fd, signal: controller.signal })
+        const text = await res.text()
+        let json: { menus?: ImportMenuItem[]; categories?: string[]; error?: string }
+        try { json = JSON.parse(text) } catch { return null }
+        if (json.error) return null
+        return json
+      } catch {
+        return null
+      } finally {
+        clearTimeout(timer)
+      }
     }
-    if (json.error) throw new Error(json.error)
-    return json
+    return (await attempt()) ?? (await attempt())
   }
 
   const handleExtract = async () => {
-    setLoading(true); setError(''); setPreview(null)
+    setLoading(true); setError(''); setNotice(''); setPreview(null)
     try {
       const rawMenus: ImportMenuItem[] = []
       let categories: string[] = CATEGORIES
+      const notes: string[] = []
 
       if (mode === 'url') {
+        if (!url.trim()) { setError('URLを入力してください'); return }
         const fd = new FormData(); fd.append('type', 'url'); fd.append('url', url)
         const json = await postBatch(fd)
-        rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories
+        if (json) { rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories }
       } else if (mode === 'pdf') {
-        const toSend = files.slice(0, 20)
-        if (toSend.length === 0) throw new Error('ファイルを選択してください')
+        const toSend = files.slice(0, MAX_FILES)
+        if (toSend.length === 0) { setError('ファイルを選択してください'); return }
+        if (files.length > MAX_FILES) notes.push(`一度に読み取れるのは${MAX_FILES}件までです。先頭${MAX_FILES}件を読み取りました。`)
         const fd = new FormData(); fd.append('type', 'pdf')
         toSend.forEach(f => fd.append('files', f))
         const json = await postBatch(fd)
-        rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories
+        if (json) { rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories }
       } else {
-        // 画像：圧縮（縦長は自動分割）→ 数枚ずつ分割送信
-        const toSend = files.slice(0, 20)
-        if (toSend.length === 0) throw new Error('ファイルを選択してください')
+        // 画像：圧縮（縦長は自動分割）→ 2枚ずつ分割送信。どの段階で失敗しても例外は投げない。
+        const toSend = files.slice(0, MAX_FILES)
+        if (toSend.length === 0) { setError('ファイルを選択してください'); return }
+        if (files.length > MAX_FILES) notes.push(`一度に読み取れるのは${MAX_FILES}枚までです。先頭${MAX_FILES}枚を読み取りました。残りは分けてお試しください。`)
         const compressed: File[] = []; const unsupported: string[] = []
         for (const f of toSend) {
           try { compressed.push(...await prepareImageFiles(f)) }
-          catch (e) {
-            const msg = e instanceof Error ? e.message : ''
-            if (msg.startsWith('__UNSUPPORTED__')) unsupported.push(f.name); else throw e
-          }
+          catch { unsupported.push(f.name) } // HEIC/破損など読めない画像はスキップ（例外は握りつぶす）
         }
-        if (compressed.length === 0) {
-          throw new Error(unsupported.length
-            ? '画像を読み取れませんでした（HEIC形式や破損ファイルは非対応です）。メニュー表のスクショ（PNG/JPEG）でお試しください。'
-            : 'ファイルを選択してください')
-        }
-        // 縦長分割で枚数が膨らみすぎた場合の上限（処理時間の暴走防止）
-        const MAX_SLICES = 40
-        const overflow = compressed.length > MAX_SLICES
-        const sendList = compressed.slice(0, MAX_SLICES)
-        // 3枚ずつ送信（サーバーの実行時間上限に余裕を持たせる）。
-        // 1バッチ失敗しても中断せず、読めた分は必ず活かす（部分成功）。
-        const CHUNK = 3
+        // 縦長分割で枚数が膨らんでも処理時間が暴走しないよう上限
+        const sendList = compressed.slice(0, 20)
+        const CHUNK = 2 // 2枚ずつ＝サーバー実行時間に十分な余裕
         let failedBatches = 0
         for (let i = 0; i < sendList.length; i += CHUNK) {
           const fd = new FormData(); fd.append('type', 'image')
           sendList.slice(i, i + CHUNK).forEach(f => fd.append('files', f))
-          try {
-            const json = await postBatch(fd)
-            rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories
-          } catch {
-            failedBatches++
-          }
+          const json = await postBatch(fd)
+          if (json) { rawMenus.push(...(json.menus || [])); if (json.categories) categories = json.categories }
+          else failedBatches++
         }
-        const warns: string[] = []
-        if (unsupported.length) warns.push(`読み取れない形式の画像をスキップ（HEIC/破損の可能性）：${unsupported.join(', ')}`)
-        if (failedBatches > 0) warns.push(`一部（${failedBatches * CHUNK}枚分ほど）の読み取りでエラーが発生しました。読み取れた分は下に表示しています。残りは枚数を減らして再度お試しください。`)
-        if (overflow) warns.push(`画像が多いため先頭${MAX_SLICES}枚分まで処理しました。残りは分けてアップロードしてください。`)
-        if (warns.length) setError(warns.join(' / '))
+        if (unsupported.length) notes.push('iPhoneのHEIC写真や破損した画像は読めないためスキップしました。メニュー表のスクショ（PNG）だと確実です。')
+        if (failedBatches > 0) notes.push('混み合っていて一部は読み取れませんでした。読み取れた分は下に表示しています。')
       }
 
-            const menus: ImportMenuItem[] = rawMenus.map((m: ImportMenuItem) => ({
+      const menus: ImportMenuItem[] = rawMenus.map((m: ImportMenuItem) => ({
         ...m,
         id: `imp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         category: m.category || 'フェイシャル',
@@ -229,13 +225,16 @@ function ImportModal({ onClose, onImport }: {
         price: m.price ?? 0,
       }))
       if (menus.length === 0) {
-        setError('画像からメニュー（施術名と価格）を見つけられませんでした。メニュー表やクーポンが写ったスクショかご確認のうえ、もう一度お試しください。')
+        // 「失敗」ではなく、やさしい再試行の案内として青色で表示（赤いエラーにしない）
+        setNotice('メニューを読み取れませんでした。メニュー表やクーポンがはっきり写ったスクショで、もう一度お試しください。' + (notes.length ? ' ' + notes.join(' ') : ''))
         return
       }
       setPreview({ menus, categories })
       setSelectedIds(new Set(menus.map(m => m.id)))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '読み取りに失敗しました。別の画像やURLをお試しください。')
+      if (notes.length) setNotice(notes.join(' ')) // プレビューは出た上での補足案内（青）
+    } catch {
+      // 想定外でも技術的エラーは見せず、やさしく再試行を促す
+      setNotice('うまく読み取れませんでした。お手数ですが、枚数を減らすかスクショで、もう一度お試しください。')
     } finally {
       setLoading(false)
     }
@@ -309,7 +308,7 @@ function ImportModal({ onClose, onImport }: {
                     onChange={e => {
                       const selected = Array.from(e.target.files || [])
                       if (selected.length > 20) {
-                        setFiles(selected.slice(0, 20))
+                        setFiles(selected.slice(0, 10))
                         setFilesOverflowWarning(true)
                       } else {
                         setFiles(selected)
@@ -317,11 +316,11 @@ function ImportModal({ onClose, onImport }: {
                       }
                     }} />
                   {files.length > 0 ? (
-                    <p className="text-sm text-text-main font-medium">{files.length}件のファイルを選択（最大20枚まで）</p>
+                    <p className="text-sm text-text-main font-medium">{files.length}件のファイルを選択（最大10枚まで）</p>
                   ) : (
                     <>
                       <p className="text-2xl mb-2">{mode === 'pdf' ? '📄' : '📷'}</p>
-                      <p className="text-sm text-text-sub">{mode === 'pdf' ? 'PDFファイルをアップロード（最大20枚まで）' : 'メニュー表の画像をアップロード（最大20枚まで）'}</p>
+                      <p className="text-sm text-text-sub">{mode === 'pdf' ? 'PDFファイルをアップロード（最大10枚まで）' : 'メニュー表の画像をアップロード（最大10枚まで）'}</p>
                     </>
                   )}
                 </label>
@@ -334,6 +333,7 @@ function ImportModal({ onClose, onImport }: {
             )}
 
             {error && <p className="text-sm text-red-400 mb-3 shrink-0">{error}</p>}
+            {notice && <p className="text-sm text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 mb-3 shrink-0">{notice}</p>}
 
             <button onClick={handleExtract} disabled={loading || (mode === 'url' ? !url.trim() : files.length === 0)}
               className="w-full py-3 rounded-xl bg-gradient-to-r from-rose to-lavender text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50 shrink-0">
