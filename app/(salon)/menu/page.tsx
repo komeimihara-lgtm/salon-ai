@@ -340,9 +340,9 @@ function ImportModal({ onClose, onImport }: {
                   <p className="mt-2 text-sm text-text-sub bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                     {loading
                       ? (progress.done === 0
-                          ? '⏳ AIを起動しています…最初の1回だけ数分かかることがあります。画面は閉じずにそのままお待ちください🙏'
-                          : `📖 読み取り中…（${progress.done}/${progress.total}）ここからは早く進みます✨`)
-                      : '⏳ 最初の読み取りだけ数分かかることがあります（AIの起動のため）。動き出せば、あとはどんどん進みます。画面は閉じずにお待ちください🙏'}
+                          ? '⏳ 読み取り・分析・登録まで、約3〜5分で完了します。画面は閉じずにそのままお待ちください🙏'
+                          : `📖 読み取り中…（${progress.done}/${progress.total}）約3〜5分で完了します✨`)
+                      : '⏳ 読み取り・分析・登録まで、約3〜5分で完了します。画面は閉じずにお待ちください🙏'}
                   </p>
                 )}
               </div>
